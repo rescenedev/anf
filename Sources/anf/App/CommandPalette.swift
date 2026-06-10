@@ -21,6 +21,8 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         /// When set, activating this row connects to the SSH host instead of
         /// navigating to a URL.
         var sshHost: String? = nil
+        /// When set, activating this row applies the saved Workspace.
+        var viewID: UUID? = nil
 
         static func divider(_ title: String) -> Target {
             Target(name: title, url: URL(fileURLWithPath: "/"), symbol: "",
@@ -30,6 +32,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         static func ssh(_ host: String, subtitle: String) -> Target {
             Target(name: host, url: URL(string: "ssh://\(host)") ?? URL(fileURLWithPath: "/"),
                    symbol: "network", isFile: false, sshHost: host)
+        }
+
+        static func workspace(_ view: SavedView) -> Target {
+            let symbol = PaneLayout(rawValue: view.snapshot.layout)?.symbol ?? "macwindow"
+            return Target(name: view.name,
+                          url: URL(fileURLWithPath: "/__workspace__/\(view.id.uuidString)"),
+                          symbol: symbol, isFile: false, viewID: view.id)
         }
     }
 
@@ -327,11 +336,15 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         let q = query
 
         if q.isEmpty {
-            // Empty state order: pinned → recently visited → built-in favorites.
+            // Empty state order: pinned → Workspace → recently visited →
+            // built-in favorites → SSH.
             var all: [Target] = []
             for u in workspace.favorites.items {
                 all.append(.init(name: u.lastPathComponent.isEmpty ? u.path : u.lastPathComponent,
                                  url: u, symbol: "star.fill", isFile: false))
+            }
+            for v in workspace.savedViews.views {
+                all.append(.workspace(v))
             }
             for u in RecentFolders.shared.items {
                 all.append(.init(name: u.lastPathComponent.isEmpty ? u.path : u.lastPathComponent,
@@ -382,10 +395,17 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             let contentRows = deepResults.filter { $0.isContent }
                 .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
                 .prefix(40).map { $0 }
-            // Matching SSH hosts surface at the top for quick connect.
+            // Matching Workspaces and SSH hosts surface at the top.
+            let workspaceRows = workspace.savedViews.views
+                .filter { $0.name.localizedCaseInsensitiveContains(q) }
+                .map { Target.workspace($0) }
             let sshRows = sshTargets.filter { $0.name.localizedCaseInsensitiveContains(q) }
             // Two labeled sections: name matches (files/folders) and content matches.
             var rows: [Target] = []
+            if !workspaceRows.isEmpty {
+                rows.append(.divider("Workspace"))
+                rows.append(contentsOf: workspaceRows)
+            }
             if !sshRows.isEmpty {
                 rows.append(.divider("SSH"))
                 rows.append(contentsOf: sshRows)
@@ -567,7 +587,11 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         guard results.indices.contains(row), !results[row].isDivider,
               let workspace else { return }
         let t = results[row]
-        if let host = t.sshHost { workspace.openSSH(host) }
+        if let viewID = t.viewID {
+            if let v = workspace.savedViews.views.first(where: { $0.id == viewID }) {
+                workspace.applyView(v)
+            }
+        } else if let host = t.sshHost { workspace.openSSH(host) }
         else if t.isFile { workspace.active.revealFile(t.url) }
         else { workspace.active.navigate(to: t.url) }
         hide()

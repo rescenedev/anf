@@ -6,6 +6,16 @@ struct ContentArea: View {
 
     var body: some View {
         ZStack {
+            // Subtle gradient under a thin translucent blur, so the content area
+            // reads as soft frosted glass instead of a flat slab.
+            LinearGradient(
+                colors: [Color(nsColor: .controlBackgroundColor),
+                         Color(nsColor: .underPageBackgroundColor)],
+                startPoint: .top, endPoint: .bottom)
+                .overlay(Color.accentColor.opacity(0.04))
+                .overlay(.ultraThinMaterial)
+                .ignoresSafeArea()
+
             switch model.viewMode {
             case .icons:   IconGridView(model: model)
             case .list:    FileListView(model: model)

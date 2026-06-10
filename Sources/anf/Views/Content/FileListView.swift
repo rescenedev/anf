@@ -37,6 +37,8 @@ struct FileListView: NSViewRepresentable {
         table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
         coord.table = table
 
+        table.backgroundColor = .clear
+
         let scroll = NSScrollView()
         scroll.documentView = table
         scroll.hasVerticalScroller = true
