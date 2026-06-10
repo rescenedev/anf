@@ -9,8 +9,13 @@ struct ContentRootView: View {
     var body: some View {
         GeometryReader { geo in
             HStack(spacing: 0) {
-                PaneLayoutView(workspace: workspace)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 0) {
+                    PaneLayoutView(workspace: workspace)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    TerminalPanel(workspace: workspace, availableHeight: geo.size.height)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.2), value: workspace.showTerminal)
                 if workspace.inspectorVisible {
                     DragDividerHandle(
                         orientation: .vertical,
@@ -28,17 +33,6 @@ struct ContentRootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: workspace.inspectorVisible)
-        .overlay {
-            if workspace.paletteVisible {
-                ZStack(alignment: .top) {
-                    Color.black.opacity(0.12).ignoresSafeArea()
-                        .onTapGesture { workspace.paletteVisible = false }
-                    QuickJumpView(workspace: workspace).padding(.top, 90)
-                }
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.12), value: workspace.paletteVisible)
     }
 }
 

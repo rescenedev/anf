@@ -148,10 +148,9 @@ struct SidebarView: View {
     }
 
     private func sshRow(_ host: SSHHost, customData: CustomSSHHost?) -> some View {
-        let session = workspace.panes.compactMap(\.terminal).first { $0.sshHost == host.alias }
+        let session = workspace.terminal?.sshHost == host.alias ? workspace.terminal : nil
         let connected = session?.isRunning == true
-        let active = workspace.activePaneModel
-        let selected = active.showTerminal && active.terminal?.sshHost == host.alias
+        let selected = workspace.showTerminal && workspace.terminal?.sshHost == host.alias
         return HStack(spacing: 0) {
             Label {
                 Text(host.alias).font(.system(size: 13)).lineLimit(1)
@@ -175,22 +174,22 @@ struct SidebarView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if let custom = customData {
-                workspace.activePaneModel.openSSH(custom)
+                workspace.openSSH(custom)
             } else {
-                workspace.activePaneModel.openSSH(host.alias)
+                workspace.openSSH(host.alias)
             }
         }
         .help("ssh \(host.subtitle)")
         .contextMenu {
             if let custom = customData {
-                Button("Connect in anf") { workspace.activePaneModel.openSSH(custom) }
+                Button("Connect in anf") { workspace.openSSH(custom) }
                 Button("Connect with Ghostty") { TerminalLauncher.ssh(custom.target) }
                 Divider()
                 Button("Remove from Sidebar", role: .destructive) {
                     workspace.customSSH.remove(target: host.alias)
                 }
             } else {
-                Button("Connect in anf") { workspace.activePaneModel.openSSH(host.alias) }
+                Button("Connect in anf") { workspace.openSSH(host.alias) }
                 Button("Connect with Ghostty") { TerminalLauncher.ssh(host.alias) }
             }
         }

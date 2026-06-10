@@ -56,6 +56,7 @@ final class WindowEdgeResizer: NSView {
         ) { [weak self, weak window] event in
             guard let self, let window, event.window === window else { return event }
             return MainActor.assumeIsolated {
+                if InputGate.modalActive { return event }
                 switch event.type {
                 case .mouseMoved, .cursorUpdate:
                     return self.handleMouseMoved(event, window: window)

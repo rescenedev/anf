@@ -48,26 +48,13 @@ final class PaneModel: Identifiable {
     private(set) var tabs: [BrowserModel]
     var activeIndex: Int = 0
 
-    // Embedded terminal drawer (bottom of the pane).
-    var terminal: TerminalSession?
-    var showTerminal = false
-    var terminalHeight: CGFloat = 280
-    /// True once the user has dragged the divider — stops the auto 1/3-height
-    /// default from overriding their chosen height on subsequent opens.
-    var terminalHeightUserSet = false
-    var terminalFontSize: CGFloat = 13 {
-        didSet { terminal?.applyFontSize(terminalFontSize) }
-    }
-
-    /// Clamp the drawer height. When `available` (the pane height) is known the
-    /// drawer may grow up to 80% of it; otherwise a generous absolute cap applies.
-    static func clampTerminalHeight(_ h: CGFloat, available: CGFloat? = nil) -> CGFloat {
-        let cap = available.map { max(200, $0 * 0.8) } ?? 1400
-        return min(max(h, 120), cap)
-    }
-
     /// "Focus my pane" — set by the workspace; propagated to every tab here.
     @ObservationIgnored var onActivity: (() -> Void)? {
+        didSet { tabs.forEach { configure($0) } }
+    }
+
+    /// "Open the (global) terminal at this folder" — set by the workspace.
+    @ObservationIgnored var onRequestTerminal: ((URL) -> Void)? {
         didSet { tabs.forEach { configure($0) } }
     }
 
@@ -80,7 +67,7 @@ final class PaneModel: Identifiable {
 
     private func configure(_ model: BrowserModel) {
         model.onActivity = onActivity
-        model.onOpenTerminal = { [weak self] url in self?.openTerminal(at: url) }
+        model.onOpenTerminal = { [weak self] url in self?.onRequestTerminal?(url) }
     }
 
     func replaceTabs(_ models: [BrowserModel], activeIndex: Int) {
@@ -96,41 +83,6 @@ final class PaneModel: Identifiable {
         configure(tab)
         tabs.append(tab)
         activeIndex = tabs.count - 1
-    }
-
-    // MARK: - Terminal
-
-    func openTerminal(at directory: URL) {
-        if terminal == nil {
-            let s = TerminalSession.shell(at: directory)
-            s.applyFontSize(terminalFontSize)
-            terminal = s
-        }
-        showTerminal = true
-    }
-
-    func openSSH(_ host: String) {
-        if let t = terminal, t.sshHost == host, t.isRunning {
-            showTerminal = true; t.focus(); return
-        }
-        let s = TerminalSession.ssh(host)
-        s.applyFontSize(terminalFontSize)
-        terminal = s
-        showTerminal = true
-    }
-
-    func openSSH(_ custom: CustomSSHHost) {
-        if let t = terminal, t.sshHost == custom.target, t.isRunning {
-            showTerminal = true; t.focus(); return
-        }
-        let s = TerminalSession.ssh(custom)
-        s.applyFontSize(terminalFontSize)
-        terminal = s
-        showTerminal = true
-    }
-
-    func toggleTerminal(at directory: URL) {
-        if terminal == nil { openTerminal(at: directory) } else { showTerminal.toggle() }
     }
 
     func closeTab(_ idx: Int) {
@@ -179,7 +131,9 @@ final class WorkspaceModel {
     var sidebarVisible = true
     var inspectorVisible = false
     var inspectorWidth: CGFloat = 300
-    var paletteVisible = false
+    var paletteVisible = false {
+        didSet { InputGate.modalActive = paletteVisible }
+    }
     let favorites = FavoritesStore()
     let customSSH = CustomSSHStore()
 
@@ -195,15 +149,59 @@ final class WorkspaceModel {
         previewTextSize = min(max(previewTextSize + CGFloat(direction), 9), 28)
     }
 
-    /// Font size for all embedded terminal sessions (⌘+ / ⌘− when terminal focused).
-    var terminalFontSize: CGFloat = 13
+    // MARK: - Global terminal drawer (one per window, full content width)
+
+    var terminal: TerminalSession?
+    var showTerminal = false
+    var terminalHeight: CGFloat = 280
+    /// True once the user has dragged the divider — stops the auto 1/3-height
+    /// default from overriding their chosen height on subsequent opens.
+    var terminalHeightUserSet = false
+
+    /// Font size for the terminal (⌘+ / ⌘− when the terminal is focused).
+    var terminalFontSize: CGFloat = 13 {
+        didSet { terminal?.applyFontSize(terminalFontSize) }
+    }
+
+    /// Clamp the drawer height. When `available` (the content height) is known the
+    /// drawer may grow up to 80% of it; otherwise a generous absolute cap applies.
+    static func clampTerminalHeight(_ h: CGFloat, available: CGFloat? = nil) -> CGFloat {
+        let cap = available.map { max(200, $0 * 0.8) } ?? 1400
+        return min(max(h, 120), cap)
+    }
 
     func bumpTerminalFontSize(_ direction: Int) {
         terminalFontSize = min(max(terminalFontSize + CGFloat(direction), 8), 24)
-        for pane in panes {
-            pane.terminalFontSize = terminalFontSize
-        }
         save()
+    }
+
+    func openTerminal(at directory: URL) {
+        if terminal == nil {
+            let s = TerminalSession.shell(at: directory)
+            s.applyFontSize(terminalFontSize)
+            terminal = s
+        }
+        showTerminal = true
+    }
+
+    func openSSH(_ host: String) {
+        if let t = terminal, t.sshHost == host, t.isRunning {
+            showTerminal = true; t.focus(); return
+        }
+        let s = TerminalSession.ssh(host)
+        s.applyFontSize(terminalFontSize)
+        terminal = s
+        showTerminal = true
+    }
+
+    func openSSH(_ custom: CustomSSHHost) {
+        if let t = terminal, t.sshHost == custom.target, t.isRunning {
+            showTerminal = true; t.focus(); return
+        }
+        let s = TerminalSession.ssh(custom)
+        s.applyFontSize(terminalFontSize)
+        terminal = s
+        showTerminal = true
     }
 
     /// `available` is the live content width — the inspector may take up to 55%
@@ -235,6 +233,7 @@ final class WorkspaceModel {
     private func wireActivity() {
         for (i, pane) in panes.enumerated() {
             pane.onActivity = { [weak self] in self?.activePane = i }
+            pane.onRequestTerminal = { [weak self] url in self?.openTerminal(at: url) }
         }
     }
 
@@ -297,7 +296,6 @@ final class WorkspaceModel {
         if let r = state.splitRatioV { splitRatioV = Self.clampSplitRatio(CGFloat(r)) }
         if let fs = state.terminalFontSize {
             terminalFontSize = min(max(CGFloat(fs), 8), 24)
-            for pane in panes { pane.terminalFontSize = terminalFontSize }
         }
 
         for (i, paneState) in state.panes.enumerated() where i < panes.count {
@@ -338,7 +336,7 @@ final class WorkspaceModel {
     }
 
     func toggleTerminal() {
-        activePaneModel.toggleTerminal(at: active.currentURL)
+        if terminal == nil { openTerminal(at: active.currentURL) } else { showTerminal.toggle() }
     }
 
     /// Mdir-style: copy/move the active pane's selection into the next visible pane.

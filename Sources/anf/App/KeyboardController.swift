@@ -10,6 +10,7 @@ import WebKit
 final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     private let workspace: WorkspaceModel
     private var monitor: Any?
+    private lazy var palette = CommandPaletteController(workspace: workspace)
 
     init(workspace: WorkspaceModel) {
         self.workspace = workspace
@@ -114,8 +115,8 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case "i": workspace.inspectorVisible.toggle(); return true
             case "d": shift ? workspace.toggleFavoriteCurrent() : model.duplicateSelection(); return true
             case "l": model.goToFolderPrompt(); return true
-            case "p": workspace.paletteVisible.toggle(); return true
-            case "k": workspace.paletteVisible.toggle(); return true   // ⌘K command palette
+            case "p": palette.toggle(); return true
+            case "k": palette.toggle(); return true   // ⌘K command palette
             case "g": if shift { model.goToFolderPrompt(); return true }
             case "n": if shift { model.makeNewFolder(); return true }
             case "r": model.reload(); return true

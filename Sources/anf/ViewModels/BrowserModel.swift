@@ -89,6 +89,7 @@ final class BrowserModel: Identifiable {
             forward.removeAll()
         }
         currentURL = url
+        RecentFolders.shared.record(url)
         reload()
     }
 

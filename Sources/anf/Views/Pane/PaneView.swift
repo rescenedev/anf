@@ -6,8 +6,6 @@ struct PaneView: View {
     @Bindable var workspace: WorkspaceModel
     let index: Int
 
-    @State private var paneHeight: CGFloat = 0
-
     private var pane: PaneModel { workspace.panes[index] }
     private var isActive: Bool { workspace.activePane == index }
     private var multiPane: Bool { workspace.layout.count > 1 }
@@ -18,16 +16,7 @@ struct PaneView: View {
             Divider()
             ContentArea(model: pane.current)
             PathBarView(model: pane.current)
-            TerminalPanel(pane: pane, availableHeight: paneHeight)
         }
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { paneHeight = geo.size.height }
-                    .onChange(of: geo.size.height) { _, h in paneHeight = h }
-            }
-        )
-        .animation(.easeInOut(duration: 0.2), value: pane.showTerminal)
         .overlay(alignment: .top) {
             if multiPane && isActive {
                 Rectangle().fill(Color.accentColor).frame(height: 2)
