@@ -39,6 +39,16 @@ struct FileSystemService: Sendable {
         }.value
     }
 
+    /// Filter by name (if any) then sort. Pure + Sendable so it can run off the
+    /// main thread for large directories.
+    func filteredSorted(_ items: [FileItem], filter: String, by order: SortOrder) -> [FileItem] {
+        var result = items
+        if !filter.isEmpty {
+            result = result.filter { $0.name.localizedCaseInsensitiveContains(filter) }
+        }
+        return sorted(result, by: order)
+    }
+
     /// Sort a snapshot. Directories always float to the top, matching Finder behaviour.
     func sorted(_ items: [FileItem], by order: SortOrder) -> [FileItem] {
         items.sorted { a, b in

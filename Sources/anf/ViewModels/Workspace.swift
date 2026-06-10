@@ -136,6 +136,7 @@ final class WorkspaceModel {
     }
     let favorites = FavoritesStore()
     let customSSH = CustomSSHStore()
+    let savedViews = SavedViewsStore()
 
     // Split proportions for the pane grid: fraction of width given to the left
     // column (dual/quad) and of height given to the top row (rows/quad).

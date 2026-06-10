@@ -503,15 +503,21 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         // If the index isn't ready, fall back to a per-query fd/mdfind/FileManager.
         deepTask = Task { [weak self] in
             let ranked = await Task.detached(priority: .userInitiated) { () -> [URL] in
-                let pool: [URL]
-                if let indexed {
-                    pool = indexed.filter { FileIndex.isUnder($0.path, rootPath) }
-                } else {
-                    pool = PaletteSearch.fdNames(root: root, needle: q, cap: 400)
+                func fdFallback() -> [URL] {
+                    PaletteSearch.fdNames(root: root, needle: q, cap: 400)
                         ?? PaletteSearch.mdfindNames(root: root, needle: q, cap: 400)
                         ?? PaletteSearch.fmNames(root: root, needle: q, maxDepth: 6, cap: 400)
                 }
-                return FuzzyMatch.rank(pool, query: q, limit: 80)
+                if let indexed {
+                    let pool = indexed.filter { FileIndex.isUnder($0.path, rootPath) }
+                    let hits = FuzzyMatch.rank(pool, query: q, limit: 80)
+                    // The index can be stale or partial (a broad parent scan that
+                    // didn't reach this subtree, or capped). If it yields nothing,
+                    // fall back to a live fd scan so name search never comes up dry.
+                    if !hits.isEmpty { return hits }
+                    return FuzzyMatch.rank(fdFallback(), query: q, limit: 80)
+                }
+                return FuzzyMatch.rank(fdFallback(), query: q, limit: 80)
             }.value
             guard let self, self.query == q else { return }
             self.nameTargets = ranked.map { Self.target(for: $0, content: false) }

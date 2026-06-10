@@ -45,6 +45,8 @@ final class BrowserModel: Identifiable {
 
     private let fs = FileSystemService()
     private var loadToken = 0
+    /// Bumped on every `recomputeItems`; an async sort only commits if still current.
+    private var itemsToken = 0
 
     init(start: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.currentURL = start
@@ -54,13 +56,28 @@ final class BrowserModel: Identifiable {
     // MARK: - Derived
 
     /// Rebuild the cached `items` from `allItems` applying the current filter and
-    /// sort. Called only when an input changes — never on plain reads.
+    /// sort. The sort uses locale-aware collation which is genuinely expensive for
+    /// big Korean-named directories (tens of thousands of entries), so for large
+    /// listings it runs off the main thread to keep navigation/scrolling smooth.
+    /// Small listings sort inline to avoid a one-frame flicker.
     private func recomputeItems() {
-        var result = allItems
-        if !filterText.isEmpty {
-            result = result.filter { $0.name.localizedCaseInsensitiveContains(filterText) }
+        itemsToken += 1
+        let snapshot = allItems
+        let filter = filterText
+        let order = sort
+        let fs = self.fs
+        if snapshot.count < 2_000 {
+            items = fs.filteredSorted(snapshot, filter: filter, by: order)
+            return
         }
-        items = fs.sorted(result, by: sort)
+        let token = itemsToken
+        Task.detached(priority: .userInitiated) {
+            let computed = fs.filteredSorted(snapshot, filter: filter, by: order)
+            await MainActor.run { [weak self] in
+                guard let self, self.itemsToken == token else { return }
+                self.items = computed
+            }
+        }
     }
 
     var selectedItems: [FileItem] {
