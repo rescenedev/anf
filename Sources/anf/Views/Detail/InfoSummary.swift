@@ -72,7 +72,9 @@ struct InfoInspector: View {
                 // Plain-text-ish files use our own preview — Quick Look renders
                 // them at an unreadably small fixed size.
                 Group {
-                    if target.isPlainTextLike {
+                    if target.isExtractableDocument {
+                        DocumentTextPreview(url: target.url, fontSize: workspace.previewTextSize)
+                    } else if target.isPlainTextLike {
                         TextFilePreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else {
                         QuickLookView(url: target.url)

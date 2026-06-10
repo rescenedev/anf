@@ -178,7 +178,8 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
     /// font; otherwise scale the file listing as before.
     private func bumpScale(_ direction: Int) {
         if workspace.inspectorVisible,
-           let target = model.selectedItems.first, target.isPlainTextLike {
+           let target = model.selectedItems.first,
+           target.isPlainTextLike || target.isExtractableDocument {
             workspace.bumpPreviewTextSize(direction)
         } else {
             model.bumpScale(direction)

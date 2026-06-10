@@ -29,6 +29,10 @@ struct FileItem: Identifiable, Hashable, Sendable {
     var isMovie: Bool { contentType?.conforms(to: .movie) ?? false }
     var isPDF: Bool { contentType?.conforms(to: .pdf) ?? false }
 
+    /// ZIP+XML office documents whose body text anf can extract and preview as
+    /// text (hwpx/docx/pptx/xlsx) — no QuickLook generator needed.
+    var isExtractableDocument: Bool { ["hwpx", "docx", "pptx", "xlsx"].contains(ext) }
+
     /// Scripts/source/plain text — previewed with our own readable text view
     /// (Quick Look renders these tiny). Rich text formats stay on Quick Look.
     var isPlainTextLike: Bool {

@@ -18,13 +18,19 @@ final class BrowserModel: Identifiable {
     private(set) var allItems: [FileItem] = []
     private(set) var isLoading = false
 
+    /// Sorted + filtered listing — what the views render. Cached because for big
+    /// directories (tens of thousands of entries) re-sorting on every property
+    /// read (SwiftUI re-renders, selection math, etc.) is the dominant cost. We
+    /// recompute only when `allItems`, `sort` or `filterText` actually change.
+    private(set) var items: [FileItem] = []
+
     // Presentation
     var viewMode: ViewMode = .list
-    var sort = SortOrder() { didSet { resort() } }
+    var sort = SortOrder() { didSet { recomputeItems() } }
     var showHidden = false { didSet { reload() } }
     var iconSize: Double = 84
     var textScale: Double = 1.0
-    var filterText = ""
+    var filterText = "" { didSet { if filterText != oldValue { recomputeItems() } } }
     var inspectorVisible = false
     var sidebarVisible = true
 
@@ -47,13 +53,14 @@ final class BrowserModel: Identifiable {
 
     // MARK: - Derived
 
-    /// Items after hidden-filtering, text-filtering and sorting. This is what views render.
-    var items: [FileItem] {
+    /// Rebuild the cached `items` from `allItems` applying the current filter and
+    /// sort. Called only when an input changes — never on plain reads.
+    private func recomputeItems() {
         var result = allItems
         if !filterText.isEmpty {
             result = result.filter { $0.name.localizedCaseInsensitiveContains(filterText) }
         }
-        return fs.sorted(result, by: sort)
+        items = fs.sorted(result, by: sort)
     }
 
     var selectedItems: [FileItem] {
@@ -134,11 +141,11 @@ final class BrowserModel: Identifiable {
             let loaded = await fs.contents(of: url, showHidden: hidden)
             guard token == loadToken else { return }   // a newer load superseded us
             allItems = loaded
+            recomputeItems()
             isLoading = false
         }
     }
 
-    private func resort() { /* `items` recomputes; nothing to store */ }
 
     // MARK: - iCloud
 
@@ -169,6 +176,7 @@ final class BrowserModel: Identifiable {
     private func refreshItem(at url: URL) {
         guard let fresh = FileItem(url: URL(fileURLWithPath: url.path)) else { return }
         allItems = allItems.map { $0.url == url ? fresh : $0 }
+        recomputeItems()
     }
 
     // MARK: - Actions

@@ -190,8 +190,7 @@ final class WorkspaceModel {
         }
         let s = TerminalSession.ssh(host)
         s.applyFontSize(terminalFontSize)
-        terminal = s
-        showTerminal = true
+        setTerminal(s)
     }
 
     func openSSH(_ custom: CustomSSHHost) {
@@ -200,14 +199,20 @@ final class WorkspaceModel {
         }
         let s = TerminalSession.ssh(custom)
         s.applyFontSize(terminalFontSize)
-        terminal = s
-        showTerminal = true
+        setTerminal(s)
     }
 
     /// Open an SFTP session to `host` in the global terminal drawer.
     func openSFTP(_ host: String) {
         let s = TerminalSession.sftp(host)
         s.applyFontSize(terminalFontSize)
+        setTerminal(s)
+    }
+
+    /// Swap the drawer's session, killing the previous one's PTY child so we don't
+    /// leave the old ssh/sftp process running when switching hosts.
+    private func setTerminal(_ s: TerminalSession) {
+        terminal?.view.terminate()
         terminal = s
         showTerminal = true
     }
