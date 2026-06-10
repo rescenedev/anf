@@ -221,18 +221,12 @@ final class BrowserModel: Identifiable {
         selection.removeAll()
         if isRemote { reloadRemote(token: token); return }
         Task {
-            // Phase 1: paint names immediately (cheap keys only). Phase 2: enrich
-            // with size/date/kind. A 27k-entry folder shows instantly instead of
-            // blocking on a full stat of every item.
-            let fast = await fs.contentsFast(of: url, showHidden: hidden)
-            if token == loadToken {
-                allItems = fast
-                recomputeItems()
-                isLoading = false
-            }
-            let full = await fs.contents(of: url, showHidden: hidden)
-            guard token == loadToken else { return }   // a newer load superseded us
-            allItems = full
+            // Single bulk pass: name + type + size + dates for every entry in a
+            // few syscalls, no per-item stat. `contentsFast` already carries the
+            // metadata the columns need, so there is no slow second pass.
+            let loaded = await fs.contentsFast(of: url, showHidden: hidden)
+            guard token == loadToken else { return }
+            allItems = loaded
             recomputeItems()
             isLoading = false
         }

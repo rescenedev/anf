@@ -92,6 +92,49 @@ struct FileItem: Identifiable, Hashable, Sendable {
         .localizedNameKey, .nameKey,
     ]
 
+    /// Build a first-paint item straight from a bulk-read entry — no syscall at
+    /// all. Packages/apps are treated as plain folders until the full pass refines
+    /// them (brief, and only affects bundles).
+    /// Directory extensions that are really opaque bundles (open, not browse).
+    private static let bundleExts: Set<String> = [
+        "app", "bundle", "framework", "kext", "plugin", "rtfd", "xcodeproj",
+        "playground", "photoslibrary", "pkg",
+    ]
+    /// Cache ext → UTType so a folder of thousands of like files resolves once.
+    private static let typeCacheLock = NSLock()
+    private nonisolated(unsafe) static var typeCache: [String: UTType?] = [:]
+
+    private static func cachedType(forExt ext: String) -> UTType? {
+        typeCacheLock.lock(); defer { typeCacheLock.unlock() }
+        if let hit = typeCache[ext] { return hit }
+        let t = ext.isEmpty ? nil : UTType(filenameExtension: ext)
+        typeCache[ext] = t
+        return t
+    }
+
+    /// Build a fully-populated item straight from a bulk-read entry — no syscall.
+    /// `contentType` is derived from the extension (cached), so the whole listing,
+    /// including size/date/kind columns, comes from one bulk pass with no stat.
+    static func fast(parentPath: String, entry: FastDirEntry) -> FileItem {
+        // Build the child URL WITHOUT `appendingPathComponent` (RFC parsing) or a
+        // bare `URL(fileURLWithPath:)` (which stats to decide directory-ness) —
+        // both cost hundreds of µs each and dominate on huge directories. Passing
+        // `isDirectory:` skips the stat; string concat skips the parser.
+        let full = parentPath.hasSuffix("/") ? parentPath + entry.name
+                                             : parentPath + "/" + entry.name
+        let url = URL(fileURLWithPath: full, isDirectory: entry.isDir)
+        let ext = (entry.name as NSString).pathExtension.lowercased()
+        let isPackage = entry.isDir && bundleExts.contains(ext)
+        let type: UTType? = entry.isDir
+            ? (isPackage ? UTType(filenameExtension: ext) : .folder)
+            : cachedType(forExt: ext)
+        return FileItem(
+            url: url, name: entry.name, isDirectory: entry.isDir, isPackage: isPackage,
+            isApplication: ext == "app", isSymlink: entry.isSymlink, isHidden: entry.isHidden,
+            size: entry.size, modified: entry.modified, created: entry.created,
+            contentType: type, isCloudPlaceholder: false)
+    }
+
     /// Lightweight item for the first paint. Metadata columns (size/date/kind) fill
     /// in when the full `FileItem(url:)` pass replaces it.
     init?(fastURL url: URL) {

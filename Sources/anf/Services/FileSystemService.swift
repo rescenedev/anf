@@ -26,6 +26,14 @@ struct FileSystemService: Sendable {
     /// almost instantly. The full `contents(of:)` pass enriches it afterwards.
     func contentsFast(of url: URL, showHidden: Bool) async -> [FileItem] {
         await Task.detached(priority: .userInitiated) {
+            // Native bulk read (no per-item stat). Falls back to FileManager only
+            // if getattrlistbulk is unavailable for this volume.
+            if let entries = FastDirRead.list(path: url.path) {
+                let parentPath = url.path
+                return entries.compactMap { e in
+                    (!showHidden && e.isHidden) ? nil : FileItem.fast(parentPath: parentPath, entry: e)
+                }
+            }
             let fm = FileManager.default
             var options: FileManager.DirectoryEnumerationOptions = [.skipsSubdirectoryDescendants]
             if !showHidden { options.insert(.skipsHiddenFiles) }
@@ -62,6 +70,23 @@ struct FileSystemService: Sendable {
         var result = items
         if !filter.isEmpty {
             result = result.filter { $0.name.localizedCaseInsensitiveContains(filter) }
+        }
+        // Fast path for the common name sort: precompute a lowercase UTF-8 key once
+        // per item and order by raw bytes. For NFC text (incl. Hangul, which is in
+        // dictionary order in Unicode) this matches expectations and is ~10× faster
+        // than `localizedStandardCompare` per comparison — the difference between a
+        // smooth and a janky 27k-entry folder.
+        if order.key == .name {
+            let asc = order.ascending
+            let keyed = result.map { (item: $0, key: Array($0.name.lowercased().utf8)) }
+            let out = keyed.sorted { a, b in
+                let ad = a.item.isBrowsableContainer, bd = b.item.isBrowsableContainer
+                if ad != bd { return ad }
+                if a.key == b.key { return false }
+                let less = a.key.lexicographicallyPrecedes(b.key)
+                return asc ? less : !less
+            }
+            return out.map(\.item)
         }
         return sorted(result, by: order)
     }

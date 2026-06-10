@@ -90,9 +90,19 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case 48: workspace.cyclePane(shift ? -1 : 1); return true // Tab → switch pane
             case 125: model.moveSelection(by: 1, extend: shift); return true   // ↓
             case 126: model.moveSelection(by: -1, extend: shift); return true  // ↑
-            // ←/→ are left to the native view (icon-grid column movement, etc.).
-            // Folder history stays on ⌘←/⌘→; plain arrows here were unstable in
-            // icon view, so they no longer navigate folders.
+            // ←/→ move the selection in icon/gallery grids (no native arrow
+            // handling there). In list/columns they fall through to the native
+            // view. Folder history stays on ⌘←/⌘→.
+            case 123:
+                if model.viewMode == .icons || model.viewMode == .gallery {
+                    model.moveSelection(by: -1, extend: shift); return true
+                }
+                return false
+            case 124:
+                if model.viewMode == .icons || model.viewMode == .gallery {
+                    model.moveSelection(by: 1, extend: shift); return true
+                }
+                return false
             case 51:  model.trashSelection(); return true           // delete → trash
             case 96:  workspace.transferToOtherPane(move: false); return true // F5 copy
             case 97:  workspace.transferToOtherPane(move: true); return true   // F6 move
