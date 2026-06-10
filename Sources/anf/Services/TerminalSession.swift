@@ -43,6 +43,12 @@ final class TerminalSession: NSObject, Identifiable {
         return session
     }
 
+    static func sftp(_ host: String) -> TerminalSession {
+        let session = TerminalSession(title: "sftp \(host)", sshHost: host)
+        session.view.startSFTP(args: [host])
+        return session
+    }
+
     func applyFontSize(_ size: CGFloat) {
         view.setFontSize(size)
     }

@@ -26,7 +26,13 @@ struct PaneView: View {
             multiPane && isActive
                 ? Color.accentColor.opacity(0.04) : Color.clear
         )
-        // Focus this pane on any interaction without blocking child gestures.
+        // Focus this pane on any interaction without blocking child gestures. A
+        // zero-distance drag fires on mouse-down, so it also catches clicks on the
+        // empty area of the file list (an NSTableView swallows plain taps there).
         .simultaneousGesture(TapGesture().onEnded { workspace.focusPane(index) })
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onEnded { _ in workspace.focusPane(index) }
+        )
     }
 }

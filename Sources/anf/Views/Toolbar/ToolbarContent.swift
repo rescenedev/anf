@@ -76,6 +76,13 @@ struct ToolbarTrailingView: View {
             ToolbarIconButton(symbol: "trash", help: "Move to Trash (⌘⌫)", enabled: !model.selection.isEmpty) {
                 model.trashSelection()
             }
+            ToolbarIconButton(symbol: "macwindow", help: "현재 레이아웃을 Workspace로 저장") {
+                if let name = TextPrompt.run(title: "Workspace 저장",
+                                             message: "현재 pane 레이아웃과 탭을 이 이름으로 저장합니다.",
+                                             defaultValue: "", action: "저장") {
+                    workspace.saveCurrentView(name: name)
+                }
+            }
             ToolbarIconButton(symbol: "terminal", help: "Terminal (⌃`)") {
                 workspace.toggleTerminal()
             }

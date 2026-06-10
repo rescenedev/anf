@@ -2,20 +2,20 @@
 
 anf 향후 작업 메모.
 
+## 완료 (branch: feat/content-search-remote)
+
+- [x] **hwpx / docx / pptx / xlsx 본문 검색** — unzip으로 내부 XML을 풀어 grep. 팔레트
+  "내용" 섹션에 함께 표시. (`PaletteSearch.docContent`)
+- [x] **FSEvents 증분 인덱스** — 포커스 폴더를 FSEvents로 감시, add/remove/rename를
+  전체 재스캔 없이 반영. checkpoint도 자동 재저장. (`FileIndex`)
+- [x] **SFTP 연결** — SSH 사이드바 우클릭: `SFTP (터미널)`(항상 동작), `SFTP 마운트해서
+  열기`(sshfs로 원격을 로컬처럼 브라우징; sshfs 없으면 설치 안내). (`RemoteMount`)
+
 ## 검색
 
-- [ ] **hwpx / docx / zip 내부 텍스트 추출 검색**
-  - 현재 내용 검색은 ripgrep 기반이라 텍스트 파일만 검색됨.
-  - hwpx·docx·pptx·xlsx·zip 등은 ZIP으로 압축된 XML이라 rg가 바이너리로 보고 건너뜀 → 내부 텍스트 검색 불가.
-  - 별도 구현 필요: 압축 해제 → XML/문서 파싱 → 텍스트 추출 → 인덱스/검색.
-  - 한글(hwp/hwpx)은 알한글의 파서나 자체 파서 검토.
 - [ ] 검색 범위 토글 (현재 폴더 / 홈 / 전역) — 지금은 현재 포커스 폴더 이하 고정.
-- [ ] 파일 인덱스 증분 갱신 / 변경 감지 (FSEvents) — 지금은 launch 때 홈 1회 인덱싱.
-- [ ] 인덱스에서 `~/Library` 제외 중 — 필요 시 사용자가 직접 진입하면 on-demand 인덱싱.
-
-## 원격 / SFTP
-
-- [ ] **SFTP 연결** — 원격 서버를 사이드바에 마운트하고 로컬처럼 탐색·전송.
+- [ ] hwpx 본문 검색을 인덱싱해 더 빠르게 (지금은 매 검색마다 unzip).
+- [ ] zip 일반 압축파일 내부 검색 확장 검토.
 
 ## 커맨드 팔레트
 

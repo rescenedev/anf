@@ -6,6 +6,9 @@ struct FileTile: View {
     let item: FileItem
     let side: CGFloat
     let isSelected: Bool
+    var isEditing: Bool = false
+    var onCommitRename: (String) -> Void = { _ in }
+    var onCancelRename: () -> Void = {}
 
     @State private var thumb: NSImage?
 
@@ -27,25 +30,32 @@ struct FileTile: View {
             }
             .frame(width: glyphSide, height: glyphSide)
 
-            HStack(spacing: 3) {
-                Text(item.name)
-                if item.isCloudPlaceholder {
-                    Image(systemName: "icloud.and.arrow.down")
-                        .font(.system(size: 10))
-                        .foregroundStyle(isSelected ? .white : .secondary)
+            if isEditing {
+                InlineRenameField(
+                    initialName: item.name, isDirectory: item.isDirectory, fontSize: 12,
+                    onCommit: onCommitRename, onCancel: onCancelRename)
+                    .frame(width: side + 24, height: 22)
+            } else {
+                HStack(spacing: 3) {
+                    Text(item.name)
+                    if item.isCloudPlaceholder {
+                        Image(systemName: "icloud.and.arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundStyle(isSelected ? .white : .secondary)
+                    }
                 }
+                    .font(.system(size: 12))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(isSelected ? Color.accentColor : .clear)
+                    )
+                    .frame(maxWidth: side + 24)
             }
-                .font(.system(size: 12))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(isSelected ? Color.accentColor : .clear)
-                )
-                .frame(maxWidth: side + 24)
         }
         .padding(8)
         .background(

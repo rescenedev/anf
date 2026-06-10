@@ -12,8 +12,11 @@ struct SidebarView: View {
     // Drawer state per section, remembered across launches.
     @AppStorage("anf.sidebar.open.favorites") private var openFavorites = true
     @AppStorage("anf.sidebar.open.pinned") private var openPinned = true
+    @AppStorage("anf.sidebar.open.views") private var openViews = true
     @AppStorage("anf.sidebar.open.locations") private var openLocations = true
     @AppStorage("anf.sidebar.open.ssh") private var openSSH = true
+    @State private var renamingView: SavedView?
+    @State private var renameText = ""
 
     private var model: BrowserModel { workspace.active }
 
@@ -49,6 +52,15 @@ struct SidebarView: View {
                     }
                 } header: {
                     sectionHeader("Pinned", isOpen: $openPinned)
+                }
+            }
+            if !workspace.savedViews.views.isEmpty {
+                Section {
+                    if openViews {
+                        ForEach(workspace.savedViews.views) { viewRow($0) }
+                    }
+                } header: {
+                    sectionHeader("Workspace", isOpen: $openViews)
                 }
             }
             if !locations.isEmpty {
@@ -89,6 +101,16 @@ struct SidebarView: View {
             locations = await Task.detached(priority: .utility) { SidebarBuilder.locations() }.value
             sshHosts = await Task.detached(priority: .utility) { SSHConfig.hosts() }.value
         }
+        .alert("Workspace 이름 변경", isPresented: Binding(
+            get: { renamingView != nil },
+            set: { if !$0 { renamingView = nil } })) {
+            TextField("이름", text: $renameText)
+            Button("취소", role: .cancel) { renamingView = nil }
+            Button("저장") {
+                if let v = renamingView { workspace.savedViews.rename(id: v.id, to: renameText) }
+                renamingView = nil
+            }
+        }
     }
 
     /// Drawer-style section header: the title + chevron area is a Button (toggle),
@@ -119,8 +141,42 @@ struct SidebarView: View {
         workspace.customSSH.add(custom)
     }
 
+    /// A saved window arrangement. Tap recalls it; the context menu updates,
+    /// renames or deletes it. The icon mirrors the layout it captured.
+    private func viewRow(_ view: SavedView) -> some View {
+        let symbol = PaneLayout(rawValue: view.snapshot.layout)?.symbol ?? "square.grid.2x2"
+        let selected = workspace.activeViewID == view.id
+        return Label {
+            Text(view.name).font(.system(size: 13)).foregroundStyle(.primary).lineLimit(1)
+        } icon: {
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(Color.accentColor)
+        }
+            .padding(.vertical, 2)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(selected ? Color.primary.opacity(0.12) : .clear)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 1)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { workspace.applyView(view) }
+            .contextMenu {
+                Button("이 레이아웃으로 전환") { workspace.applyView(view) }
+                Button("현재 레이아웃으로 덮어쓰기") {
+                    workspace.savedViews.update(id: view.id, snapshot: workspace.captureSnapshot())
+                }
+                Button("이름 변경…") { renameText = view.name; renamingView = view }
+                Divider()
+                Button("삭제", role: .destructive) { workspace.savedViews.remove(id: view.id) }
+            }
+    }
+
     private func row(name: String, symbol: String, url: URL, removable: Bool) -> some View {
-        let selected = url.standardizedFileURL.path == model.currentURL.standardizedFileURL.path
+        // A folder row highlights only when no Workspace is the active sidebar
+        // selection — so a folder and a Workspace pointing at the same path never
+        // both light up. Clicking a folder clears the Workspace selection.
+        let selected = workspace.activeViewID == nil
+            && url.standardizedFileURL.path == model.currentURL.standardizedFileURL.path
         return Label {
             Text(name).font(.system(size: 13)).foregroundStyle(.primary).lineLimit(1)
         } icon: {
@@ -136,7 +192,7 @@ struct SidebarView: View {
                     .padding(.vertical, 1)
             )
             .contentShape(Rectangle())
-            .onTapGesture { model.navigate(to: url) }
+            .onTapGesture { workspace.activeViewID = nil; model.navigate(to: url) }
             .contextMenu {
                 Button("Open in New Tab") { workspace.activePaneModel.newTab(at: url) }
                 if removable {
@@ -182,14 +238,20 @@ struct SidebarView: View {
         .help("ssh \(host.subtitle)")
         .contextMenu {
             if let custom = customData {
+                Button("SFTP로 열기") { workspace.openRemote(custom.target) }
                 Button("Connect in anf") { workspace.openSSH(custom) }
+                Button("SFTP (터미널)") { workspace.openSFTP(custom.target) }
+                Button("SFTP 마운트해서 열기") { workspace.mountSFTP(custom.target) }
                 Button("Connect with Ghostty") { TerminalLauncher.ssh(custom.target) }
                 Divider()
                 Button("Remove from Sidebar", role: .destructive) {
                     workspace.customSSH.remove(target: host.alias)
                 }
             } else {
+                Button("SFTP로 열기") { workspace.openRemote(host.alias) }
                 Button("Connect in anf") { workspace.openSSH(host.alias) }
+                Button("SFTP (터미널)") { workspace.openSFTP(host.alias) }
+                Button("SFTP 마운트해서 열기") { workspace.mountSFTP(host.alias) }
                 Button("Connect with Ghostty") { TerminalLauncher.ssh(host.alias) }
             }
         }

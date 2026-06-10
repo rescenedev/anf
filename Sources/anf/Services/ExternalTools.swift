@@ -13,6 +13,9 @@ enum ExternalTools {
             "\(home)/.cargo/bin",     // cargo-installed (fd/rg)
             "\(home)/.local/bin",
             "/opt/local/bin",         // MacPorts
+            "/opt/zerobrew/prefix/bin",   // zerobrew prefix
+            "/run/current-system/sw/bin", // Nix (system)
+            "\(home)/.nix-profile/bin",   // Nix (user profile)
         ]
         // A Finder-launched app gets a minimal PATH, so also read the user's
         // login-shell PATH — this picks up non-standard prefixes (custom brews,
@@ -87,7 +90,10 @@ enum ExternalTools {
 
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        guard let s = String(data: data, encoding: .utf8) else { return [] }
+        // Lossy UTF-8 decode: tools that emit some binary bytes (e.g. `unzip -p`
+        // over a whole archive) must not nuke the entire output to nil — invalid
+        // bytes become U+FFFD and valid text is preserved.
+        let s = String(decoding: data, as: UTF8.self)
         return s.split(separator: "\n", omittingEmptySubsequences: true)
             .prefix(maxLines).map(String.init)
     }

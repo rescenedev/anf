@@ -6,6 +6,16 @@ struct ContentArea: View {
 
     var body: some View {
         ZStack {
+            // True window translucency: the desktop shows through, blurred. A faint
+            // gradient tint on top keeps text readable without killing the effect.
+            VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
+                .overlay(
+                    LinearGradient(
+                        colors: [Color(nsColor: .windowBackgroundColor).opacity(0.55),
+                                 Color(nsColor: .windowBackgroundColor).opacity(0.42)],
+                        startPoint: .top, endPoint: .bottom))
+                .ignoresSafeArea()
+
             switch model.viewMode {
             case .icons:   IconGridView(model: model)
             case .list:    FileListView(model: model)
@@ -14,7 +24,14 @@ struct ContentArea: View {
             }
 
             if model.isLoading && model.allItems.isEmpty {
-                ProgressView().controlSize(.large)
+                VStack(spacing: 10) {
+                    ProgressView().controlSize(.large)
+                    if model.isRemote {
+                        Text("원격 연결 중…").font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                }
+            } else if let err = model.remoteError, model.items.isEmpty {
+                RemoteErrorState(message: err) { model.reload() }
             } else if !model.isLoading && model.items.isEmpty {
                 EmptyState(filtered: !model.filterText.isEmpty)
             }
@@ -46,6 +63,23 @@ private struct BackgroundMenu: View {
         Button("Copy Path") { model.copyPathToPasteboard() }
         Divider()
         Toggle("Show Hidden Files", isOn: Binding(get: { model.showHidden }, set: { model.showHidden = $0 }))
+    }
+}
+
+private struct RemoteErrorState: View {
+    let message: String
+    let retry: () -> Void
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 40)).foregroundStyle(.tertiary)
+            Text("SFTP 연결 실패").font(.title3).foregroundStyle(.secondary)
+            Text(message)
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).frame(maxWidth: 360)
+            Button("다시 시도", action: retry)
+        }
+        .padding(24)
     }
 }
 

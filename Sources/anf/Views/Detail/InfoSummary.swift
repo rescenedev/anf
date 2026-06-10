@@ -54,6 +54,27 @@ struct InfoSummary: View {
     }
 }
 
+/// Inspector preview for a remote (SFTP) selection — Quick Look can't read a
+/// `sftp://` URL, so show the icon, name and a hint to open/download.
+private struct RemotePreviewPlaceholder: View {
+    let item: FileItem
+    var body: some View {
+        VStack(spacing: 12) {
+            IconImage(image: IconProvider.shared.icon(for: item))
+                .frame(width: 64, height: 64)
+            Text(item.name).font(.system(size: 13, weight: .medium))
+                .lineLimit(2).multilineTextAlignment(.center)
+            if !item.isDirectory {
+                Text(Format.bytes(item.size)).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("열기(↵ 또는 더블클릭) 시 다운로드 후 표시됩니다")
+                    .font(.system(size: 11)).foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// Right-hand inspector: a full-bleed preview of the selection. The metadata
 /// block stays hidden until the ⓘ button toggles it in.
 struct InfoInspector: View {
@@ -72,7 +93,11 @@ struct InfoInspector: View {
                 // Plain-text-ish files use our own preview — Quick Look renders
                 // them at an unreadably small fixed size.
                 Group {
-                    if target.isPlainTextLike {
+                    if target.url.scheme == "sftp" {
+                        RemotePreviewPlaceholder(item: target)
+                    } else if target.isExtractableDocument {
+                        DocumentTextPreview(url: target.url, fontSize: workspace.previewTextSize)
+                    } else if target.isPlainTextLike {
                         TextFilePreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else {
                         QuickLookView(url: target.url)

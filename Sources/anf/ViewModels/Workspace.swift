@@ -136,6 +136,7 @@ final class WorkspaceModel {
     }
     let favorites = FavoritesStore()
     let customSSH = CustomSSHStore()
+    let savedViews = SavedViewsStore()
 
     // Split proportions for the pane grid: fraction of width given to the left
     // column (dual/quad) and of height given to the top row (rows/quad).
@@ -190,8 +191,7 @@ final class WorkspaceModel {
         }
         let s = TerminalSession.ssh(host)
         s.applyFontSize(terminalFontSize)
-        terminal = s
-        showTerminal = true
+        setTerminal(s)
     }
 
     func openSSH(_ custom: CustomSSHHost) {
@@ -200,8 +200,42 @@ final class WorkspaceModel {
         }
         let s = TerminalSession.ssh(custom)
         s.applyFontSize(terminalFontSize)
+        setTerminal(s)
+    }
+
+    /// Open an SFTP session to `host` in the global terminal drawer.
+    func openSFTP(_ host: String) {
+        let s = TerminalSession.sftp(host)
+        s.applyFontSize(terminalFontSize)
+        setTerminal(s)
+    }
+
+    /// Swap the drawer's session, killing the previous one's PTY child so we don't
+    /// leave the old ssh/sftp process running when switching hosts.
+    private func setTerminal(_ s: TerminalSession) {
+        terminal?.view.terminate()
         terminal = s
         showTerminal = true
+    }
+
+    /// Browse `host` over SFTP directly in the active pane (no terminal, no
+    /// sshfs/macFUSE) — the remote home opens as a normal folder listing.
+    func openRemote(_ host: String) {
+        activePaneModel.current.openRemote(host: host)
+    }
+
+    /// Mount `host` over SFTP (sshfs) and open it in the active pane, so the
+    /// remote filesystem is browsed like a local folder. Requires sshfs.
+    func mountSFTP(_ host: String) {
+        RemoteMount.shared.mount(host: host) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let url):
+                self.activePaneModel.current.navigate(to: url)
+            case .failure(let message):
+                RemoteMount.presentError(message)
+            }
+        }
     }
 
     /// `available` is the live content width — the inspector may take up to 55%
@@ -322,6 +356,63 @@ final class WorkspaceModel {
         activePane = min(state.activePane, layout.count - 1)
     }
 
+    // MARK: - Saved Views (named window arrangements)
+
+    /// Snapshot the current pane layout + tabs so it can be recalled later.
+    func captureSnapshot() -> ViewSnapshot {
+        ViewSnapshot(
+            layout: layout.rawValue,
+            activePane: activePane,
+            splitRatioH: Double(splitRatioH),
+            splitRatioV: Double(splitRatioV),
+            panes: panes.prefix(layout.count).map { pane in
+                ViewSnapshot.Pane(
+                    tabs: pane.tabs.map {
+                        ViewSnapshot.Tab(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue)
+                    },
+                    activeIndex: pane.activeIndex)
+            }
+        )
+    }
+
+    /// Restore a saved arrangement: layout, split ratios and each pane's tabs.
+    func applySnapshot(_ snap: ViewSnapshot) {
+        let fm = FileManager.default
+        if let l = PaneLayout(rawValue: snap.layout) { layout = l }
+        splitRatioH = Self.clampSplitRatio(CGFloat(snap.splitRatioH))
+        splitRatioV = Self.clampSplitRatio(CGFloat(snap.splitRatioV))
+        for (i, paneState) in snap.panes.enumerated() where i < panes.count {
+            let validTabs = paneState.tabs.filter {
+                var isDir: ObjCBool = false
+                return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue
+            }
+            guard !validTabs.isEmpty else { continue }
+            let models = validTabs.map { ts -> BrowserModel in
+                let m = BrowserModel(start: URL(fileURLWithPath: ts.path))
+                if let vm = ViewMode(rawValue: ts.viewMode) { m.viewMode = vm }
+                return m
+            }
+            panes[i].replaceTabs(models, activeIndex: min(paneState.activeIndex, models.count - 1))
+        }
+        activePane = min(snap.activePane, layout.count - 1)
+        save()
+    }
+
+    /// Save the current arrangement under `name`.
+    func saveCurrentView(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        savedViews.add(SavedView(name: trimmed, snapshot: captureSnapshot()))
+    }
+
+    /// The saved view currently applied (drives the sidebar selection highlight).
+    var activeViewID: UUID?
+
+    func applyView(_ view: SavedView) {
+        activeViewID = view.id
+        applySnapshot(view.snapshot)
+    }
+
     var activePaneModel: PaneModel { panes[min(activePane, panes.count - 1)] }
     var active: BrowserModel { activePaneModel.current }
 
@@ -357,6 +448,15 @@ final class WorkspaceModel {
 
     func toggleTerminal() {
         if terminal == nil { openTerminal(at: active.currentURL) } else { showTerminal.toggle() }
+        // When (re)opening, hand keyboard focus to the terminal. The view is
+        // re-inserted by SwiftUI asynchronously, so retry until it's in a window.
+        if showTerminal, let t = terminal {
+            for delay in [0.0, 0.08, 0.2] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    if t.view.window != nil { t.focus() }
+                }
+            }
+        }
     }
 
     /// Mdir-style: copy/move the active pane's selection into the next visible pane.

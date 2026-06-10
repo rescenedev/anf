@@ -40,8 +40,13 @@ struct TerminalPanel: View {
                     .buttonStyle(.plain).focusEffectDisabled().help("Close Terminal (⌃`)")
                 }
                 .padding(.horizontal, 10).frame(height: 24).background(.bar)
+                // `.id` ties the embedded NSView to the session: when the user
+                // switches host (e.g. ebs → msg10p) SwiftUI tears down the old
+                // terminal view and builds the new session's, instead of keeping
+                // the previous PTY on screen under a new title.
                 XtermViewRep(session: session)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id(session.id)
             }
             .frame(height: workspace.terminalHeight)
             .transition(.move(edge: .bottom).combined(with: .opacity))

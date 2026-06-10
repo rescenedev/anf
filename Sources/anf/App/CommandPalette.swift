@@ -18,10 +18,27 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         let isFile: Bool
         var isContent = false   // matched by file content (ripgrep), not name
         var isDivider = false   // non-selectable section header row
+        /// When set, activating this row connects to the SSH host instead of
+        /// navigating to a URL.
+        var sshHost: String? = nil
+        /// When set, activating this row applies the saved Workspace.
+        var viewID: UUID? = nil
 
         static func divider(_ title: String) -> Target {
             Target(name: title, url: URL(fileURLWithPath: "/"), symbol: "",
                    isFile: false, isContent: false, isDivider: true)
+        }
+
+        static func ssh(_ host: String, subtitle: String) -> Target {
+            Target(name: host, url: URL(string: "ssh://\(host)") ?? URL(fileURLWithPath: "/"),
+                   symbol: "network", isFile: false, sshHost: host)
+        }
+
+        static func workspace(_ view: SavedView) -> Target {
+            let symbol = PaneLayout(rawValue: view.snapshot.layout)?.symbol ?? "macwindow"
+            return Target(name: view.name,
+                          url: URL(fileURLWithPath: "/__workspace__/\(view.id.uuidString)"),
+                          symbol: symbol, isFile: false, viewID: view.id)
         }
     }
 
@@ -47,6 +64,9 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     private var scanTimer: Timer?
     private var scanDirs: [String] = []
     private var scanIdx = 0
+    /// SSH hosts (config + custom) cached when the palette opens, so keystrokes
+    /// don't re-read ~/.ssh/config.
+    private var sshTargets: [Target] = []
 
     private let panelWidth: CGFloat = 760
     private let rowHeight: CGFloat = 36
@@ -75,6 +95,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
         field.stringValue = ""
         deepResults = []
+        loadSSHTargets()
         recompute()
         position(over: host)
         host.addChildWindow(panel, ordered: .above)
@@ -294,16 +315,36 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
     private var query: String { field?.stringValue ?? "" }
 
+    /// Build the SSH host list (custom hosts first, then ~/.ssh/config) once per
+    /// open. Reading the config off-main keeps the first keystroke snappy.
+    private func loadSSHTargets() {
+        let custom = workspace?.customSSH.hosts.map { $0.target } ?? []
+        var targets: [Target] = custom.map { .ssh($0, subtitle: $0) }
+        Task { @MainActor [weak self] in
+            let hosts = await Task.detached(priority: .utility) { SSHConfig.hosts() }.value
+            var seen = Set(custom)
+            for h in hosts where seen.insert(h.alias).inserted {
+                targets.append(.ssh(h.alias, subtitle: h.subtitle))
+            }
+            self?.sshTargets = targets
+            if self?.isShown == true { self?.recompute() }
+        }
+    }
+
     private func recompute() {
         guard let workspace else { results = []; table?.reloadData(); return }
         let q = query
 
         if q.isEmpty {
-            // Empty state order: pinned → recently visited → built-in favorites.
+            // Empty state order: pinned → Workspace → recently visited →
+            // built-in favorites → SSH.
             var all: [Target] = []
             for u in workspace.favorites.items {
                 all.append(.init(name: u.lastPathComponent.isEmpty ? u.path : u.lastPathComponent,
                                  url: u, symbol: "star.fill", isFile: false))
+            }
+            for v in workspace.savedViews.views {
+                all.append(.workspace(v))
             }
             for u in RecentFolders.shared.items {
                 all.append(.init(name: u.lastPathComponent.isEmpty ? u.path : u.lastPathComponent,
@@ -313,8 +354,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 all.append(.init(name: f.name, url: f.url, symbol: f.symbol, isFile: false))
             }
             var seen = Set<String>()
-            results = all.filter { seen.insert($0.url.standardizedFileURL.path).inserted }
-                         .prefix(40).map { $0 }
+            var rows = all.filter { seen.insert($0.url.standardizedFileURL.path).inserted }
+                          .prefix(40).map { $0 }
+            if !sshTargets.isEmpty {
+                rows.append(.divider("SSH"))
+                rows.append(contentsOf: sshTargets)
+            }
+            results = rows
         } else {
             // Local candidates (favorites / recents / current folder) — filter
             // these by name or path so only relevant ones show.
@@ -349,8 +395,21 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             let contentRows = deepResults.filter { $0.isContent }
                 .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
                 .prefix(40).map { $0 }
+            // Matching Workspaces and SSH hosts surface at the top.
+            let workspaceRows = workspace.savedViews.views
+                .filter { $0.name.localizedCaseInsensitiveContains(q) }
+                .map { Target.workspace($0) }
+            let sshRows = sshTargets.filter { $0.name.localizedCaseInsensitiveContains(q) }
             // Two labeled sections: name matches (files/folders) and content matches.
             var rows: [Target] = []
+            if !workspaceRows.isEmpty {
+                rows.append(.divider("Workspace"))
+                rows.append(contentsOf: workspaceRows)
+            }
+            if !sshRows.isEmpty {
+                rows.append(.divider("SSH"))
+                rows.append(contentsOf: sshRows)
+            }
             if !nameRows.isEmpty {
                 rows.append(.divider("파일 · 폴더"))
                 rows.append(contentsOf: nameRows)
@@ -456,17 +515,29 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         }
         if scanDirs.isEmpty { scanDirs = [root.path] }
 
-        let indexed = FileIndex.shared.snapshot(for: root)   // pre-built list, or nil
-        // 1) Filenames — fuzzy-rank the in-memory index off the main thread
-        // (instant). If the index isn't ready, fall back to a per-query fd.
+        // Cheap COW capture on main (no filtering); the prefix filter + fuzzy run
+        // off the main thread so typing never hitches.
+        let indexed = FileIndex.shared.entriesIfCovers(root)
+        let rootPath = root.standardizedFileURL.path
+        // 1) Filenames — fuzzy-rank the in-memory index off the main thread.
+        // If the index isn't ready, fall back to a per-query fd/mdfind/FileManager.
         deepTask = Task { [weak self] in
             let ranked = await Task.detached(priority: .userInitiated) { () -> [URL] in
-                // fd index → per-query fd → mdfind (Spotlight, scoped) → FileManager.
-                let pool = indexed
-                    ?? PaletteSearch.fdNames(root: root, needle: q, cap: 400)
-                    ?? PaletteSearch.mdfindNames(root: root, needle: q, cap: 400)
-                    ?? PaletteSearch.fmNames(root: root, needle: q, maxDepth: 6, cap: 400)
-                return FuzzyMatch.rank(pool, query: q, limit: 80)
+                func fdFallback() -> [URL] {
+                    PaletteSearch.fdNames(root: root, needle: q, cap: 400)
+                        ?? PaletteSearch.mdfindNames(root: root, needle: q, cap: 400)
+                        ?? PaletteSearch.fmNames(root: root, needle: q, maxDepth: 6, cap: 400)
+                }
+                if let indexed {
+                    let pool = indexed.filter { FileIndex.isUnder($0.path, rootPath) }
+                    let hits = FuzzyMatch.rank(pool, query: q, limit: 80)
+                    // The index can be stale or partial (a broad parent scan that
+                    // didn't reach this subtree, or capped). If it yields nothing,
+                    // fall back to a live fd scan so name search never comes up dry.
+                    if !hits.isEmpty { return hits }
+                    return FuzzyMatch.rank(fdFallback(), query: q, limit: 80)
+                }
+                return FuzzyMatch.rank(fdFallback(), query: q, limit: 80)
             }.value
             guard let self, self.query == q else { return }
             self.nameTargets = ranked.map { Self.target(for: $0, content: false) }
@@ -480,10 +551,15 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         contentScanning = true
         updatePlaceholder()                    // start the footer scan ticker
         contentTask = Task { [weak self] in
-            let urls = await Task.detached(priority: .userInitiated) {
-                // ripgrep → mdfind content (Spotlight, scoped) when rg is absent.
-                PaletteSearch.rgContent(root: root, needle: q, cap: 40)
+            let urls = await Task.detached(priority: .userInitiated) { () -> [URL] in
+                // ripgrep (text) → mdfind fallback, plus hwpx/docx body extraction.
+                let textHits = PaletteSearch.rgContent(root: root, needle: q, cap: 40)
                     ?? PaletteSearch.mdfindContent(root: root, needle: q, cap: 40)
+                let docHits = PaletteSearch.docContent(root: root, needle: q, cap: 25)
+                var seen = Set<String>()
+                return (textHits + docHits).filter {
+                    seen.insert($0.standardizedFileURL.path).inserted
+                }
             }.value
             guard let self, self.query == q else { return }
             self.contentTargets = urls.map { Self.target(for: $0, content: true) }
@@ -511,7 +587,12 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         guard results.indices.contains(row), !results[row].isDivider,
               let workspace else { return }
         let t = results[row]
-        if t.isFile { workspace.active.revealFile(t.url) }
+        if let viewID = t.viewID {
+            if let v = workspace.savedViews.views.first(where: { $0.id == viewID }) {
+                workspace.applyView(v)
+            }
+        } else if let host = t.sshHost { workspace.openSSH(host) }
+        else if t.isFile { workspace.active.revealFile(t.url) }
         else { workspace.active.navigate(to: t.url) }
         hide()
     }
@@ -713,6 +794,16 @@ enum PaletteSearch {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    /// NFC + NFD forms of `s`, de-duplicated by raw bytes. Korean from the IME vs.
+    /// on-disk text can differ only by normalization; byte matchers (rg) need both.
+    /// NOTE: compare UTF-8 bytes, not the strings — Swift `==` is canonical, so
+    /// `nfc == nfd` is always true for canonically equivalent forms.
+    static func normalizationVariants(_ s: String) -> [String] {
+        let nfc = s.precomposedStringWithCanonicalMapping
+        let nfd = s.decomposedStringWithCanonicalMapping
+        return Array(nfc.utf8) == Array(nfd.utf8) ? [nfc] : [nfc, nfd]
+    }
+
     /// Filenames via Spotlight, scoped to `root`. Used when fd is not installed —
     /// `-onlyin` keeps it fast and free of global noise (Nix Store, system files).
     static func mdfindNames(root: URL, needle: String, cap: Int) -> [URL]? {
@@ -758,12 +849,49 @@ enum PaletteSearch {
 
     static func rgContent(root: URL, needle: String, cap: Int) -> [URL]? {
         guard let rg = ExternalTools.path("rg") else { return nil }
-        // Skip big files and cap the time so content search never hangs.
-        let lines = ExternalTools.run(rg, [
-            "--color=never", "--files-with-matches", "--smart-case",
-            "--max-count", "1", "--no-messages", "--max-filesize", "2M",
-            "--", needle, root.path
-        ], maxLines: cap, timeout: 3.0)
+        // Skip big files and cap the time so content search never hangs. Search
+        // both Unicode normalizations (rg byte-matches; IME text may be NFC/NFD).
+        var args = ["--color=never", "--files-with-matches", "--smart-case",
+                    "--max-count", "1", "--no-messages", "--max-filesize", "2M"]
+        for v in normalizationVariants(needle) { args += ["-e", v] }
+        args += [root.path]
+        let lines = ExternalTools.run(rg, args, maxLines: cap, timeout: 3.0)
         return lines.map { URL(fileURLWithPath: $0) }
+    }
+
+    // MARK: - Document body search (hwpx / docx / pptx / xlsx)
+
+    /// ripgrep treats these as binary (they're ZIP+XML), so search their bodies
+    /// by unzipping each to stdout and matching in Swift. Matching is done in
+    /// Swift (not piped to `grep`) for two reasons: Swift string comparison is
+    /// Unicode-canonical, so it's immune to NFC/NFD differences between IME input
+    /// and document text; and it avoids depending on a `grep` that may be shadowed
+    /// or misconfigured in the app's spawn environment. Bounded by file count +
+    /// per-file timeout so it stays fast.
+    static func docContent(root: URL, needle: String, cap: Int) -> [URL] {
+        guard let fd = ExternalTools.path("fd"),
+              FileManager.default.isExecutableFile(atPath: "/usr/bin/unzip") else { return [] }
+        var args = ["--color=never", "--absolute-path", "--type", "f"]
+        for ext in ["hwpx", "docx", "pptx", "xlsx"] { args += ["--extension", ext] }
+        let scanLimit = 80
+        args += ["--max-results", "\(scanLimit)", ".", root.path]
+        let files = ExternalTools.run(fd, args, maxLines: scanLimit, timeout: 2.0)
+        guard !files.isEmpty else { return [] }
+
+        let lock = NSLock()
+        var matched: [URL] = []
+        DispatchQueue.concurrentPerform(iterations: files.count) { i in
+            lock.lock(); let enough = matched.count >= cap; lock.unlock()
+            if enough { return }
+            let url = URL(fileURLWithPath: files[i])
+            // Extract only the text-bearing XML (not the whole archive — that dumps
+            // binary entries too, which break UTF-8 decoding). Match in Swift, which
+            // is Unicode-canonical so it's immune to NFC/NFD differences.
+            guard let body = DocumentText.extract(url) else { return }
+            if body.localizedCaseInsensitiveContains(needle) {
+                lock.lock(); if matched.count < cap { matched.append(url) }; lock.unlock()
+            }
+        }
+        return matched
     }
 }

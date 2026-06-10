@@ -82,16 +82,33 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         // (charactersIgnoringModifiers yields "D"/"G"/"N") and symbol keys.
         let chars = Self.latinLetter[code] ?? (e.charactersIgnoringModifiers ?? "").lowercased()
 
+        // Vertical step: a full grid row in icon/gallery, one item in list/columns.
+        let gridStep = (model.viewMode == .icons || model.viewMode == .gallery)
+            ? max(1, model.gridColumns) : 1
+
         // --- No-modifier keys (orthodox navigation) ---
         if !cmd && !opt {
             switch code {
             case 49: toggleQuickLook(); return true                 // space
-            case 36, 76: model.renameSelected(); return true        // return / enter → rename
+            case 36, 76: model.beginRename(); return true           // return / enter → inline rename
             case 48: workspace.cyclePane(shift ? -1 : 1); return true // Tab → switch pane
-            case 125: model.moveSelection(by: 1, extend: shift); return true   // ↓
-            case 126: model.moveSelection(by: -1, extend: shift); return true  // ↑
-            case 123: model.goBack(); return true                   // ←
-            case 124: model.openSelected(); return true             // → open
+            case 125:   // ↓ — icon/gallery grids jump a whole row
+                model.moveSelection(by: gridStep, extend: shift); return true
+            case 126:   // ↑
+                model.moveSelection(by: -gridStep, extend: shift); return true
+            // ←/→ move the selection in icon/gallery grids (no native arrow
+            // handling there). In list/columns they fall through to the native
+            // view. Folder history stays on ⌘←/⌘→.
+            case 123:
+                if model.viewMode == .icons || model.viewMode == .gallery {
+                    model.moveSelection(by: -1, extend: shift); return true
+                }
+                return false
+            case 124:
+                if model.viewMode == .icons || model.viewMode == .gallery {
+                    model.moveSelection(by: 1, extend: shift); return true
+                }
+                return false
             case 51:  model.trashSelection(); return true           // delete → trash
             case 96:  workspace.transferToOtherPane(move: false); return true // F5 copy
             case 97:  workspace.transferToOtherPane(move: true); return true   // F6 move
@@ -178,7 +195,8 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
     /// font; otherwise scale the file listing as before.
     private func bumpScale(_ direction: Int) {
         if workspace.inspectorVisible,
-           let target = model.selectedItems.first, target.isPlainTextLike {
+           let target = model.selectedItems.first,
+           target.isPlainTextLike || target.isExtractableDocument {
             workspace.bumpPreviewTextSize(direction)
         } else {
             model.bumpScale(direction)

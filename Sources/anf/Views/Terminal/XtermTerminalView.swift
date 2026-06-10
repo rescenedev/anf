@@ -59,6 +59,12 @@ final class XtermTerminalView: NSView {
         pty.spawn(executable: "/usr/bin/ssh", args: args)
     }
 
+    func startSFTP(args: [String]) {
+        pty.onOutput = { [weak self] data in self?.send(data: data) }
+        pty.onExit   = { [weak self] _ in self?.onExit?() }
+        pty.spawn(executable: "/usr/bin/sftp", args: args)
+    }
+
     func setFontSize(_ size: CGFloat) {
         if ready {
             webView.evaluateJavaScript("window.termSetFontSize(\(size))")
