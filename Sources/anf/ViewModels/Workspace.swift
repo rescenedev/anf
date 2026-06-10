@@ -333,6 +333,19 @@ final class WorkspaceModel {
         save()
     }
 
+    /// Close the focused pane: collapse to a single pane showing one of the other
+    /// (surviving) panes. No-op in single layout.
+    func closeActivePane() {
+        guard layout.count > 1 else { NSSound.beep(); return }
+        let survivorIdx = (0..<layout.count).first { $0 != activePane } ?? 0
+        if survivorIdx != 0 {
+            let survivor = panes[survivorIdx]
+            panes[0].replaceTabs(survivor.tabs, activeIndex: survivor.activeIndex)
+        }
+        activePane = 0
+        setLayout(.single)
+    }
+
     func toggleFavoriteCurrent() {
         favorites.toggle(active.currentURL)
     }

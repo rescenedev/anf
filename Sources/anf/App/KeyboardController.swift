@@ -119,7 +119,12 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             }
             switch chars {
             case "t": workspace.activePaneModel.newTab(); return true
-            case "w": workspace.activePaneModel.closeCurrent(); return true
+            case "w":
+                // Close the current tab; if it's the last tab, close the pane.
+                let pane = workspace.activePaneModel
+                if pane.tabs.count > 1 { pane.closeCurrent() }
+                else { workspace.closeActivePane() }
+                return true
             case "=", "+": bumpScale(1); return true
             case "-": bumpScale(-1); return true
             case "c": model.copySelectionToPasteboard(); return true
