@@ -145,6 +145,13 @@ h2 {
 }
 .tile h3 { font-size: 18px; margin-bottom: 9px; letter-spacing: -.01em; }
 .tile p { color: var(--txt-dim); font-size: 14.5px; }
+/* inline code inside paragraphs (distinct from the block install commands) */
+.tile p code {
+  display: inline; margin: 0; padding: 1px 6px; white-space: nowrap;
+  background: rgba(255,255,255,.06); border: 1px solid var(--line);
+  border-radius: 6px; font-size: .88em; color: var(--accent-2);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+}
 
 /* ---- Showcase shots ---- */
 .shot { margin: 52px auto 0; max-width: 880px; }
@@ -175,8 +182,8 @@ h2 {
 .tile-link h3 { color: var(--txt); }
 .note { color: var(--txt-faint); font-size: 14px; margin-top: 30px; }
 
-/* 2×2 tools grid */
-.tools-grid { grid-template-columns: repeat(2, 1fr); max-width: 840px; margin-inline: auto; }
+/* tools row (fd · ripgrep · 알한글) */
+.tools-grid { grid-template-columns: repeat(3, 1fr); }
 
 /* One-shot install command */
 .install-all { max-width: 840px; margin: 40px auto 0; }

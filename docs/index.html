@@ -14,6 +14,7 @@
     <a class="brand" href="#top">anf</a>
     <nav class="nav-links">
       <a href="#features">기능</a>
+      <a href="#performance">왜 빠른가</a>
       <a href="#terminal">터미널</a>
       <a href="#palette">팔레트</a>
       <a href="#shortcuts">단축키</a>
@@ -84,6 +85,44 @@
           <h3>네이티브 사이드바</h3>
           <p>즐겨찾기 · 핀 · 위치 · SSH 섹션. 접고 펼 수 있는 드로어와 ~/.ssh/config 자동 인식, 라이브 세션 표시.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why fast -->
+  <section id="performance" class="showcase">
+    <h2 class="centered">왜 빠른가.</h2>
+    <p class="sub centered">속도는 우연이 아니라 설계입니다. anf가 가벼운 이유.</p>
+    <div class="grid">
+      <div class="tile">
+        <div class="ic">⚡</div>
+        <h3>네이티브, Electron 없음</h3>
+        <p>Swift + AppKit으로 시스템 프레임워크를 직접 씁니다. 브라우저 런타임이 없어 시작이 빠르고 메모리가 가볍습니다.</p>
+      </div>
+      <div class="tile">
+        <div class="ic">⌖</div>
+        <h3>백그라운드 파일 인덱싱</h3>
+        <p>폴더에 들어가는 순간 <code>fd</code>로 하위 전체를 백그라운드 인덱싱. 검색은 그 인메모리 리스트를 필터링해 키 입력마다 디스크를 훑지 않습니다.</p>
+      </div>
+      <div class="tile">
+        <div class="ic">≈</div>
+        <h3>내장 퍼지 매칭</h3>
+        <p>fzf 같은 외부 프로세스 없이 퍼지 랭킹을 Swift로 직접 구현했습니다. 메인 스레드 밖에서 돌려 타이핑이 끊기지 않습니다.</p>
+      </div>
+      <div class="tile">
+        <div class="ic">◧</div>
+        <h3>SwiftUI가 아닌 AppKit 컨트롤러</h3>
+        <p>커맨드 팔레트는 <code>NSPanel</code> + <code>NSTableView</code>를 직접 다루는 컨트롤러로 만들었습니다. SwiftUI에서 잡히지 않던 키보드 포커스·성능 문제를 네이티브로 해결했습니다.</p>
+      </div>
+      <div class="tile">
+        <div class="ic">▤</div>
+        <h3>검증된 AppKit 뷰 + 캐싱</h3>
+        <p>파일 목록·분할은 <code>NSTableView</code> / <code>NSSplitView</code>. 디렉토리 읽기·아이콘·Quick Look 썸네일은 백그라운드에서 처리하고 캐시로 재사용해 수천 개 항목도 매끄럽습니다.</p>
+      </div>
+      <div class="tile">
+        <div class="ic">⏱</div>
+        <h3>디바운스 · 타임아웃</h3>
+        <p>검색은 130ms 디바운스로 불필요한 작업을 막고, 내용 검색(ripgrep)은 3초 타임아웃·대용량 파일 스킵으로 절대 멈추지 않습니다.</p>
       </div>
     </div>
   </section>
