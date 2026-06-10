@@ -204,6 +204,28 @@ final class WorkspaceModel {
         showTerminal = true
     }
 
+    /// Open an SFTP session to `host` in the global terminal drawer.
+    func openSFTP(_ host: String) {
+        let s = TerminalSession.sftp(host)
+        s.applyFontSize(terminalFontSize)
+        terminal = s
+        showTerminal = true
+    }
+
+    /// Mount `host` over SFTP (sshfs) and open it in the active pane, so the
+    /// remote filesystem is browsed like a local folder. Requires sshfs.
+    func mountSFTP(_ host: String) {
+        RemoteMount.shared.mount(host: host) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let url):
+                self.activePaneModel.current.navigate(to: url)
+            case .failure(let message):
+                RemoteMount.presentError(message)
+            }
+        }
+    }
+
     /// `available` is the live content width — the inspector may take up to 55%
     /// of it (≈ half the window). Without a measurement only a sanity cap applies.
     static func clampInspectorWidth(_ w: CGFloat, available: CGFloat? = nil) -> CGFloat {

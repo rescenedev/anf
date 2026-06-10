@@ -183,6 +183,8 @@ struct SidebarView: View {
         .contextMenu {
             if let custom = customData {
                 Button("Connect in anf") { workspace.openSSH(custom) }
+                Button("SFTP (터미널)") { workspace.openSFTP(custom.target) }
+                Button("SFTP 마운트해서 열기") { workspace.mountSFTP(custom.target) }
                 Button("Connect with Ghostty") { TerminalLauncher.ssh(custom.target) }
                 Divider()
                 Button("Remove from Sidebar", role: .destructive) {
@@ -190,6 +192,8 @@ struct SidebarView: View {
                 }
             } else {
                 Button("Connect in anf") { workspace.openSSH(host.alias) }
+                Button("SFTP (터미널)") { workspace.openSFTP(host.alias) }
+                Button("SFTP 마운트해서 열기") { workspace.mountSFTP(host.alias) }
                 Button("Connect with Ghostty") { TerminalLauncher.ssh(host.alias) }
             }
         }
