@@ -414,7 +414,16 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         searching = true
         nameTargets = []; contentTargets = []
         deepResults = []
-        scanDirs = FileIndex.shared.directories(for: root)   // for the scan animation
+        // Scan animation paths: prefer the built index; before it's ready, use the
+        // current folder's immediate subfolders so the ticker shows from the first
+        // search instead of a bare "검색 중…".
+        scanDirs = FileIndex.shared.directories(for: root)
+        if scanDirs.isEmpty {
+            scanDirs = (workspace?.active.items ?? [])
+                .filter { $0.isBrowsableContainer }
+                .map { $0.url.path }
+        }
+        if scanDirs.isEmpty { scanDirs = [root.path] }
 
         let indexed = FileIndex.shared.snapshot(for: root)   // pre-built list, or nil
         // 1) Filenames — fuzzy-rank the in-memory index off the main thread

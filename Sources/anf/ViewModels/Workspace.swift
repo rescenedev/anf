@@ -220,6 +220,8 @@ final class WorkspaceModel {
         panes = (0..<4).map { _ in PaneModel(start: home) }
         restore()
         wireActivity()
+        // Pre-index the home tree in the background so the first ⌘K is instant.
+        FileIndex.shared.build(for: home)
         // Debug hook: ANF_LAYOUT=single|dual|rows|quad forces the initial layout
         // (headless visual verification — clicks can't be synthesized here).
         if let forced = ProcessInfo.processInfo.environment["ANF_LAYOUT"],

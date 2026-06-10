@@ -69,7 +69,14 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         let cmd = flags.contains(.command)
         let shift = flags.contains(.shift)
         let opt = flags.contains(.option)
+        let ctrl = flags.contains(.control)
         let code = e.keyCode
+
+        // ⌃Tab / ⌃⇧Tab → cycle tabs within the active pane (plain Tab = pane).
+        if ctrl, code == 48 {
+            workspace.activePaneModel.cycle(shift ? -1 : 1)
+            return true
+        }
         // Resolve letter keys by physical keycode (input-source independent), so
         // ⌘K works under the Korean IME too. Lowercased fallback handles Shift
         // (charactersIgnoringModifiers yields "D"/"G"/"N") and symbol keys.
