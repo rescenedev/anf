@@ -404,8 +404,12 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 guard let self, !self.scanDirs.isEmpty else { return }
                 self.scanIdx += 5
                 let abbr = self.abbreviate(self.scanDirs[self.scanIdx % self.scanDirs.count])
-                scanLabel.stringValue = abbr
-                self.footer?.stringValue = "내용 검색 중  ·  \(abbr)"
+                // Center label only while there are no results; footer only while
+                // content-scanning with results already shown.
+                let centerActive = self.results.isEmpty && !self.query.isEmpty && self.searching
+                let footerActive = self.contentScanning && !self.results.isEmpty
+                scanLabel.stringValue = centerActive ? abbr : ""
+                self.footer?.stringValue = footerActive ? "내용 검색 중  ·  \(abbr)" : ""
             }
         }
     }
