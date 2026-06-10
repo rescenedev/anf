@@ -71,9 +71,12 @@ final class FileIndex {
         var ctx = FSEventStreamContext(version: 0,
                                        info: Unmanaged.passUnretained(self).toOpaque(),
                                        retain: nil, release: nil, copyDescription: nil)
+        // UseCFTypes is REQUIRED: without it eventPaths is a C char** array, and
+        // bit-casting that to NSArray crashes (SIGSEGV) when a change fires.
         let flags = UInt32(kFSEventStreamCreateFlagFileEvents
                            | kFSEventStreamCreateFlagNoDefer
-                           | kFSEventStreamCreateFlagWatchRoot)
+                           | kFSEventStreamCreateFlagWatchRoot
+                           | kFSEventStreamCreateFlagUseCFTypes)
         let cb: FSEventStreamCallback = { _, info, num, paths, eventFlags, _ in
             guard let info else { return }
             let me = Unmanaged<FileIndex>.fromOpaque(info).takeUnretainedValue()
