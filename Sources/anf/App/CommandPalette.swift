@@ -16,6 +16,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         let url: URL
         let symbol: String
         let isFile: Bool
+        var isContent = false   // matched by file content (ripgrep), not name
+        var isDivider = false   // non-selectable section header row
+
+        static func divider(_ title: String) -> Target {
+            Target(name: title, url: URL(fileURLWithPath: "/"), symbol: "",
+                   isFile: false, isContent: false, isDivider: true)
+        }
     }
 
     private weak var workspace: WorkspaceModel?
@@ -27,6 +34,8 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     private var results: [Target] = []
     private var deepResults: [Target] = []
     private var deepTask: Task<Void, Never>?
+    private var searching = false
+    private var placeholder: NSTextField!
 
     private let panelWidth: CGFloat = 760
     private let rowHeight: CGFloat = 36
@@ -195,6 +204,20 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             scroll.heightAnchor.constraint(equalToConstant: tableHeight),
         ])
 
+        // Centered status text ("검색 중…" / "결과 없음") shown when no rows.
+        let placeholder = NSTextField(labelWithString: "")
+        placeholder.font = .systemFont(ofSize: 15)
+        placeholder.textColor = .secondaryLabelColor
+        placeholder.alignment = .center
+        placeholder.isHidden = true
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
+        blur.addSubview(placeholder)
+        NSLayoutConstraint.activate([
+            placeholder.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
+            placeholder.topAnchor.constraint(equalTo: scroll.topAnchor, constant: 40),
+        ])
+        self.placeholder = placeholder
+
         panel.setContentSize(NSSize(width: panelWidth,
                                     height: fieldHeight + 1 + 6 + tableHeight + 8))
         return panel
@@ -249,17 +272,43 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 $0.name.localizedCaseInsensitiveContains(q)
                 || $0.url.path.localizedCaseInsensitiveContains(q)
             }
-            // deepResults are already matched by fd/ripgrep/fzf — do NOT re-filter
-            // them. ripgrep CONTENT matches don't contain the query in their name
-            // or path, so the old name/path filter discarded every content hit.
+            // Filename matches first (local + fd/fzf), then a divider, then
+            // ripgrep CONTENT matches. deepResults are already matched by the
+            // tools — never re-filter them by name/path.
             var seen = Set<String>()
-            results = (filteredLocal + deepResults)
+            let nameRows = (filteredLocal + deepResults.filter { !$0.isContent })
                 .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
-                .prefix(80).map { $0 }
+                .prefix(60).map { $0 }
+            let contentRows = deepResults.filter { $0.isContent }
+                .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
+                .prefix(40).map { $0 }
+            var rows = Array(nameRows)
+            if !contentRows.isEmpty {
+                rows.append(.divider("내용 일치"))
+                rows.append(contentsOf: contentRows)
+            }
+            results = rows
         }
         table?.reloadData()
-        if !results.isEmpty {
-            table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        selectFirstSelectableRow()
+        updatePlaceholder()
+    }
+
+    /// Select the first non-divider row.
+    private func selectFirstSelectableRow() {
+        guard let first = results.firstIndex(where: { !$0.isDivider }) else { return }
+        table.selectRowIndexes(IndexSet(integer: first), byExtendingSelection: false)
+    }
+
+    /// Show "검색 중…" while a deep search runs, "결과 없음" when it finishes empty,
+    /// and nothing when there are results (or the query is empty).
+    private func updatePlaceholder() {
+        guard let placeholder else { return }
+        if !results.isEmpty || query.isEmpty {
+            placeholder.isHidden = true
+        } else {
+            placeholder.isHidden = false
+            placeholder.stringValue = searching ? "검색 중…" : "결과 없음"
         }
     }
 
@@ -267,22 +316,29 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         deepTask?.cancel()
         let q = query
         guard q.count >= 2, let root = workspace?.active.currentURL else {
-            if !deepResults.isEmpty { deepResults = []; recompute() }
+            searching = false
+            if !deepResults.isEmpty { deepResults = [] }
             return
         }
+        searching = true
         deepTask = Task { [weak self] in
             let found = await Task.detached(priority: .userInitiated) {
                 PaletteSearch.scan(root: root, needle: q)
             }.value
             guard !Task.isCancelled, let self else { return }
             // Ignore stale results if the query changed meanwhile.
-            if self.query == q { self.deepResults = found; self.recompute() }
+            if self.query == q {
+                self.searching = false
+                self.deepResults = found
+                self.recompute()
+            }
         }
     }
 
     private func activateSelection() {
         let row = table.selectedRow
-        guard results.indices.contains(row), let workspace else { return }
+        guard results.indices.contains(row), !results[row].isDivider,
+              let workspace else { return }
         let t = results[row]
         if t.isFile { workspace.active.revealFile(t.url) }
         else { workspace.active.navigate(to: t.url) }
@@ -295,8 +351,8 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     // MARK: - NSTextFieldDelegate
 
     func controlTextDidChange(_ obj: Notification) {
+        startDeepSearch()   // sets `searching` before we render the placeholder
         recompute()
-        startDeepSearch()
     }
 
     func control(_ control: NSControl, textView: NSTextView,
@@ -317,7 +373,10 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
     private func move(_ delta: Int) {
         guard !results.isEmpty else { return }
-        let next = min(max(table.selectedRow + delta, 0), results.count - 1)
+        var next = table.selectedRow
+        // Step in `delta` direction, skipping non-selectable divider rows.
+        repeat { next += delta } while results.indices.contains(next) && results[next].isDivider
+        guard results.indices.contains(next) else { return }
         table.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
         table.scrollRowToVisible(next)
     }
@@ -328,11 +387,23 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?,
                    row: Int) -> NSView? {
+        let target = results[row]
+        if target.isDivider {
+            let id = NSUserInterfaceItemIdentifier("divider")
+            let cell = (tableView.makeView(withIdentifier: id, owner: self) as? PaletteDividerView)
+                ?? PaletteDividerView(identifier: id)
+            cell.configure(title: target.name)
+            return cell
+        }
         let id = NSUserInterfaceItemIdentifier("cell")
         let cell = (tableView.makeView(withIdentifier: id, owner: self) as? PaletteRowView)
             ?? PaletteRowView(identifier: id)
-        cell.configure(with: results[row])
+        cell.configure(with: target)
         return cell
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        !results[row].isDivider
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
@@ -350,6 +421,28 @@ private final class PalettePanel: NSPanel {
         super.resignKey()
         onResignKey?()
     }
+}
+
+// MARK: - Divider row ("내용 일치" section header)
+
+private final class PaletteDividerView: NSTableCellView {
+    private let label = NSTextField(labelWithString: "")
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+        label.font = .systemFont(ofSize: 11, weight: .semibold)
+        label.textColor = .tertiaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(title: String) { label.stringValue = title }
 }
 
 // MARK: - Row view (icon + name + path)
@@ -426,7 +519,7 @@ enum PaletteSearch {
             results.append(.init(
                 name: url.lastPathComponent, url: url,
                 symbol: content ? "doc.text.magnifyingglass" : (isDir ? "folder" : "doc"),
-                isFile: !isDir))
+                isFile: !isDir, isContent: content))
         }
 
         // 1) Filename matches — fd if available, else a FileManager walk.

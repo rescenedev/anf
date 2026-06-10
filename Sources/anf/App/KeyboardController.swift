@@ -89,15 +89,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                     workspace.activePaneModel.select(n - 1); return true
                 }
             }
-            // ⌘1–4 view mode, ⌘⇧1–4 pane layout (keycodes — shift changes chars).
+            // ⌘1–4 → pane layout (single / dual / rows / quad).
             if !opt {
                 let digit: Int? = [18: 1, 19: 2, 20: 3, 21: 4][Int(code)]
                 if let d = digit {
-                    if shift {
-                        workspace.setLayout([.single, .dual, .rows, .quad][d - 1])
-                    } else {
-                        model.viewMode = ViewMode.allCases[d - 1]
-                    }
+                    workspace.setLayout([.single, .dual, .rows, .quad][d - 1])
                     return true
                 }
             }
@@ -106,8 +102,6 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case "w": workspace.activePaneModel.closeCurrent(); return true
             case "=", "+": bumpScale(1); return true
             case "-": bumpScale(-1); return true
-            case "[": model.goBack(); return true
-            case "]": model.goForward(); return true
             case "c": model.copySelectionToPasteboard(); return true
             case "x": model.cutSelectionToPasteboard(); return true
             case "v": model.pasteFromPasteboard(); return true
@@ -126,10 +120,31 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case 125: model.openSelected(); return true   // ⌘↓ open
             case 126: model.goUp(); refocusContent(); return true // ⌘↑ enclosing folder
             case 51:  model.trashSelection(); return true // ⌘⌫ trash
+            case 33:  // [ — ⌘[ cycle view mode back, ⌘⇧[ show sidebar
+                if shift { setSidebar(collapsed: false) } else { cycleViewMode(-1) }
+                return true
+            case 30:  // ] — ⌘] cycle view mode forward, ⌘⇧] hide sidebar
+                if shift { setSidebar(collapsed: true) } else { cycleViewMode(1) }
+                return true
             default: break
             }
         }
         return false
+    }
+
+    /// ⌘[ / ⌘] cycles the active tab's view mode (list / icons / columns / …).
+    private func cycleViewMode(_ dir: Int) {
+        let all = ViewMode.allCases
+        guard let i = all.firstIndex(of: model.viewMode) else { return }
+        model.viewMode = all[(i + dir + all.count) % all.count]
+    }
+
+    /// ⌘⇧[ shows the sidebar, ⌘⇧] hides it — drives the native split item.
+    private func setSidebar(collapsed: Bool) {
+        guard let split = NSApp.keyWindow?.contentViewController as? NSSplitViewController,
+              let item = split.splitViewItems.first else { return }
+        item.animator().isCollapsed = collapsed
+        workspace.sidebarVisible = !collapsed
     }
 
     /// ⌘+ / ⌘−: when the inspector is showing a plain-text preview, scale its

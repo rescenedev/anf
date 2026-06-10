@@ -228,6 +228,10 @@ h2 {
 }
 a.tile:hover { border-color: var(--accent); }
 
+/* ---- Closing CTA ---- */
+.closing { max-width: 1080px; margin: 0 auto; padding: 110px 22px; text-align: center; }
+.closing .cta { margin-top: 32px; }
+
 /* ---- Footer ---- */
 .footer { border-top: 1px solid var(--line); }
 .footer-inner {
