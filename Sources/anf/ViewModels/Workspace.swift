@@ -220,8 +220,9 @@ final class WorkspaceModel {
         panes = (0..<4).map { _ in PaneModel(start: home) }
         restore()
         wireActivity()
-        // Pre-index the home tree in the background so the first ⌘K is instant.
-        FileIndex.shared.build(for: home)
+        // Index the focused folder's subtree (not all of home) so the first ⌘K is
+        // instant and the scope follows the focused pane.
+        FileIndex.shared.build(for: active.currentURL)
         // Debug hook: ANF_LAYOUT=single|dual|rows|quad forces the initial layout
         // (headless visual verification — clicks can't be synthesized here).
         if let forced = ProcessInfo.processInfo.environment["ANF_LAYOUT"],
@@ -234,7 +235,11 @@ final class WorkspaceModel {
     /// the pane the user is actually working in.
     private func wireActivity() {
         for (i, pane) in panes.enumerated() {
-            pane.onActivity = { [weak self] in self?.activePane = i }
+            pane.onActivity = { [weak self] in
+                guard let self else { return }
+                self.activePane = i
+                FileIndex.shared.build(for: self.active.currentURL)
+            }
             pane.onRequestTerminal = { [weak self] url in self?.openTerminal(at: url) }
         }
     }
