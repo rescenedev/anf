@@ -12,8 +12,11 @@ struct SidebarView: View {
     // Drawer state per section, remembered across launches.
     @AppStorage("anf.sidebar.open.favorites") private var openFavorites = true
     @AppStorage("anf.sidebar.open.pinned") private var openPinned = true
+    @AppStorage("anf.sidebar.open.views") private var openViews = true
     @AppStorage("anf.sidebar.open.locations") private var openLocations = true
     @AppStorage("anf.sidebar.open.ssh") private var openSSH = true
+    @State private var renamingView: SavedView?
+    @State private var renameText = ""
 
     private var model: BrowserModel { workspace.active }
 
@@ -49,6 +52,15 @@ struct SidebarView: View {
                     }
                 } header: {
                     sectionHeader("Pinned", isOpen: $openPinned)
+                }
+            }
+            if !workspace.savedViews.views.isEmpty {
+                Section {
+                    if openViews {
+                        ForEach(workspace.savedViews.views) { viewRow($0) }
+                    }
+                } header: {
+                    sectionHeader("View", isOpen: $openViews)
                 }
             }
             if !locations.isEmpty {
@@ -89,6 +101,16 @@ struct SidebarView: View {
             locations = await Task.detached(priority: .utility) { SidebarBuilder.locations() }.value
             sshHosts = await Task.detached(priority: .utility) { SSHConfig.hosts() }.value
         }
+        .alert("View 이름 변경", isPresented: Binding(
+            get: { renamingView != nil },
+            set: { if !$0 { renamingView = nil } })) {
+            TextField("이름", text: $renameText)
+            Button("취소", role: .cancel) { renamingView = nil }
+            Button("저장") {
+                if let v = renamingView { workspace.savedViews.rename(id: v.id, to: renameText) }
+                renamingView = nil
+            }
+        }
     }
 
     /// Drawer-style section header: the title + chevron area is a Button (toggle),
@@ -117,6 +139,29 @@ struct SidebarView: View {
     private func addSSHHost() {
         guard let custom = SSHPrompt.run() else { return }
         workspace.customSSH.add(custom)
+    }
+
+    /// A saved window arrangement. Tap recalls it; the context menu updates,
+    /// renames or deletes it. The icon mirrors the layout it captured.
+    private func viewRow(_ view: SavedView) -> some View {
+        let symbol = PaneLayout(rawValue: view.snapshot.layout)?.symbol ?? "square.grid.2x2"
+        return Label {
+            Text(view.name).font(.system(size: 13)).foregroundStyle(.primary).lineLimit(1)
+        } icon: {
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(Color.accentColor)
+        }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+            .onTapGesture { workspace.applyView(view) }
+            .contextMenu {
+                Button("이 레이아웃으로 전환") { workspace.applyView(view) }
+                Button("현재 레이아웃으로 덮어쓰기") {
+                    workspace.savedViews.update(id: view.id, snapshot: workspace.captureSnapshot())
+                }
+                Button("이름 변경…") { renameText = view.name; renamingView = view }
+                Divider()
+                Button("삭제", role: .destructive) { workspace.savedViews.remove(id: view.id) }
+            }
     }
 
     private func row(name: String, symbol: String, url: URL, removable: Bool) -> some View {

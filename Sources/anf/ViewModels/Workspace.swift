@@ -356,6 +356,57 @@ final class WorkspaceModel {
         activePane = min(state.activePane, layout.count - 1)
     }
 
+    // MARK: - Saved Views (named window arrangements)
+
+    /// Snapshot the current pane layout + tabs so it can be recalled later.
+    func captureSnapshot() -> ViewSnapshot {
+        ViewSnapshot(
+            layout: layout.rawValue,
+            activePane: activePane,
+            splitRatioH: Double(splitRatioH),
+            splitRatioV: Double(splitRatioV),
+            panes: panes.prefix(layout.count).map { pane in
+                ViewSnapshot.Pane(
+                    tabs: pane.tabs.map {
+                        ViewSnapshot.Tab(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue)
+                    },
+                    activeIndex: pane.activeIndex)
+            }
+        )
+    }
+
+    /// Restore a saved arrangement: layout, split ratios and each pane's tabs.
+    func applySnapshot(_ snap: ViewSnapshot) {
+        let fm = FileManager.default
+        if let l = PaneLayout(rawValue: snap.layout) { layout = l }
+        splitRatioH = Self.clampSplitRatio(CGFloat(snap.splitRatioH))
+        splitRatioV = Self.clampSplitRatio(CGFloat(snap.splitRatioV))
+        for (i, paneState) in snap.panes.enumerated() where i < panes.count {
+            let validTabs = paneState.tabs.filter {
+                var isDir: ObjCBool = false
+                return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue
+            }
+            guard !validTabs.isEmpty else { continue }
+            let models = validTabs.map { ts -> BrowserModel in
+                let m = BrowserModel(start: URL(fileURLWithPath: ts.path))
+                if let vm = ViewMode(rawValue: ts.viewMode) { m.viewMode = vm }
+                return m
+            }
+            panes[i].replaceTabs(models, activeIndex: min(paneState.activeIndex, models.count - 1))
+        }
+        activePane = min(snap.activePane, layout.count - 1)
+        save()
+    }
+
+    /// Save the current arrangement under `name`.
+    func saveCurrentView(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        savedViews.add(SavedView(name: trimmed, snapshot: captureSnapshot()))
+    }
+
+    func applyView(_ view: SavedView) { applySnapshot(view.snapshot) }
+
     var activePaneModel: PaneModel { panes[min(activePane, panes.count - 1)] }
     var active: BrowserModel { activePaneModel.current }
 
