@@ -1,0 +1,201 @@
+import AppKit
+import Quartz
+import WebKit
+
+/// Global keyboard dispatch for the whole app, driven by a local event monitor.
+/// This is the single source of truth for shortcuts (orthodox / Finder / Explorer
+/// style) and avoids fighting the SwiftUI ⇄ AppKit responder chain. While a text
+/// field is being edited, everything passes straight through so typing works.
+@MainActor
+final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    private let workspace: WorkspaceModel
+    private var monitor: Any?
+
+    init(workspace: WorkspaceModel) {
+        self.workspace = workspace
+        super.init()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            return self.handle(event) ? nil : event
+        }
+    }
+
+    private var model: BrowserModel { workspace.active }
+
+    private var isEditingText: Bool {
+        let responder = NSApp.keyWindow?.firstResponder
+        return responder is NSText || responder is NSTextView
+    }
+
+    /// True when the embedded xterm.js terminal (WKWebView) has focus.
+    private var isTerminalFocused: Bool {
+        var responder = NSApp.keyWindow?.firstResponder as? NSView
+        while let view = responder {
+            if view is WKWebView { return true }
+            responder = view.superview
+        }
+        return false
+    }
+
+    /// Returns true if the event was consumed.
+    private func handle(_ e: NSEvent) -> Bool {
+        let flagsAll = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // ⌃` toggles the terminal even while it's focused.
+        if flagsAll == .control && e.keyCode == 50 { workspace.toggleTerminal(); return true }
+        // ⌘+/- adjusts terminal font size even while terminal is focused.
+        if isTerminalFocused {
+            let tFlags = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if tFlags == .command {
+                let tChars = e.charactersIgnoringModifiers ?? ""
+                if tChars == "=" || tChars == "+" { workspace.bumpTerminalFontSize(1); return true }
+                if tChars == "-" { workspace.bumpTerminalFontSize(-1); return true }
+            }
+            return false
+        }
+        if isEditingText { return false }
+
+        let flags = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let cmd = flags.contains(.command)
+        let shift = flags.contains(.shift)
+        let opt = flags.contains(.option)
+        let chars = e.charactersIgnoringModifiers ?? ""
+        let code = e.keyCode
+
+        // --- No-modifier keys (orthodox navigation) ---
+        if !cmd && !opt {
+            switch code {
+            case 49: toggleQuickLook(); return true                 // space
+            case 36, 76: model.renameSelected(); return true        // return / enter → rename
+            case 48: workspace.cyclePane(shift ? -1 : 1); return true // Tab → switch pane
+            case 125: model.moveSelection(by: 1, extend: shift); return true   // ↓
+            case 126: model.moveSelection(by: -1, extend: shift); return true  // ↑
+            case 123: model.goBack(); return true                   // ←
+            case 124: model.openSelected(); return true             // → open
+            case 51:  model.trashSelection(); return true           // delete → trash
+            case 96:  workspace.transferToOtherPane(move: false); return true // F5 copy
+            case 97:  workspace.transferToOtherPane(move: true); return true   // F6 move
+            case 53:  if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared().orderOut(nil); return true } // esc
+            default: break
+            }
+        }
+
+        // --- Command combinations ---
+        if cmd {
+            if opt {
+                if chars == "c" { model.copyPathToPasteboard(); return true }   // ⌘⌥C copy path
+                // Tab selection ⌘⌥1…⌘⌥9
+                if let n = Int(chars), (1...9).contains(n) {
+                    workspace.activePaneModel.select(n - 1); return true
+                }
+            }
+            // ⌘1–4 view mode, ⌘⇧1–4 pane layout (keycodes — shift changes chars).
+            if !opt {
+                let digit: Int? = [18: 1, 19: 2, 20: 3, 21: 4][Int(code)]
+                if let d = digit {
+                    if shift {
+                        workspace.setLayout([.single, .dual, .rows, .quad][d - 1])
+                    } else {
+                        model.viewMode = ViewMode.allCases[d - 1]
+                    }
+                    return true
+                }
+            }
+            switch chars {
+            case "t": workspace.activePaneModel.newTab(); return true
+            case "w": workspace.activePaneModel.closeCurrent(); return true
+            case "=", "+": bumpScale(1); return true
+            case "-": bumpScale(-1); return true
+            case "[": model.goBack(); return true
+            case "]": model.goForward(); return true
+            case "c": model.copySelectionToPasteboard(); return true
+            case "x": model.cutSelectionToPasteboard(); return true
+            case "v": model.pasteFromPasteboard(); return true
+            case "a": model.selectAll(); return true
+            case "i": workspace.inspectorVisible.toggle(); return true
+            case "d": shift ? workspace.toggleFavoriteCurrent() : model.duplicateSelection(); return true
+            case "l": model.goToFolderPrompt(); return true
+            case "p": workspace.paletteVisible.toggle(); return true
+            case "k": workspace.paletteVisible.toggle(); return true   // ⌘K command palette
+            case "g": if shift { model.goToFolderPrompt(); return true }
+            case "n": if shift { model.makeNewFolder(); return true }
+            case "r": model.reload(); return true
+            default: break
+            }
+            switch code {
+            case 125: model.openSelected(); return true   // ⌘↓ open
+            case 126: model.goUp(); refocusContent(); return true // ⌘↑ enclosing folder
+            case 51:  model.trashSelection(); return true // ⌘⌫ trash
+            default: break
+            }
+        }
+        return false
+    }
+
+    /// ⌘+ / ⌘−: when the inspector is showing a plain-text preview, scale its
+    /// font; otherwise scale the file listing as before.
+    private func bumpScale(_ direction: Int) {
+        if workspace.inspectorVisible,
+           let target = model.selectedItems.first, target.isPlainTextLike {
+            workspace.bumpPreviewTextSize(direction)
+        } else {
+            model.bumpScale(direction)
+        }
+    }
+
+    // MARK: - Focus
+
+    /// After navigation the first responder can be (or stay) in the sidebar, so
+    /// the keyboard focus ring lands on a sidebar row. Pull focus back to the
+    /// first file table on the content side of the split.
+    private func refocusContent() {
+        DispatchQueue.main.async {
+            guard let window = NSApp.keyWindow,
+                  let split = window.contentViewController as? NSSplitViewController,
+                  split.splitViewItems.count > 1 else { return }
+            let contentRoot = split.splitViewItems[1].viewController.view
+            if let fr = window.firstResponder as? NSView, fr.isDescendant(of: contentRoot) {
+                return   // focus already lives in the content area
+            }
+            if let table = Self.firstTableView(in: contentRoot) {
+                window.makeFirstResponder(table)
+            }
+        }
+    }
+
+    private static func firstTableView(in root: NSView) -> NSTableView? {
+        var queue: [NSView] = [root]
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if let table = view as? NSTableView { return table }
+            queue.append(contentsOf: view.subviews)
+        }
+        return nil
+    }
+
+    // MARK: - Quick Look
+
+    private var previewURLs: [URL] {
+        let sel = model.selectedItems.map(\.url)
+        if !sel.isEmpty { return sel }
+        if let first = model.items.first { return [first.url] }
+        return []
+    }
+
+    private func toggleQuickLook() {
+        guard !previewURLs.isEmpty, let panel = QLPreviewPanel.shared() else { return }
+        if QLPreviewPanel.sharedPreviewPanelExists() && panel.isVisible {
+            panel.orderOut(nil)
+        } else {
+            panel.dataSource = self
+            panel.delegate = self
+            panel.makeKeyAndOrderFront(nil)
+            panel.reloadData()
+        }
+    }
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { previewURLs.count }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        previewURLs[index] as NSURL
+    }
+}

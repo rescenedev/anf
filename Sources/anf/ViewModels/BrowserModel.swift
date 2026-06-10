@@ -1,0 +1,352 @@
+import SwiftUI
+import AppKit
+import Observation
+
+/// The single source of truth for a window: where we are, what's there,
+/// what's selected, and how it's presented. Lives on the main actor.
+@MainActor
+@Observable
+final class BrowserModel: Identifiable {
+    let id = UUID()
+
+    // Navigation
+    private(set) var currentURL: URL
+    private(set) var back: [URL] = []
+    private(set) var forward: [URL] = []
+
+    // Contents
+    private(set) var allItems: [FileItem] = []
+    private(set) var isLoading = false
+
+    // Presentation
+    var viewMode: ViewMode = .list
+    var sort = SortOrder() { didSet { resort() } }
+    var showHidden = false { didSet { reload() } }
+    var iconSize: Double = 84
+    var textScale: Double = 1.0
+    var filterText = ""
+    var inspectorVisible = false
+    var sidebarVisible = true
+
+    // Selection — changing it marks this tab/pane as the active one.
+    var selection: Set<FileItem.ID> = [] { didSet { onActivity?() } }
+
+    /// Called whenever the user interacts here, so the owning pane can become active.
+    @ObservationIgnored var onActivity: (() -> Void)?
+
+    /// Opens anf's embedded terminal at a directory (set by the owning pane).
+    @ObservationIgnored var onOpenTerminal: ((URL) -> Void)?
+
+    private let fs = FileSystemService()
+    private var loadToken = 0
+
+    init(start: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.currentURL = start
+        reload()
+    }
+
+    // MARK: - Derived
+
+    /// Items after hidden-filtering, text-filtering and sorting. This is what views render.
+    var items: [FileItem] {
+        var result = allItems
+        if !filterText.isEmpty {
+            result = result.filter { $0.name.localizedCaseInsensitiveContains(filterText) }
+        }
+        return fs.sorted(result, by: sort)
+    }
+
+    var selectedItems: [FileItem] {
+        items.filter { selection.contains($0.id) }
+    }
+
+    var canGoBack: Bool { !back.isEmpty }
+    var canGoForward: Bool { !forward.isEmpty }
+    var canGoUp: Bool { currentURL.path != "/" }
+
+    /// Breadcrumb trail from root to the current directory. Built forward from
+    /// Foundation's path components — walking *up* with deletingLastPathComponent
+    /// can fail to reach a fixed point for some URLs and spin forever.
+    var pathComponents: [URL] {
+        let parts = currentURL.standardizedFileURL.pathComponents
+        var urls: [URL] = []
+        var url = URL(fileURLWithPath: "/")
+        urls.append(url)
+        for part in parts where part != "/" {
+            url.appendPathComponent(part)
+            urls.append(url)
+        }
+        return urls
+    }
+
+    // MARK: - Navigation
+
+    func navigate(to url: URL, recordHistory: Bool = true) {
+        onActivity?()
+        guard url != currentURL else { return }
+        if recordHistory {
+            back.append(currentURL)
+            forward.removeAll()
+        }
+        currentURL = url
+        reload()
+    }
+
+    func open(_ item: FileItem) {
+        if item.isBrowsableContainer {
+            navigate(to: item.url)
+        } else {
+            FileOperations.open(item)
+        }
+    }
+
+    func goBack() {
+        guard let prev = back.popLast() else { return }
+        forward.append(currentURL)
+        currentURL = prev
+        reload()
+    }
+
+    func goForward() {
+        guard let next = forward.popLast() else { return }
+        back.append(currentURL)
+        currentURL = next
+        reload()
+    }
+
+    func goUp() {
+        guard canGoUp else { return }
+        navigate(to: currentURL.deletingLastPathComponent())
+    }
+
+    // MARK: - Loading
+
+    func reload() {
+        loadToken += 1
+        let token = loadToken
+        let url = currentURL
+        let hidden = showHidden
+        isLoading = true
+        selection.removeAll()
+        Task {
+            let loaded = await fs.contents(of: url, showHidden: hidden)
+            guard token == loadToken else { return }   // a newer load superseded us
+            allItems = loaded
+            isLoading = false
+        }
+    }
+
+    private func resort() { /* `items` recomputes; nothing to store */ }
+
+    // MARK: - iCloud
+
+    /// Kick off the iCloud download for a placeholder and refresh that one item
+    /// in place once the content lands — size and preview update, selection and
+    /// scroll position survive (no full reload).
+    func downloadFromCloud(_ item: FileItem) {
+        guard item.isCloudPlaceholder else { return }
+        try? FileManager.default.startDownloadingUbiquitousItem(at: item.url)
+        let url = item.url
+        let token = loadToken
+        Task { @MainActor in
+            for _ in 0..<240 {   // poll ~2 min max, every 0.5s
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard token == loadToken else { return }   // navigated away
+                let fresh = URL(fileURLWithPath: url.path)   // bypass cached values
+                let status = (try? fresh.resourceValues(
+                    forKeys: [.ubiquitousItemDownloadingStatusKey]))?
+                    .ubiquitousItemDownloadingStatus
+                if status == .current || status == .downloaded { break }
+            }
+            guard token == loadToken else { return }
+            refreshItem(at: url)
+        }
+    }
+
+    /// Re-stat a single entry and swap it into the listing (immutably).
+    private func refreshItem(at url: URL) {
+        guard let fresh = FileItem(url: URL(fileURLWithPath: url.path)) else { return }
+        allItems = allItems.map { $0.url == url ? fresh : $0 }
+    }
+
+    // MARK: - Actions
+
+    func trashSelection() {
+        let targets = selectedItems
+        guard !targets.isEmpty else { return }
+        FileOperations.moveToTrash(targets)
+        reload()
+    }
+
+    func duplicateSelection() {
+        FileOperations.duplicate(selectedItems)
+        reload()
+    }
+
+    func makeNewFolder() {
+        if let url = FileOperations.newFolder(in: currentURL) {
+            reload()
+            // select the new folder once the reload lands
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                selection = [url]
+            }
+        }
+    }
+
+    func revealSelection() {
+        FileOperations.reveal(selectedItems.isEmpty ? [] : selectedItems)
+    }
+
+    func selectAll() { selection = Set(items.map(\.id)) }
+
+    /// Navigate to a file's parent folder and select the file once the listing
+    /// lands (used by the ⌘K palette).
+    func revealFile(_ url: URL) {
+        let parent = url.deletingLastPathComponent()
+        if parent.path != currentURL.path { navigate(to: parent) }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            if let match = items.first(where: { $0.url.path == url.path }) {
+                selection = [match.id]
+            }
+        }
+    }
+
+    // MARK: - Keyboard-driven actions
+
+    func openSelected() {
+        if let item = selectedItems.first { open(item) }
+        else if let first = items.first { open(first) }
+    }
+
+    /// Move the (single) selection up/down the visible list.
+    func moveSelection(by delta: Int, extend: Bool = false) {
+        let ids = items.map(\.id)
+        guard !ids.isEmpty else { return }
+        let anchor = selectedItems.first?.id
+        let idx = anchor.flatMap { ids.firstIndex(of: $0) }
+        let next: Int
+        if let idx { next = min(max(idx + delta, 0), ids.count - 1) }
+        else { next = delta >= 0 ? 0 : ids.count - 1 }
+        if extend, let idx {
+            let lo = min(idx, next), hi = max(idx, next)
+            selection.formUnion(ids[lo...hi])
+        } else {
+            selection = [ids[next]]
+        }
+    }
+
+    func bumpScale(_ direction: Int) {
+        if viewMode == .icons {
+            iconSize = min(max(iconSize + Double(direction) * 14, 40), 168)
+        } else {
+            textScale = min(max(textScale + Double(direction) * 0.1, 0.8), 2.0)
+        }
+    }
+
+    /// Paths marked by ⌘X — the next paste MOVES them instead of copying.
+    private static var cutPaths: Set<String> = []
+
+    func copySelectionToPasteboard() {
+        let urls = selectedItems.map(\.url)
+        guard !urls.isEmpty else { return }
+        Self.cutPaths = []
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects(urls as [NSURL])
+    }
+
+    func cutSelectionToPasteboard() {
+        let urls = selectedItems.map(\.url)
+        guard !urls.isEmpty else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects(urls as [NSURL])
+        Self.cutPaths = Set(urls.map(\.path))
+    }
+
+    func copyPathToPasteboard() {
+        let paths = (selectedItems.isEmpty ? [currentURL] : selectedItems.map(\.url)).map(\.path)
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(paths.joined(separator: "\n"), forType: .string)
+    }
+
+    func pasteFromPasteboard() {
+        let pb = NSPasteboard.general
+        guard let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty else { return }
+        // A paste of ⌘X-marked items is a move (Finder semantics); the cut mark
+        // clears after one paste so repeat-pastes copy.
+        if Set(urls.map(\.path)) == Self.cutPaths {
+            Self.cutPaths = []
+            FileOperations.move(urls, into: currentURL)
+        } else {
+            FileOperations.copy(urls, into: currentURL)
+        }
+        reload()
+    }
+
+    /// Copy the current selection into another directory (used by Mdir-style
+    /// pane-to-pane transfers).
+    func copySelection(into destination: URL, move: Bool) {
+        let urls = selectedItems.map(\.url)
+        guard !urls.isEmpty, destination != currentURL else { return }
+        if move { FileOperations.move(urls, into: destination) }
+        else { FileOperations.copy(urls, into: destination) }
+    }
+
+    func openTerminalHere() {
+        let target = selectedItems.first.flatMap { $0.isBrowsableContainer ? $0.url : nil } ?? currentURL
+        if let onOpenTerminal { onOpenTerminal(target) }      // embedded terminal
+        else { FileOperations.openInTerminal(target) }        // fallback: external
+    }
+
+    func renameSelected() {
+        guard let item = selectedItems.first else { return }
+        guard let newName = TextPrompt.run(title: "Rename", message: "New name for “\(item.name)”",
+                                           defaultValue: item.name, action: "Rename") else { return }
+        if let dest = FileOperations.rename(item, to: newName) {
+            reload(); selection = [dest]
+        }
+    }
+
+    /// Accept dropped file URLs into `destination` (a folder, or the current dir).
+    /// Holding Option copies; default is move — matching Finder same-volume behaviour.
+    func acceptDrop(_ urls: [URL], into destination: URL, copy: Bool) {
+        let incoming = urls.filter { $0.deletingLastPathComponent().path != destination.path }
+        guard !incoming.isEmpty else { return }
+        if copy { FileOperations.copy(incoming, into: destination) }
+        else { FileOperations.move(incoming, into: destination) }
+        reload()
+    }
+
+    /// Batch rename the selection by find/replace on each name.
+    func batchRename() {
+        let targets = selectedItems
+        guard targets.count > 1 else { renameSelected(); return }
+        guard let (find, replace) = TextPrompt.runPair(
+            title: "Rename \(targets.count) Items",
+            message: "Replace text in each name:",
+            label1: "Find", label2: "Replace with", action: "Rename"),
+              !find.isEmpty else { return }
+        for item in targets {
+            let newName = item.name.replacingOccurrences(of: find, with: replace)
+            if newName != item.name { _ = FileOperations.rename(item, to: newName) }
+        }
+        reload()
+    }
+
+    func goToFolderPrompt() {
+        guard let raw = TextPrompt.run(title: "Go to Folder",
+                                       message: "Enter or paste a path:",
+                                       defaultValue: currentURL.path, action: "Go") else { return }
+        let expanded = (raw as NSString).expandingTildeInPath
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
+            navigate(to: URL(fileURLWithPath: expanded))
+        } else {
+            NSSound.beep()
+        }
+    }
+}
