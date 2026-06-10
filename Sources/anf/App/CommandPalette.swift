@@ -480,10 +480,15 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         contentScanning = true
         updatePlaceholder()                    // start the footer scan ticker
         contentTask = Task { [weak self] in
-            let urls = await Task.detached(priority: .userInitiated) {
-                // ripgrep → mdfind content (Spotlight, scoped) when rg is absent.
-                PaletteSearch.rgContent(root: root, needle: q, cap: 40)
+            let urls = await Task.detached(priority: .userInitiated) { () -> [URL] in
+                // ripgrep (text) → mdfind fallback, plus hwpx/docx body extraction.
+                let textHits = PaletteSearch.rgContent(root: root, needle: q, cap: 40)
                     ?? PaletteSearch.mdfindContent(root: root, needle: q, cap: 40)
+                let docHits = PaletteSearch.docContent(root: root, needle: q, cap: 25)
+                var seen = Set<String>()
+                return (textHits + docHits).filter {
+                    seen.insert($0.standardizedFileURL.path).inserted
+                }
             }.value
             guard let self, self.query == q else { return }
             self.contentTargets = urls.map { Self.target(for: $0, content: true) }
@@ -765,5 +770,31 @@ enum PaletteSearch {
             "--", needle, root.path
         ], maxLines: cap, timeout: 3.0)
         return lines.map { URL(fileURLWithPath: $0) }
+    }
+
+    // MARK: - Document body search (hwpx / docx / pptx / xlsx)
+
+    /// ripgrep treats these as binary (they're ZIP+XML), so search their bodies
+    /// by unzipping each to stdout and grepping. Bounded by file count + per-file
+    /// timeout so it stays fast.
+    static func docContent(root: URL, needle: String, cap: Int) -> [URL] {
+        guard let fd = ExternalTools.path("fd"),
+              FileManager.default.isExecutableFile(atPath: "/usr/bin/unzip") else { return [] }
+        var args = ["--color=never", "--absolute-path", "--type", "f"]
+        for ext in ["hwpx", "docx", "pptx", "xlsx"] { args += ["--extension", ext] }
+        args += ["--max-results", "\(cap * 3)", ".", root.path]
+        let files = ExternalTools.run(fd, args, maxLines: cap * 3, timeout: 3.0)
+
+        let q = shQuote(needle)
+        var matched: [URL] = []
+        for f in files {
+            if matched.count >= cap { break }
+            // unzip the whole archive to stdout; grep the raw XML for the needle.
+            let cmd = "unzip -p \(shQuote(f)) 2>/dev/null | grep -aqF -- \(q) && echo Y"
+            if ExternalTools.run("/bin/sh", ["-c", cmd], maxLines: 1, timeout: 2.0).first == "Y" {
+                matched.append(URL(fileURLWithPath: f))
+            }
+        }
+        return matched
     }
 }
