@@ -69,12 +69,48 @@ final class BrowserModel: Identifiable {
 
     var canGoBack: Bool { !back.isEmpty }
     var canGoForward: Bool { !forward.isEmpty }
-    var canGoUp: Bool { currentURL.path != "/" }
+    var canGoUp: Bool { isRemote ? remotePath != "/" : currentURL.path != "/" }
+
+    // MARK: - Remote (SFTP)
+
+    /// True when the current location is a remote `sftp://host/path` address.
+    var isRemote: Bool { currentURL.scheme == "sftp" }
+    var remoteHost: String? { currentURL.host }
+    var remotePath: String { let p = currentURL.path; return p.isEmpty ? "/" : p }
+    /// Set while a remote listing fails, so the view can show the reason.
+    private(set) var remoteError: String?
+
+    /// Synthetic address for a remote path; reuses the normal navigation/history.
+    static func remoteURL(host: String, path: String) -> URL {
+        var c = URLComponents()
+        c.scheme = "sftp"; c.host = host
+        c.path = path.hasPrefix("/") ? path : "/" + path
+        return c.url ?? URL(string: "sftp://\(host)/")!
+    }
+
+    /// Open a host's home directory in this pane as a browsable remote folder.
+    func openRemote(host: String) {
+        remoteError = nil
+        isLoading = true
+        Task { @MainActor in
+            let home = await SFTPClient.home(host)
+            navigate(to: Self.remoteURL(host: host, path: home))
+        }
+    }
 
     /// Breadcrumb trail from root to the current directory. Built forward from
     /// Foundation's path components — walking *up* with deletingLastPathComponent
     /// can fail to reach a fixed point for some URLs and spin forever.
     var pathComponents: [URL] {
+        if isRemote, let host = remoteHost {
+            var urls = [Self.remoteURL(host: host, path: "/")]
+            var path = ""
+            for part in remotePath.split(separator: "/") {
+                path += "/" + part
+                urls.append(Self.remoteURL(host: host, path: path))
+            }
+            return urls
+        }
         let parts = currentURL.standardizedFileURL.pathComponents
         var urls: [URL] = []
         var url = URL(fileURLWithPath: "/")
@@ -96,16 +132,40 @@ final class BrowserModel: Identifiable {
             forward.removeAll()
         }
         currentURL = url
-        RecentFolders.shared.record(url)
-        FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
+        if url.scheme != "sftp" {          // local-only bookkeeping
+            RecentFolders.shared.record(url)
+            FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
+        }
         reload()
     }
 
     func open(_ item: FileItem) {
+        if isRemote {
+            if item.isDirectory {
+                navigate(to: item.url)
+            } else {
+                openRemoteFile(item)
+            }
+            return
+        }
         if item.isBrowsableContainer {
             navigate(to: item.url)
         } else {
             FileOperations.open(item)
+        }
+    }
+
+    /// Download a remote file to a temp dir, then open it with the default app.
+    private func openRemoteFile(_ item: FileItem) {
+        guard let host = remoteHost else { return }
+        let remotePath = item.url.path
+        Task { @MainActor in
+            do {
+                let local = try await SFTPClient.download(host: host, remotePath: remotePath)
+                NSWorkspace.shared.open(local)
+            } catch {
+                RemoteMount.presentError(error.localizedDescription)
+            }
         }
     }
 
@@ -125,6 +185,11 @@ final class BrowserModel: Identifiable {
 
     func goUp() {
         guard canGoUp else { return }
+        if isRemote, let host = remoteHost {
+            let parent = (remotePath as NSString).deletingLastPathComponent
+            navigate(to: Self.remoteURL(host: host, path: parent.isEmpty ? "/" : parent))
+            return
+        }
         navigate(to: currentURL.deletingLastPathComponent())
     }
 
@@ -137,6 +202,7 @@ final class BrowserModel: Identifiable {
         let hidden = showHidden
         isLoading = true
         selection.removeAll()
+        if isRemote { reloadRemote(token: token); return }
         Task {
             let loaded = await fs.contents(of: url, showHidden: hidden)
             guard token == loadToken else { return }   // a newer load superseded us
@@ -144,6 +210,39 @@ final class BrowserModel: Identifiable {
             recomputeItems()
             isLoading = false
         }
+    }
+
+    /// Load the current remote directory over SFTP and map it onto FileItems.
+    private func reloadRemote(token: Int) {
+        guard let host = remoteHost else { return }
+        let path = remotePath
+        let hidden = showHidden
+        Task { @MainActor in
+            do {
+                let entries = try await SFTPClient.list(host: host, path: path)
+                guard token == loadToken else { return }
+                allItems = entries
+                    .filter { hidden || !$0.name.hasPrefix(".") }
+                    .map { e in
+                        FileItem.remote(
+                            url: Self.remoteURL(host: host, path: joinRemote(path, e.name)),
+                            name: e.name, isDir: e.isDir, isSymlink: e.isSymlink,
+                            size: e.size, modified: e.modified)
+                    }
+                remoteError = nil
+                recomputeItems()
+                isLoading = false
+            } catch {
+                guard token == loadToken else { return }
+                allItems = []; recomputeItems()
+                remoteError = error.localizedDescription
+                isLoading = false
+            }
+        }
+    }
+
+    private func joinRemote(_ base: String, _ name: String) -> String {
+        base == "/" ? "/" + name : base + "/" + name
     }
 
 

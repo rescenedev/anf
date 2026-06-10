@@ -59,6 +59,31 @@ struct FileItem: Identifiable, Hashable, Sendable {
         .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey
     ]
 
+    /// Designated memberwise init (used by the remote/SFTP factory).
+    private init(url: URL, name: String, isDirectory: Bool, isPackage: Bool,
+                 isApplication: Bool, isSymlink: Bool, isHidden: Bool, size: Int64,
+                 modified: Date, created: Date, contentType: UTType?,
+                 isCloudPlaceholder: Bool) {
+        self.url = url; self.name = name; self.isDirectory = isDirectory
+        self.isPackage = isPackage; self.isApplication = isApplication
+        self.isSymlink = isSymlink; self.isHidden = isHidden; self.size = size
+        self.modified = modified; self.created = created; self.contentType = contentType
+        self.isCloudPlaceholder = isCloudPlaceholder
+    }
+
+    /// Build an item from a remote SFTP listing. `url` is the synthetic
+    /// `sftp://host/abs/path` address; type is inferred from the extension.
+    static func remote(url: URL, name: String, isDir: Bool, isSymlink: Bool,
+                       size: Int64, modified: Date) -> FileItem {
+        let type: UTType? = isDir ? .folder
+            : UTType(filenameExtension: (name as NSString).pathExtension.lowercased())
+        return FileItem(
+            url: url, name: name, isDirectory: isDir, isPackage: false,
+            isApplication: false, isSymlink: isSymlink, isHidden: name.hasPrefix("."),
+            size: size, modified: modified, created: modified,
+            contentType: type, isCloudPlaceholder: false)
+    }
+
     init?(url: URL) {
         guard let v = try? url.resourceValues(forKeys: FileItem.resourceKeys) else { return nil }
         self.url = url

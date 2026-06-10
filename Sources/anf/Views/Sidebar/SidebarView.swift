@@ -182,6 +182,7 @@ struct SidebarView: View {
         .help("ssh \(host.subtitle)")
         .contextMenu {
             if let custom = customData {
+                Button("SFTP로 열기") { workspace.openRemote(custom.target) }
                 Button("Connect in anf") { workspace.openSSH(custom) }
                 Button("SFTP (터미널)") { workspace.openSFTP(custom.target) }
                 Button("SFTP 마운트해서 열기") { workspace.mountSFTP(custom.target) }
@@ -191,6 +192,7 @@ struct SidebarView: View {
                     workspace.customSSH.remove(target: host.alias)
                 }
             } else {
+                Button("SFTP로 열기") { workspace.openRemote(host.alias) }
                 Button("Connect in anf") { workspace.openSSH(host.alias) }
                 Button("SFTP (터미널)") { workspace.openSFTP(host.alias) }
                 Button("SFTP 마운트해서 열기") { workspace.mountSFTP(host.alias) }

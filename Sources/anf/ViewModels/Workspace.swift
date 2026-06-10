@@ -217,6 +217,12 @@ final class WorkspaceModel {
         showTerminal = true
     }
 
+    /// Browse `host` over SFTP directly in the active pane (no terminal, no
+    /// sshfs/macFUSE) — the remote home opens as a normal folder listing.
+    func openRemote(_ host: String) {
+        activePaneModel.current.openRemote(host: host)
+    }
+
     /// Mount `host` over SFTP (sshfs) and open it in the active pane, so the
     /// remote filesystem is browsed like a local folder. Requires sshfs.
     func mountSFTP(_ host: String) {
@@ -384,6 +390,15 @@ final class WorkspaceModel {
 
     func toggleTerminal() {
         if terminal == nil { openTerminal(at: active.currentURL) } else { showTerminal.toggle() }
+        // When (re)opening, hand keyboard focus to the terminal. The view is
+        // re-inserted by SwiftUI asynchronously, so retry until it's in a window.
+        if showTerminal, let t = terminal {
+            for delay in [0.0, 0.08, 0.2] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    if t.view.window != nil { t.focus() }
+                }
+            }
+        }
     }
 
     /// Mdir-style: copy/move the active pane's selection into the next visible pane.
