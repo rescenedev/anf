@@ -1,11 +1,11 @@
 import Foundation
+import CoreServices
 
 /// Background filename index for the focused folder, persisted to disk so it
-/// survives quit/relaunch. On launch the last checkpoint is loaded instantly;
-/// every focus/navigation refreshes the scan in the background (throttled) and
-/// re-saves the checkpoint. The palette fuzzy-filters this in-memory list per
-/// keystroke — no per-search disk walk. Without `fd` there's no index and the
-/// palette falls back to mdfind / FileManager.
+/// survives quit/relaunch, and kept live with FSEvents so add/remove/rename are
+/// applied incrementally (no full rescan). On launch the last checkpoint loads
+/// instantly; the palette fuzzy-filters the in-memory list per keystroke. Without
+/// `fd` there's no index and the palette falls back to mdfind / FileManager.
 @MainActor
 final class FileIndex {
     static let shared = FileIndex()
@@ -13,41 +13,39 @@ final class FileIndex {
     private(set) var root: String?
     private(set) var entries: [URL] = []
     private(set) var ready = false
+
+    private var pathSet: Set<String> = []
     private var task: Task<Void, Never>?
     private var seeded = false
     private var lastScan: [String: Date] = [:]
+    private var stream: FSEventStreamRef?
+    private var saveWork: DispatchWorkItem?
 
-    /// Ensure `url` (and below) is indexed. Reuses a broader in-memory or
-    /// on-disk index that already covers it; otherwise (re)builds rooted at `url`.
+    /// Ensure `url` (and below) is indexed. Reuses a broader in-memory or on-disk
+    /// index that already covers it; otherwise (re)builds rooted at `url`.
     func build(for url: URL) {
-        guard ExternalTools.path("fd") != nil else { root = nil; ready = false; entries = []; return }
+        guard ExternalTools.path("fd") != nil else { reset(); return }
         let path = url.standardizedFileURL.path
 
-        // Seed from the on-disk checkpoint once — instant availability on launch.
         if !seeded {
             seeded = true
-            if let c = Self.loadCache() { root = c.root; entries = c.entries; ready = true }
+            if let c = Self.loadCache() {
+                root = c.root; entries = c.entries; pathSet = Set(c.entries.map(\.path)); ready = true
+                startWatching(c.root)
+            }
         }
 
         if let r = root, ready, Self.isUnder(path, r) {
-            // Re-index immediately if the focused folder changed (mtime bumped by
-            // add/remove/rename of its contents); otherwise a throttled refresh.
-            refresh(r, force: Self.folderChanged(url, since: lastScan[r]))
-            return
+            return                                   // covered; FSEvents keeps it fresh
         }
-        root = path; entries = []; ready = false
+        root = path; entries = []; pathSet = []; ready = false
         refresh(path, force: true)
     }
 
-    private static func folderChanged(_ url: URL, since: Date?) -> Bool {
-        guard let since else { return true }
-        let m = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-            .contentModificationDate
-        return (m ?? .distantPast) > since
-    }
+    private func reset() { stopWatching(); task?.cancel(); root = nil; ready = false; entries = []; pathSet = [] }
 
-    /// (Re)scan `rootPath` in the background and re-save the checkpoint. Throttled
-    /// to avoid rescanning the same root on every focus change.
+    /// Full (re)scan of `rootPath` in the background; replaces entries, re-saves
+    /// the checkpoint and (re)starts the FSEvents watcher. Throttled.
     private func refresh(_ rootPath: String, force: Bool = false) {
         if !force, let last = lastScan[rootPath], Date().timeIntervalSince(last) < 20 { return }
         lastScan[rootPath] = Date()
@@ -60,9 +58,80 @@ final class FileIndex {
             }.value
             guard let self, self.root == rootPath else { return }
             self.entries = urls
+            self.pathSet = Set(urls.map(\.path))
             self.ready = true
+            self.startWatching(rootPath)
         }
     }
+
+    // MARK: - Incremental updates (FSEvents)
+
+    private func startWatching(_ rootPath: String) {
+        stopWatching()
+        var ctx = FSEventStreamContext(version: 0,
+                                       info: Unmanaged.passUnretained(self).toOpaque(),
+                                       retain: nil, release: nil, copyDescription: nil)
+        let flags = UInt32(kFSEventStreamCreateFlagFileEvents
+                           | kFSEventStreamCreateFlagNoDefer
+                           | kFSEventStreamCreateFlagWatchRoot)
+        let cb: FSEventStreamCallback = { _, info, num, paths, eventFlags, _ in
+            guard let info else { return }
+            let me = Unmanaged<FileIndex>.fromOpaque(info).takeUnretainedValue()
+            let cpaths = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
+            let fl = (0..<num).map { eventFlags[$0] }
+            Task { @MainActor in me.apply(paths: cpaths, flags: fl) }
+        }
+        guard let s = FSEventStreamCreate(kCFAllocatorDefault, cb, &ctx,
+                                          [rootPath] as CFArray,
+                                          FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                                          0.4, flags) else { return }
+        FSEventStreamSetDispatchQueue(s, DispatchQueue.global(qos: .utility))
+        FSEventStreamStart(s)
+        stream = s
+    }
+
+    private func stopWatching() {
+        guard let s = stream else { return }
+        FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s)
+        stream = nil
+    }
+
+    private func apply(paths: [String], flags: [FSEventStreamEventFlags]) {
+        guard let root, ready else { return }
+        let fm = FileManager.default
+        var changed = false
+        for (i, p) in paths.enumerated() {
+            guard Self.isUnder(p, root) else { continue }
+            if p.contains("/Library/") || p.contains("/.Trash") { continue }
+            // A coalesced "must rescan" event → safest to do a throttled full rescan.
+            if flags[i] & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0 {
+                refresh(root); return
+            }
+            if fm.fileExists(atPath: p) {
+                if pathSet.insert(p).inserted { entries.append(URL(fileURLWithPath: p)); changed = true }
+            } else {
+                // Removed/renamed-away: drop the path and any descendants.
+                let prefix = p.hasSuffix("/") ? p : p + "/"
+                let before = entries.count
+                entries.removeAll { $0.path == p || $0.path.hasPrefix(prefix) }
+                if entries.count != before {
+                    pathSet = Set(entries.map(\.path)); changed = true
+                }
+            }
+        }
+        if changed { scheduleSave() }
+    }
+
+    private func scheduleSave() {
+        saveWork?.cancel()
+        let snapshot = entries
+        let r = root
+        let work = DispatchWorkItem { if let r { FileIndex.saveCache(root: r, entries: snapshot) } }
+        saveWork = work
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2, execute: work)
+    }
+
+    // MARK: - Queries
 
     /// Indexed entries scoped to `url` (and below), or nil if not covered/ready.
     func snapshot(for url: URL) -> [URL]? {
@@ -91,8 +160,6 @@ final class FileIndex {
     nonisolated private static func scan(path: String) -> [URL] {
         let cap = 300_000
         guard let fd = ExternalTools.path("fd") else { return [] }
-        // Respect .gitignore for speed; skip ~/Library and Trash (TCC-protected,
-        // rarely searched — navigating into one directly indexes it on demand).
         let lines = ExternalTools.run(fd, [
             "--color=never", "--absolute-path", "--type", "f", "--type", "d",
             "--exclude", "Library", "--exclude", ".Trash",
