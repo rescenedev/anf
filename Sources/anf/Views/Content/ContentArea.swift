@@ -6,14 +6,14 @@ struct ContentArea: View {
 
     var body: some View {
         ZStack {
-            // Subtle gradient under a thin translucent blur, so the content area
-            // reads as soft frosted glass instead of a flat slab.
-            LinearGradient(
-                colors: [Color(nsColor: .controlBackgroundColor),
-                         Color(nsColor: .underPageBackgroundColor)],
-                startPoint: .top, endPoint: .bottom)
-                .overlay(Color.accentColor.opacity(0.04))
-                .overlay(.ultraThinMaterial)
+            // True window translucency: the desktop shows through, blurred. A faint
+            // gradient tint on top keeps text readable without killing the effect.
+            VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
+                .overlay(
+                    LinearGradient(
+                        colors: [Color(nsColor: .windowBackgroundColor).opacity(0.55),
+                                 Color(nsColor: .windowBackgroundColor).opacity(0.42)],
+                        startPoint: .top, endPoint: .bottom))
                 .ignoresSafeArea()
 
             switch model.viewMode {

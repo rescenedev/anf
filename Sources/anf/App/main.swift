@@ -58,6 +58,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             window.title = "anf"
             window.titleVisibility = .hidden
             window.minSize = NSSize(width: 720, height: 460)
+            // Non-opaque so the content area's behind-window blur reveals the
+            // desktop (true translucency).
+            window.isOpaque = false
+            window.backgroundColor = .clear
             window.contentViewController = split
             // Self-test runs resize everything — keep them out of the autosaved
             // window/sidebar geometry so they can't pollute the user's layout.
