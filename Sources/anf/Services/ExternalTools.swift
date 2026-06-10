@@ -54,7 +54,7 @@ enum ExternalTools {
     @discardableResult
     static func run(_ exe: String, _ args: [String],
                     cwd: URL? = nil, stdin: String? = nil,
-                    maxLines: Int = 500) -> [String] {
+                    maxLines: Int = 500, timeout: TimeInterval? = nil) -> [String] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: exe)
         process.arguments = args
@@ -74,6 +74,15 @@ enum ExternalTools {
             try? inPipe.fileHandleForWriting.close()
         } else {
             do { try process.run() } catch { return [] }
+        }
+
+        // Kill the process if it outruns the timeout — return whatever it produced
+        // so a slow scan never hangs the palette. terminate() on an exited process
+        // is a harmless no-op.
+        if let timeout {
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [process] in
+                if process.isRunning { process.terminate() }
+            }
         }
 
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()

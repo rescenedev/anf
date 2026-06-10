@@ -59,7 +59,9 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         let cmd = flags.contains(.command)
         let shift = flags.contains(.shift)
         let opt = flags.contains(.option)
-        let chars = e.charactersIgnoringModifiers ?? ""
+        // Lowercased: with Shift, charactersIgnoringModifiers yields "D"/"G"/"N",
+        // which wouldn't match the lowercase cases below (⌘⇧D, ⌘⇧G, ⌘⇧N).
+        let chars = (e.charactersIgnoringModifiers ?? "").lowercased()
         let code = e.keyCode
 
         // --- No-modifier keys (orthodox navigation) ---

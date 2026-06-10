@@ -38,8 +38,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     private var nameTargets: [Target] = []
     private var contentTargets: [Target] = []
     private var searching = false
+    private var debounce: DispatchWorkItem?
     private var placeholder: NSTextField!
     private var spinner: NSProgressIndicator!
+    private var scanLabel: NSTextField!
+    private var scanTimer: Timer?
+    private var scanDirs: [String] = []
+    private var scanIdx = 0
 
     private let panelWidth: CGFloat = 760
     private let rowHeight: CGFloat = 36
@@ -64,6 +69,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         let panel = panel ?? buildPanel()
         self.panel = panel
         isShown = true
+        if let cur = workspace?.active.currentURL { FileIndex.shared.build(for: cur) }
 
         field.stringValue = ""
         deepResults = []
@@ -78,8 +84,10 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     func hide() {
         guard isShown else { return }
         isShown = false
+        debounce?.cancel()
         deepTask?.cancel()
         contentTask?.cancel()
+        stopScanTimer()
         searching = false
         if let panel {
             anchorWindow?.removeChildWindow(panel)
@@ -231,6 +239,15 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         placeholder.isHidden = true
         placeholder.translatesAutoresizingMaskIntoConstraints = false
         blur.addSubview(placeholder)
+        // Directory path ticker that flickers by while a search runs.
+        let scanLabel = NSTextField(labelWithString: "")
+        scanLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        scanLabel.textColor = .tertiaryLabelColor
+        scanLabel.alignment = .center
+        scanLabel.lineBreakMode = .byTruncatingMiddle
+        scanLabel.translatesAutoresizingMaskIntoConstraints = false
+        blur.addSubview(scanLabel)
+
         NSLayoutConstraint.activate([
             spinner.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
             spinner.topAnchor.constraint(equalTo: scroll.topAnchor, constant: 44),
@@ -238,9 +255,14 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             spinner.heightAnchor.constraint(equalToConstant: 18),
             placeholder.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
             placeholder.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 12),
+            scanLabel.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
+            scanLabel.topAnchor.constraint(equalTo: placeholder.bottomAnchor, constant: 8),
+            scanLabel.leadingAnchor.constraint(greaterThanOrEqualTo: blur.leadingAnchor, constant: 24),
+            scanLabel.trailingAnchor.constraint(lessThanOrEqualTo: blur.trailingAnchor, constant: -24),
         ])
         self.spinner = spinner
         self.placeholder = placeholder
+        self.scanLabel = scanLabel
 
         panel.setContentSize(NSSize(width: panelWidth,
                                     height: fieldHeight + 1 + 6 + tableHeight + 8))
@@ -327,20 +349,54 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     /// Show "검색 중…" while a deep search runs, "결과 없음" when it finishes empty,
     /// and nothing when there are results (or the query is empty).
     private func updatePlaceholder() {
-        guard let placeholder, let spinner else { return }
-        if !results.isEmpty || query.isEmpty {
-            placeholder.isHidden = true
-            spinner.stopAnimation(nil)
-        } else {
+        guard let placeholder, let spinner, let scanLabel else { return }
+        let showStatus = results.isEmpty && !query.isEmpty
+        if showStatus && searching {
             placeholder.isHidden = false
-            placeholder.stringValue = searching ? "검색 중…" : "결과 없음"
-            if searching { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
+            placeholder.stringValue = "검색 중…"
+            spinner.startAnimation(nil)
+            startScanTimer()
+        } else {
+            placeholder.isHidden = !showStatus
+            if showStatus { placeholder.stringValue = "결과 없음" }
+            spinner.stopAnimation(nil)
+            stopScanTimer()
+            scanLabel.stringValue = ""
         }
     }
 
-    /// Deep search, scoped to the focused folder and below: fd lists filenames
-    /// (ranked by Swift fuzzy) and is shown FIRST, then ripgrep matches file
-    /// contents under a "내용 일치" divider. Both are bounded for speed.
+    // MARK: - Scan animation (directory paths flickering by during a search)
+
+    private func startScanTimer() {
+        guard scanTimer == nil, let scanLabel else { return }
+        scanTimer = Timer.scheduledTimer(withTimeInterval: 0.035, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.scanDirs.isEmpty else { return }
+                self.scanIdx += 5
+                let path = self.scanDirs[self.scanIdx % self.scanDirs.count]
+                scanLabel.stringValue = self.abbreviate(path)
+            }
+        }
+    }
+
+    private func stopScanTimer() {
+        scanTimer?.invalidate()
+        scanTimer = nil
+    }
+
+    /// Shorten a long path for the scanning ticker: keep the last few components.
+    private func abbreviate(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        var p = path
+        if p.hasPrefix(home) { p = "~" + p.dropFirst(home.count) }
+        let parts = p.split(separator: "/")
+        if parts.count > 4 { return ".../" + parts.suffix(3).joined(separator: "/") }
+        return p
+    }
+
+    /// Deep search, scoped to the focused folder and below. Filenames come from
+    /// the in-memory FileIndex (fuzzy-ranked, instant) and are shown FIRST; then
+    /// ripgrep matches file contents under a "내용 일치" divider.
     private func startDeepSearch() {
         deepTask?.cancel()
         contentTask?.cancel()
@@ -353,15 +409,19 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         searching = true
         nameTargets = []; contentTargets = []
         deepResults = []
+        scanDirs = FileIndex.shared.directories(for: root)   // for the scan animation
 
-        // 1) Filenames via fd (fast, scoped to `root`), ranked by Swift fuzzy.
+        let indexed = FileIndex.shared.snapshot(for: root)   // pre-built list, or nil
+        // 1) Filenames — fuzzy-rank the in-memory index off the main thread
+        // (instant). If the index isn't ready, fall back to a per-query fd.
         deepTask = Task { [weak self] in
-            let urls = await Task.detached(priority: .userInitiated) {
-                PaletteSearch.fdNames(root: root, needle: q, cap: 300)
-                    ?? PaletteSearch.fmNames(root: root, needle: q, maxDepth: 6, cap: 300)
+            let ranked = await Task.detached(priority: .userInitiated) { () -> [URL] in
+                let pool = indexed
+                    ?? PaletteSearch.fdNames(root: root, needle: q, cap: 400)
+                    ?? PaletteSearch.fmNames(root: root, needle: q, maxDepth: 6, cap: 400)
+                return FuzzyMatch.rank(pool, query: q, limit: 80)
             }.value
             guard let self, self.query == q else { return }
-            let ranked = FuzzyMatch.rank(urls, query: q, limit: 80)
             self.nameTargets = ranked.map { Self.target(for: $0, content: false) }
             self.mergeDeep()
             self.startContentSearch(q, root: root)
@@ -410,8 +470,20 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     // MARK: - NSTextFieldDelegate
 
     func controlTextDidChange(_ obj: Notification) {
-        startDeepSearch()   // sets `searching` before we render the placeholder
-        recompute()
+        let hasQuery = !query.isEmpty
+        searching = hasQuery
+        recompute()                       // local results instantly + placeholder
+        debounce?.cancel()
+        guard hasQuery else {
+            deepTask?.cancel(); contentTask?.cancel()
+            nameTargets = []; contentTargets = []
+            if !deepResults.isEmpty { deepResults = []; recompute() }
+            return
+        }
+        // Debounce the fd/ripgrep work so we don't spawn one per keystroke.
+        let work = DispatchWorkItem { [weak self] in self?.startDeepSearch() }
+        debounce = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.13, execute: work)
     }
 
     func control(_ control: NSControl, textView: NSTextView,
@@ -608,10 +680,12 @@ enum PaletteSearch {
 
     static func rgContent(root: URL, needle: String, cap: Int) -> [URL] {
         guard let rg = ExternalTools.path("rg") else { return [] }
+        // Skip big files and cap the time so content search never hangs.
         let lines = ExternalTools.run(rg, [
             "--color=never", "--files-with-matches", "--smart-case",
-            "--max-count", "1", "--no-messages", "--", needle, root.path
-        ], maxLines: cap)
+            "--max-count", "1", "--no-messages", "--max-filesize", "2M",
+            "--", needle, root.path
+        ], maxLines: cap, timeout: 3.0)
         return lines.map { URL(fileURLWithPath: $0) }
     }
 }

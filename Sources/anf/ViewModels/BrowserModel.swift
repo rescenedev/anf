@@ -90,6 +90,7 @@ final class BrowserModel: Identifiable {
         }
         currentURL = url
         RecentFolders.shared.record(url)
+        FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
         reload()
     }
 
