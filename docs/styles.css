@@ -90,7 +90,9 @@ strong { color: var(--txt); font-weight: 600; }
 .btn.primary { background: var(--accent); color: #fff; }
 .btn.primary:hover { background: #1f86ec; }
 .btn.heart { border: 1px solid var(--line); color: var(--txt); }
-.btn.heart:hover { border-color: #ff5ea8; color: #ff8fc0; }
+.btn.heart:hover { border-color: #ff5e8a; color: #ff8fc0; }
+/* Sponsor heart — always pink, with a soft glow */
+.heart-ic { color: #ff5e8a; text-shadow: 0 0 10px rgba(255,94,138,.5); }
 
 /* Layout carousel */
 .carousel { margin-top: 56px; }
@@ -216,12 +218,14 @@ h2 {
 .duo {
   display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 52px;
 }
+.duo.trio { grid-template-columns: repeat(3, 1fr); }
 .duo-item { display: flex; flex-direction: column; gap: 14px; }
 .duo-item img {
   width: 100%; border-radius: var(--radius); border: 1px solid var(--line);
   box-shadow: 0 24px 60px rgba(0,0,0,.5);
 }
-.duo-item figcaption { color: var(--txt-dim); font-size: 14.5px; }
+.duo-item figcaption { color: var(--txt-dim); font-size: 14.5px; text-align: center; }
+@media (max-width: 880px) { .duo, .duo.trio { grid-template-columns: 1fr; } }
 
 /* ---- Open source ---- */
 .oss-head {

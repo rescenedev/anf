@@ -328,9 +328,14 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             let contentRows = deepResults.filter { $0.isContent }
                 .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
                 .prefix(40).map { $0 }
-            var rows = Array(nameRows)
+            // Two labeled sections: name matches (files/folders) and content matches.
+            var rows: [Target] = []
+            if !nameRows.isEmpty {
+                rows.append(.divider("파일 · 폴더"))
+                rows.append(contentsOf: nameRows)
+            }
             if !contentRows.isEmpty {
-                rows.append(.divider("내용 일치"))
+                rows.append(.divider("내용"))
                 rows.append(contentsOf: contentRows)
             }
             results = rows

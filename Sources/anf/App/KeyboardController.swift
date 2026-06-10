@@ -12,6 +12,16 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
     private var monitor: Any?
     private lazy var palette = CommandPaletteController(workspace: workspace)
 
+    /// Physical keycode → Latin letter, so ⌘-letter shortcuts work under any
+    /// input source (Korean IME makes `charactersIgnoringModifiers` return e.g.
+    /// "ㅏ" for the K key — keycode 40 stays constant).
+    private static let latinLetter: [UInt16: String] = [
+        0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c",
+        9: "v", 11: "b", 12: "q", 13: "w", 14: "e", 15: "r", 16: "y", 17: "t",
+        31: "o", 32: "u", 34: "i", 35: "p", 37: "l", 38: "j", 40: "k",
+        45: "n", 46: "m",
+    ]
+
     init(workspace: WorkspaceModel) {
         self.workspace = workspace
         super.init()
@@ -59,10 +69,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         let cmd = flags.contains(.command)
         let shift = flags.contains(.shift)
         let opt = flags.contains(.option)
-        // Lowercased: with Shift, charactersIgnoringModifiers yields "D"/"G"/"N",
-        // which wouldn't match the lowercase cases below (⌘⇧D, ⌘⇧G, ⌘⇧N).
-        let chars = (e.charactersIgnoringModifiers ?? "").lowercased()
         let code = e.keyCode
+        // Resolve letter keys by physical keycode (input-source independent), so
+        // ⌘K works under the Korean IME too. Lowercased fallback handles Shift
+        // (charactersIgnoringModifiers yields "D"/"G"/"N") and symbol keys.
+        let chars = Self.latinLetter[code] ?? (e.charactersIgnoringModifiers ?? "").lowercased()
 
         // --- No-modifier keys (orthodox navigation) ---
         if !cmd && !opt {
@@ -119,6 +130,8 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             default: break
             }
             switch code {
+            case 123: model.goBack(); refocusContent(); return true     // ⌘← history back
+            case 124: model.goForward(); refocusContent(); return true  // ⌘→ history forward
             case 125: model.openSelected(); return true   // ⌘↓ open
             case 126: model.goUp(); refocusContent(); return true // ⌘↑ enclosing folder
             case 51:  model.trashSelection(); return true // ⌘⌫ trash
