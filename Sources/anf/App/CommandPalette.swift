@@ -421,8 +421,10 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         // (instant). If the index isn't ready, fall back to a per-query fd.
         deepTask = Task { [weak self] in
             let ranked = await Task.detached(priority: .userInitiated) { () -> [URL] in
+                // fd index → per-query fd → mdfind (Spotlight, scoped) → FileManager.
                 let pool = indexed
                     ?? PaletteSearch.fdNames(root: root, needle: q, cap: 400)
+                    ?? PaletteSearch.mdfindNames(root: root, needle: q, cap: 400)
                     ?? PaletteSearch.fmNames(root: root, needle: q, maxDepth: 6, cap: 400)
                 return FuzzyMatch.rank(pool, query: q, limit: 80)
             }.value
@@ -437,7 +439,9 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     private func startContentSearch(_ q: String, root: URL) {
         contentTask = Task { [weak self] in
             let urls = await Task.detached(priority: .userInitiated) {
+                // ripgrep → mdfind content (Spotlight, scoped) when rg is absent.
                 PaletteSearch.rgContent(root: root, needle: q, cap: 40)
+                    ?? PaletteSearch.mdfindContent(root: root, needle: q, cap: 40)
             }.value
             guard let self, self.query == q else { return }
             self.contentTargets = urls.map { Self.target(for: $0, content: true) }
@@ -660,7 +664,33 @@ enum PaletteSearch {
         return lines.map { URL(fileURLWithPath: $0) }
     }
 
-    // MARK: - FileManager fallback (filenames, when fd is unavailable)
+    // MARK: - mdfind fallback (Spotlight, scoped to the folder via -onlyin)
+
+    private static func shQuote(_ s: String) -> String {
+        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// Filenames via Spotlight, scoped to `root`. Used when fd is not installed —
+    /// `-onlyin` keeps it fast and free of global noise (Nix Store, system files).
+    static func mdfindNames(root: URL, needle: String, cap: Int) -> [URL]? {
+        guard FileManager.default.isExecutableFile(atPath: "/usr/bin/mdfind") else { return nil }
+        let cmd = "mdfind -onlyin \(shQuote(root.path)) -name \(shQuote(needle)) 2>/dev/null | head -n \(cap)"
+        let lines = ExternalTools.run("/bin/sh", ["-c", cmd], maxLines: cap, timeout: 3.0)
+        return lines.map { URL(fileURLWithPath: $0) }
+    }
+
+    /// File contents via Spotlight, scoped to `root`. Fallback for ripgrep.
+    static func mdfindContent(root: URL, needle: String, cap: Int) -> [URL] {
+        let clean = needle.replacingOccurrences(of: "'", with: "")
+        guard !clean.isEmpty,
+              FileManager.default.isExecutableFile(atPath: "/usr/bin/mdfind") else { return [] }
+        let pred = "kMDItemTextContent == '*\(clean)*'cd"
+        let cmd = "mdfind -onlyin \(shQuote(root.path)) \(shQuote(pred)) 2>/dev/null | head -n \(cap)"
+        let lines = ExternalTools.run("/bin/sh", ["-c", cmd], maxLines: cap, timeout: 3.0)
+        return lines.map { URL(fileURLWithPath: $0) }
+    }
+
+    // MARK: - FileManager fallback (filenames, last resort)
 
     static func fmNames(root: URL, needle: String,
                         maxDepth: Int, cap: Int) -> [URL] {
@@ -683,8 +713,8 @@ enum PaletteSearch {
 
     // MARK: - ripgrep (content)
 
-    static func rgContent(root: URL, needle: String, cap: Int) -> [URL] {
-        guard let rg = ExternalTools.path("rg") else { return [] }
+    static func rgContent(root: URL, needle: String, cap: Int) -> [URL]? {
+        guard let rg = ExternalTools.path("rg") else { return nil }
         // Skip big files and cap the time so content search never hangs.
         let lines = ExternalTools.run(rg, [
             "--color=never", "--files-with-matches", "--smart-case",

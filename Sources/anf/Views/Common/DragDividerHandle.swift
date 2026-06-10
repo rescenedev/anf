@@ -137,7 +137,7 @@ final class DividerDragRouter {
                 // bounds so the divider is easy to catch even though the visible
                 // hairline is 1pt.
                 let rect = anchor.convert(anchor.bounds, to: nil)
-                guard rect.insetBy(dx: -9, dy: -9).contains(p) else { continue }
+                guard rect.insetBy(dx: -12, dy: -12).contains(p) else { continue }
                 Trace.log("router: down consumed at \(p) rect=\(rect)")
                 active = (entry, entry.read(), p)
                 return nil

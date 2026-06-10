@@ -19,6 +19,7 @@
       <a href="#palette">팔레트</a>
       <a href="#shortcuts">단축키</a>
       <a href="#tools">권장 도구</a>
+      <a href="#roadmap">로드맵</a>
       <a href="#opensource">오픈소스</a>
       <a href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub</a>
     </nav>
@@ -29,7 +30,7 @@
 
   <!-- Hero -->
   <section class="hero">
-    <span class="badge">곧 출시 · 개발 중</span>
+    <div class="badge-row"><span class="badge">곧 출시 · 개발 중</span></div>
     <p class="eyebrow">all new finder</p>
     <h1>당신의 Finder를 다시 상상하다.</h1>
     <p class="lead">분할 뷰, 내장 터미널, 커맨드 팔레트.<br>macOS를 위한 가볍고 빠른 네이티브 파일 브라우저.</p>
@@ -147,7 +148,7 @@
       <div class="duo trio">
         <figure class="duo-item">
           <img src="assets/palette.png" alt="팔레트 — 핀·최근·즐겨찾기" loading="lazy">
-          <figcaption>열면 핀 · 최근 방문 · 즐겨찾기</figcaption>
+          <figcaption>핀 · 최근 방문 · 즐겨찾기</figcaption>
         </figure>
         <figure class="duo-item">
           <img src="assets/palette-scan.png" alt="팔레트 — 디렉토리 스캔" loading="lazy">
@@ -220,7 +221,7 @@
         <div class="cmd"><code id="cmd-al">brew install --cask postmelee/tap/alhangeul</code><button class="copy-btn mini" type="button" data-target="cmd-al">복사</button></div>
       </div>
     </div>
-    <p class="note centered">퍼지 랭킹은 anf에 내장되어 있습니다. fd·ripgrep은 검색, 알한글은 한글 미리보기용입니다.</p>
+    <p class="note centered">퍼지 랭킹은 anf에 내장. fd·ripgrep이 없으면 macOS Spotlight(mdfind)으로 자동 폴백하니 설치 없이도 검색됩니다. 알한글은 한글 미리보기용입니다.</p>
   </section>
 
   <!-- Open Source -->
@@ -245,13 +246,37 @@
     </div>
   </section>
 
+  <!-- Roadmap -->
+  <section id="roadmap" class="band">
+    <div class="band-inner">
+      <h2 class="centered">곧 추가됩니다.</h2>
+      <p class="sub centered">출시 이후 이어질 기능들.</p>
+      <div class="grid roadmap-grid">
+        <div class="tile">
+          <div class="ic">01</div>
+          <h3>hwpx 본문 검색</h3>
+          <p>HWP/HWPX 압축 내부의 텍스트까지 추출해, 커맨드 팔레트에서 본문 내용으로 검색합니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">02</div>
+          <h3>SFTP 연결</h3>
+          <p>원격 서버를 사이드바에 연결해 로컬 폴더처럼 탐색하고 파일을 주고받습니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">03</div>
+          <h3>one more thing…</h3>
+          <p>아직은 비밀. 출시 때 공개합니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Closing CTA -->
   <section class="closing">
     <h2 class="centered">마음에 드셨나요?</h2>
-    <p class="sub centered">개발 중인 프로젝트입니다. Star와 후원으로 응원해 주세요.</p>
+    <p class="sub centered">개발 중인 프로젝트입니다. GitHub에서 Star로 응원해 주세요.</p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub에서 보기</a>
-      <a class="btn heart" href="https://fairy.hada.io/@rescene" target="_blank" rel="noopener"><span class="heart-ic">♥</span> 후원하기</a>
     </div>
   </section>
 
@@ -267,7 +292,6 @@
         </svg>
         <span>GitHub</span>
       </a>
-      <a class="footer-heart" href="https://fairy.hada.io/@rescene" target="_blank" rel="noopener"><span class="heart-ic">♥</span> 후원하기</a>
     </div>
   </div>
 </footer>

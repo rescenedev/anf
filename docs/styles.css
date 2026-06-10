@@ -69,11 +69,12 @@ strong { color: var(--txt); font-weight: 600; }
 }
 
 /* Coming-soon badge */
+.badge-row { margin-bottom: 16px; }
 .badge {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 13px; font-weight: 600; color: var(--txt-dim);
   background: rgba(255,255,255,.05); border: 1px solid var(--line);
-  padding: 7px 15px; border-radius: 999px; margin-bottom: 20px;
+  padding: 7px 15px; border-radius: 999px;
 }
 .badge::before {
   content: ""; width: 7px; height: 7px; border-radius: 50%;
@@ -184,8 +185,10 @@ h2 {
 .tile-link h3 { color: var(--txt); }
 .note { color: var(--txt-faint); font-size: 14px; margin-top: 30px; }
 
-/* tools row (fd · ripgrep · 알한글) */
+/* tools row (fd · ripgrep · 알한글) — align the install rows at the bottom */
 .tools-grid { grid-template-columns: repeat(3, 1fr); }
+.tools-grid .tile { display: flex; flex-direction: column; }
+.tools-grid .cmd { margin-top: auto; }
 
 /* One-shot install command */
 .install-all { max-width: 840px; margin: 40px auto 0; }

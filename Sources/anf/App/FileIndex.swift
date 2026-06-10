@@ -15,7 +15,10 @@ final class FileIndex {
     private var task: Task<Void, Never>?
 
     /// Build (or reuse) the index for `url`. Cheap no-op if already indexed.
+    /// Without `fd` there's no index — `snapshot` returns nil so the palette
+    /// falls back to mdfind / FileManager.
     func build(for url: URL) {
+        guard ExternalTools.path("fd") != nil else { root = nil; ready = false; entries = []; return }
         let path = url.standardizedFileURL.path
         if path == root, ready { return }
         task?.cancel()

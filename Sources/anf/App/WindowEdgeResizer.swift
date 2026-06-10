@@ -57,6 +57,11 @@ final class WindowEdgeResizer: NSView {
             guard let self, let window, event.window === window else { return event }
             return MainActor.assumeIsolated {
                 if InputGate.modalActive { return event }
+                // Keep the overlay matched to the frame view: when the window is
+                // resized (e.g. moved to a larger external display) a stale bounds
+                // would put the "edge" zones in the middle and swallow clicks there
+                // (e.g. the inspector divider).
+                if let sv = self.superview, self.frame != sv.bounds { self.frame = sv.bounds }
                 switch event.type {
                 case .mouseMoved, .cursorUpdate:
                     return self.handleMouseMoved(event, window: window)
