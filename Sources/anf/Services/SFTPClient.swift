@@ -108,7 +108,8 @@ enum SFTPClient {
 
     /// Parse one OpenSSH `ls -la` line:
     /// `drwxr-xr-x    2 user  group      4096 Jun  3 04:54 name with spaces`
-    private static func parse(_ line: String) -> RemoteEntry? {
+    /// Internal (not private) so unit tests can exercise the parser directly.
+    static func parse(_ line: String) -> RemoteEntry? {
         let pattern = #"^([dlbcps\-])[rwxXsStT\-]{9}[@+\.]?\s+\d+\s+\S+\s+\S+\s+(\d+)\s+(\w{3}\s+\d+\s+[\d:]+)\s+(.+)$"#
         guard let re = try? NSRegularExpression(pattern: pattern),
               let m = re.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),

@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # anf targets macOS 26; needs a runner with the macOS 26 SDK.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Unit tests
+        run: swift run anfTests

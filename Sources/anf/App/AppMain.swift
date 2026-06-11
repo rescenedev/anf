@@ -150,9 +150,15 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 }
 
-let app = NSApplication.shared
-let controller = AppController()
-app.delegate = controller
-app.setActivationPolicy(.regular)
-MainMenu.install()
-app.run()
+/// App entry point. Lives in the `anf` library so the logic is unit-testable;
+/// the thin `anfapp` executable target just calls this.
+public func anfMain() {
+    let app = NSApplication.shared
+    let controller = AppController()
+    app.delegate = controller
+    app.setActivationPolicy(.regular)
+    MainMenu.install()
+    // Keep the delegate alive for the app's lifetime.
+    objc_setAssociatedObject(app, "anf.controller", controller, .OBJC_ASSOCIATION_RETAIN)
+    app.run()
+}

@@ -32,6 +32,20 @@ swift build         # SwiftPM 직접 빌드
 > AppKit을 직접 구동해 `NSWindow` + `NSHostingController`로 SwiftUI를 호스팅합니다.
 > 자세한 구조는 [README의 아키텍처](./README.md#아키텍처)를 참고하세요.
 
+## 테스트
+
+```bash
+./test.sh        # 또는: swift run anfTests
+```
+
+XCTest·Swift Testing은 전체 Xcode가 필요해서, Command Line Tools 환경에선 **자체 하니스**로
+순수 로직을 테스트합니다(`Tests/anfTests/`, 실행 타깃 `anfTests`, 종료 코드 0 = 통과).
+앱 로직은 `anf` **라이브러리** 타깃에 있고, 실제 앱은 얇은 `anfapp` 실행 타깃이 `anfMain()`을
+호출합니다 — 덕분에 내부 심볼을 `@testable import anf`로 검증할 수 있습니다.
+
+새 순수 로직(파서·정렬·랭킹 등)을 추가하면 가능한 한 테스트도 같이 추가해 주세요. CI(GitHub
+Actions, macOS)에서 `swift build` + `swift run anfTests`가 자동 실행됩니다.
+
 ## 코드 스타일
 
 - **작은 파일 다수 > 큰 파일 소수** (대략 200~400줄, 800줄 상한).

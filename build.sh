@@ -11,8 +11,8 @@ BIN_DIR="$APP/Contents/MacOS"
 RES_DIR="$APP/Contents/Resources"
 
 echo "▸ Compiling ($CONFIG)…"
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/anf"
+swift build -c "$CONFIG" --product anfapp
+BIN="$(swift build -c "$CONFIG" --show-bin-path)/anfapp"
 
 echo "▸ Assembling ${APP}…"
 rm -rf "$APP"

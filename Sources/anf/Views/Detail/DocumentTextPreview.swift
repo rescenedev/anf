@@ -31,7 +31,8 @@ enum DocumentText {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
-    private static func strip(_ s: String) -> String {
+    /// Internal (not private) so unit tests can exercise tag/entity stripping.
+    static func strip(_ s: String) -> String {
         var t = s
         // Paragraph boundaries → newlines (HWPML / OOXML / ODF).
         for end in ["</hp:p>", "</w:p>", "</a:p>", "</text:p>"] {

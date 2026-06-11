@@ -36,6 +36,16 @@ brew install --cask anf
 > 권한 프롬프트가 재빌드마다 반복되는 게 싫다면 한 번만:
 > `./tools/setup-signing.sh` (고정 서명 → macOS 권한 유지)
 
+### 테스트
+
+```bash
+./test.sh        # = swift run anfTests
+```
+
+XCTest는 Xcode 전용이라 CLT 환경에선 자체 하니스로 순수 로직을 테스트합니다. 앱 로직은 `anf`
+라이브러리 타깃, 실제 앱은 얇은 `anfapp` 실행 타깃입니다. CI는 [.github/workflows/ci.yml](./.github/workflows/ci.yml).
+자세한 내용은 [CONTRIBUTING.md](./CONTRIBUTING.md#테스트).
+
 ---
 
 ## 핵심 기능
