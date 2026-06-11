@@ -92,6 +92,16 @@ strong { color: var(--txt); font-weight: 600; }
 .btn:active { transform: translateY(1px); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover { background: #1f86ec; border-color: #1f86ec; }
+/* Sponsor — gradient emphasis */
+.btn.sponsor {
+  background: linear-gradient(90deg, #2997ff, #7c5cff 55%, #ff5ea8);
+  border-color: transparent; color: #fff;
+  box-shadow: 0 8px 24px rgba(124,92,255,.35);
+}
+.btn.sponsor:hover {
+  background: linear-gradient(90deg, #2997ff, #7c5cff 55%, #ff5ea8);
+  filter: brightness(1.08); border-color: transparent;
+}
 .btn.heart { border: 1px solid var(--line); color: var(--txt); }
 .btn.heart:hover { border-color: #ff5e8a; color: #ff8fc0; }
 /* Sponsor heart — always pink, with a soft glow */
@@ -226,10 +236,12 @@ h2 {
   font-size: 13.5px; overflow-x: auto; white-space: nowrap;
 }
 .copy-btn {
-  flex: 0 0 auto; padding: 0 20px; border-radius: 12px; border: none;
+  flex: 0 0 auto; padding: 0 14px; border-radius: 12px; border: none;
   background: var(--accent); color: #fff; font-weight: 600; font-size: 14px;
   cursor: pointer; transition: background .15s, transform .1s;
+  display: inline-flex; align-items: center; justify-content: center; min-width: 44px;
 }
+.copy-btn svg { display: block; }
 .copy-btn:hover { background: #1f86ec; }
 .copy-btn:active { transform: translateY(1px); }
 .copy-btn.copied { background: #30d158; }

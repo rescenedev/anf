@@ -59,9 +59,10 @@
       <div class="install-box">
         <div class="cmd"><code id="cmd-brew">brew tap rescenedev/anf
 brew trust rescenedev/anf
-brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew">복사</button></div>
-        <p class="note">업데이트는 <code>brew upgrade --cask anf</code>. self-signed 빌드라 첫 실행 시
-          <strong>anf.app 우클릭 → 열기</strong>, 또는 시스템 설정 &gt; 개인정보 보호 및 보안 &gt; "확인 없이 열기"가 필요할 수 있습니다.</p>
+brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+        <p class="note">업데이트는 <code>brew upgrade --cask anf</code>. cask가 quarantine를 자동 제거하지만,
+          그래도 막히면 <strong>anf.app 우클릭 → 열기</strong>, 또는
+          <code>xattr -dr com.apple.quarantine /Applications/anf.app</code> 실행.</p>
         <p class="note">소스에서 빌드: <a href="https://github.com/rescenedev/anf#소스에서-빌드" target="_blank" rel="noopener">GitHub README ↗</a> (<code>./build.sh run</code>, Command Line Tools만 필요)</p>
       </div>
     </div>
@@ -243,7 +244,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
       <span class="install-label">한 번에 설치</span>
       <div class="install-row">
         <code id="cmd-all">brew install fd ripgrep && brew install --cask postmelee/tap/alhangeul</code>
-        <button class="copy-btn" type="button" data-target="cmd-all">복사</button>
+        <button class="copy-btn" type="button" data-target="cmd-all" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
       </div>
     </div>
 
@@ -251,17 +252,17 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
       <div class="tile">
         <h3>fd</h3>
         <p>현재 폴더 이하 파일명을 초고속으로 검색.</p>
-        <div class="cmd"><code id="cmd-fd">brew install fd</code><button class="copy-btn mini" type="button" data-target="cmd-fd">복사</button></div>
+        <div class="cmd"><code id="cmd-fd">brew install fd</code><button class="copy-btn mini" type="button" data-target="cmd-fd" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
       </div>
       <div class="tile">
         <h3>ripgrep</h3>
         <p>커맨드 팔레트에서 파일 <strong>내용</strong>까지 검색.</p>
-        <div class="cmd"><code id="cmd-rg">brew install ripgrep</code><button class="copy-btn mini" type="button" data-target="cmd-rg">복사</button></div>
+        <div class="cmd"><code id="cmd-rg">brew install ripgrep</code><button class="copy-btn mini" type="button" data-target="cmd-rg" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
       </div>
       <div class="tile">
         <h3><a href="https://postmelee.github.io/alhangeul-macos/" target="_blank" rel="noopener">알한글 ↗</a></h3>
         <p>HWP/HWPX 본문 텍스트는 anf가 직접 추출해 보여줍니다. 알한글은 서식까지 포함한 전체 QuickLook 미리보기용(선택).</p>
-        <div class="cmd"><code id="cmd-al">brew install --cask postmelee/tap/alhangeul</code><button class="copy-btn mini" type="button" data-target="cmd-al">복사</button></div>
+        <div class="cmd"><code id="cmd-al">brew install --cask postmelee/tap/alhangeul</code><button class="copy-btn mini" type="button" data-target="cmd-al" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
       </div>
     </div>
     <p class="note centered">퍼지 랭킹은 anf에 내장. fd·ripgrep이 없으면 macOS Spotlight(mdfind)으로 자동 폴백하니 설치 없이도 검색됩니다. 알한글은 한글 미리보기용입니다.</p>
@@ -338,8 +339,8 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
     <h2 class="centered">마음에 드셨나요?</h2>
     <p class="sub centered">GitHub에서 Star로 응원하고, 후원으로 개발을 도와주세요.</p>
     <div class="cta">
-      <a class="btn primary" href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub</a>
-      <a class="btn" href="https://fairy.hada.io/@lumen" target="_blank" rel="noopener">후원하기</a>
+      <a class="btn" href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub</a>
+      <a class="btn sponsor" href="https://fairy.hada.io/@lumen" target="_blank" rel="noopener">후원하기</a>
     </div>
   </section>
 
@@ -383,9 +384,14 @@ document.addEventListener('click', function (e) {
   var el = document.getElementById(btn.dataset.target);
   if (!el) return;
   navigator.clipboard.writeText(el.textContent.trim()).then(function () {
-    var label = btn.textContent;
-    btn.textContent = '복사됨'; btn.classList.add('copied');
-    setTimeout(function () { btn.textContent = label; btn.classList.remove('copied'); }, 1400);
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    var original = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
+    btn.classList.add('copied');
+    setTimeout(function () {
+      btn.innerHTML = original; btn.classList.remove('copied'); delete btn.dataset.busy;
+    }, 1400);
   });
 });
 </script>
