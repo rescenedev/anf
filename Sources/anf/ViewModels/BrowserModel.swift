@@ -196,6 +196,9 @@ final class BrowserModel: Identifiable {
             back.append(currentURL)
             forward.removeAll()
         }
+        // Remember the mode the user was LOOKING at this folder with — not just
+        // explicit changes — so every visited folder restores its own view.
+        ViewModePrefs.shared.set(viewMode, for: currentURL)
         currentURL = url
         if url.scheme != "sftp" {          // local-only bookkeeping
             RecentFolders.shared.record(url)
@@ -242,6 +245,7 @@ final class BrowserModel: Identifiable {
     func goBack() {
         guard let prev = back.popLast() else { return }
         forward.append(currentURL)
+        ViewModePrefs.shared.set(viewMode, for: currentURL)
         currentURL = prev
         applyFolderViewMode()
         reload()
@@ -251,6 +255,7 @@ final class BrowserModel: Identifiable {
     func goForward() {
         guard let next = forward.popLast() else { return }
         back.append(currentURL)
+        ViewModePrefs.shared.set(viewMode, for: currentURL)
         currentURL = next
         applyFolderViewMode()
         reload()
