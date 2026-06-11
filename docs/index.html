@@ -292,8 +292,9 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
           <h3>탐색 · 성능</h3>
           <ul>
             <li><code>getattrlistbulk(2)</code> 네이티브 벌크 읽기로 2만 6천 개 폴더도 ~0.1초 진입</li>
+            <li><strong>한 번 연 폴더는 재진입 즉시(0ms)</strong> — 캐시로 먼저 그리고 변경분만 뒤에서 반영</li>
             <li>리스트·아이콘 그리드·사이드바 전부 네이티브 AppKit 렌더링 — 수만 개도 즉각 스크롤·정렬</li>
-            <li>리스트 · 아이콘 · 컬럼 · 갤러리 보기 (⌘[ / ⌘]), 아이콘·글자 크기 ⌘±</li>
+            <li>리스트 · 아이콘 · 컬럼 · 갤러리 보기 (⌘[ / ⌘]), 리스트 줄무늬, 글자 크기 2단계</li>
             <li><strong>폴더별 보기 형태 기억 + 하위 폴더 상속</strong> — 상위에서 바꾸면 서브트리가 따라옴</li>
             <li>유휴 CPU ~0% — 검색 인덱스는 필요할 때만 갱신</li>
           </ul>
@@ -310,10 +311,10 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
         <div class="rel-block">
           <h3>키보드</h3>
           <ul>
-            <li><strong>타입어헤드</strong> — p를 치면 p 항목으로 점프, 한글은 초성 매칭(ㅍ → 플레이그라운드)</li>
+            <li><strong>타입어헤드</strong> — p를 치면 p 항목으로 점프, 한글은 초성 매칭(ㅍ → 플레이그라운드), 한글 IME에서도 영문 키 폴백</li>
             <li>Shift+화살표: 리스트는 연속 범위, 아이콘 그리드는 직사각형 블록 선택</li>
-            <li>PgUp/PgDn/Home/End 스크롤, 스페이스 Quick Look, Enter 인라인 이름 변경</li>
-            <li>한글 입력 상태에서도 동작하는 ⌘ 단축키 (물리 키 기준)</li>
+            <li>PgUp/PgDn은 선택을 한 화면씩, Home/End는 처음/끝으로 이동, 스페이스 Quick Look</li>
+            <li>⌘⌥C 선택 경로 · ⌥⇧⌘C 현재 폴더 경로 복사, 한글 IME에서도 ⌘ 단축키 동작</li>
           </ul>
         </div>
         <div class="rel-block">
