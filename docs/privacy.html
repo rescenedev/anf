@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개인정보처리방침 — anf</title>
+<meta name="description" content="anf(all new finder) 개인정보처리방침">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .legal { max-width: 760px; margin: 0 auto; padding: 80px 22px 120px; }
+  .legal h1 { font-size: 38px; letter-spacing: -.02em; margin-bottom: 10px; }
+  .legal .date { color: var(--txt-faint); font-size: 13.5px; margin-bottom: 44px; }
+  .legal h2 { font-size: 21px; margin: 40px 0 12px; }
+  .legal p, .legal li { color: var(--txt-dim); font-size: 15px; line-height: 1.7; }
+  .legal ul { padding-left: 20px; margin-top: 8px; }
+  .legal li { margin-bottom: 6px; }
+  .legal code {
+    padding: 1px 6px; background: rgba(255,255,255,.06); border: 1px solid var(--line);
+    border-radius: 6px; font-size: .88em; color: var(--accent-2);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .legal a { color: var(--accent); }
+  .legal a:hover { text-decoration: underline; }
+  .legal .tldr {
+    background: var(--tile); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 24px; margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">anf</a>
+    <nav class="nav-links">
+      <a href="index.html">홈</a>
+      <a href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="legal">
+  <h1>개인정보처리방침</h1>
+  <p class="date">시행일: 2026년 6월 12일</p>
+
+  <div class="tldr">
+    <p><strong>요약:</strong> anf는 개인정보를 수집하지 않습니다. 계정도, 텔레메트리도,
+    분석 도구도 없습니다. 모든 데이터는 사용자의 Mac에만 저장됩니다.</p>
+  </div>
+
+  <h2>1. 수집하는 정보</h2>
+  <p>없습니다. anf는 사용자의 개인정보를 수집·전송·판매하지 않으며, 계정 가입이 없고,
+  텔레메트리·사용 통계·크래시 리포트·광고 식별자를 일절 수집하지 않습니다.</p>
+
+  <h2>2. 네트워크 통신</h2>
+  <p>anf가 자발적으로 수행하는 네트워크 요청은 단 하나입니다:</p>
+  <ul>
+    <li><strong>업데이트 확인</strong> — 하루 1회 GitHub Releases API
+      (<code>api.github.com</code>)에 최신 버전을 조회합니다. 이 요청에는 어떤 사용자
+      데이터도 포함되지 않으며, 일반적인 웹 요청과 마찬가지로 GitHub가 IP 주소를 볼 수
+      있습니다(<a href="https://docs.github.com/site-policy/privacy-policies" target="_blank" rel="noopener">GitHub 개인정보 정책</a> 적용). 오프라인이면 조용히 건너뜁니다.</li>
+    <li><strong>SSH / SFTP</strong> — 사용자가 직접 등록·연결한 호스트에만, 사용자가
+      연결할 때만 통신합니다. 인증은 키/에이전트 방식이며 anf는 <strong>비밀번호를
+      입력받지도, 저장하지도 않습니다</strong>.</li>
+  </ul>
+
+  <h2>3. 기기에 저장되는 데이터</h2>
+  <p>아래 데이터는 모두 사용자의 Mac에만 저장되며 외부로 전송되지 않습니다:</p>
+  <ul>
+    <li>검색 인덱스(파일 경로 목록) — <code>~/Library/Caches/anf/</code></li>
+    <li>설정(레이아웃, 핀, Workspace, 최근 폴더 등) — macOS UserDefaults</li>
+    <li>SSH 연결 다중화 소켓 — <code>~/.anf/</code></li>
+    <li>진단 로그 — 기본 <strong>비활성</strong>. <code>ANF_TRACE=1</code>로 직접 실행한
+      경우에만 <code>/tmp/anf-trace.log</code>에 기록됩니다.</li>
+  </ul>
+  <p>앱을 삭제하면 위 데이터를 함께 정리할 수 있습니다
+  (<code>brew uninstall --zap --cask anf</code>).</p>
+
+  <h2>4. 제3자 제공</h2>
+  <p>수집하는 정보가 없으므로 제3자에게 제공하는 정보도 없습니다.</p>
+
+  <h2>5. 방침 변경</h2>
+  <p>방침이 바뀌면 이 페이지와
+  <a href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub 저장소</a>에
+  변경 내역을 공개합니다.</p>
+
+  <h2>6. 문의처</h2>
+  <p>개인정보 관련 문의: <a href="mailto:tellme@duck.com?subject=anf%20개인정보%20문의">tellme@duck.com</a></p>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>anf — all new finder</span>
+    <div class="footer-links">
+      <a href="index.html">홈</a>
+      <a href="mailto:tellme@duck.com">tellme@duck.com</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
