@@ -1,0 +1,42 @@
+name: Claude Issue → PR
+
+# 이슈에 'claude' 레이블을 달면 Claude가 이슈를 읽고 구현 → PR을 엽니다.
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  issue-to-pr:
+    if: github.event.label.name == 'claude'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          prompt: |
+            GitHub 이슈 #${{ github.event.issue.number }} 를 해결하세요.
+
+            제목: ${{ github.event.issue.title }}
+
+            절차:
+            1. 이슈 본문의 요구사항을 정확히 이해합니다.
+            2. 새 브랜치를 만들고 변경을 구현합니다.
+            3. `./build.sh` 로 빌드가 통과하는지 확인합니다.
+            4. 커밋 후, 이 이슈(#${{ github.event.issue.number }})를 닫는 Pull Request를 엽니다.
+               PR 본문에 변경 요약과 테스트 방법을 적습니다.
+
+            요구사항이 모호하면 추측하지 말고, 코드를 바꾸는 대신 이슈에 코멘트로 질문만 남기세요.
