@@ -36,19 +36,18 @@ func runNormalizedRankTests() {
             "/x/report.txt",
             "/x/unrelated.md",
         ]
-        let urls = rawPaths.map { URL(fileURLWithPath: $0) }
         let lower = rawPaths.map { FuzzyMatch.normalizeForIndex($0) }
 
-        let korean = FuzzyMatch.rankLowered(urls: urls, lowerPaths: lower,
+        let korean = FuzzyMatch.rankLowered(paths: rawPaths, lowerPaths: lower,
                                             query: "금융위", limit: 10)
         T.equal(korean.count, 1, "NFC korean query matches NFD path")
         T.expect(korean.first?.lastPathComponent.contains("규정") == true, "right hit")
 
-        let ascii = FuzzyMatch.rankLowered(urls: urls, lowerPaths: lower,
+        let ascii = FuzzyMatch.rankLowered(paths: rawPaths, lowerPaths: lower,
                                            query: "REPORT", limit: 10)
         T.equal(ascii.first?.lastPathComponent, "report.txt", "case-insensitive ascii")
 
-        let none = FuzzyMatch.rankLowered(urls: urls, lowerPaths: lower,
+        let none = FuzzyMatch.rankLowered(paths: rawPaths, lowerPaths: lower,
                                           query: "교육부", limit: 10)
         T.equal(none.count, 0, "miss stays a miss")
     }

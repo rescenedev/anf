@@ -539,20 +539,20 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 }
                 if let pool {
                     // Scope to the focused folder by prefix over the pre-lowered
-                    // paths (no URL.path bridging, no lowercasing per keystroke).
+                    // paths (no URL objects, no lowercasing per keystroke).
                     let lowerRoot = FuzzyMatch.normalizeForIndex(rootPath)
                     let prefix = lowerRoot.hasSuffix("/") ? lowerRoot : lowerRoot + "/"
-                    var urls: [URL] = []
+                    var paths: [String] = []
                     var lower: [String] = []
-                    urls.reserveCapacity(pool.urls.count)
-                    lower.reserveCapacity(pool.urls.count)
-                    for i in pool.urls.indices {
+                    paths.reserveCapacity(pool.paths.count)
+                    lower.reserveCapacity(pool.paths.count)
+                    for i in pool.paths.indices {
                         let lp = pool.lower[i]
                         if lp == lowerRoot || lp.hasPrefix(prefix) {
-                            urls.append(pool.urls[i]); lower.append(lp)
+                            paths.append(pool.paths[i]); lower.append(lp)
                         }
                     }
-                    let hits = FuzzyMatch.rankLowered(urls: urls, lowerPaths: lower,
+                    let hits = FuzzyMatch.rankLowered(paths: paths, lowerPaths: lower,
                                                       query: q, limit: 80)
                     // The index can be stale or partial (a broad parent scan that
                     // didn't reach this subtree, or capped). If it yields nothing,

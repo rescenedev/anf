@@ -123,14 +123,16 @@ enum FuzzyMatch {
         return nil
     }
 
-    /// Rank an index pool: `lowerPaths[i]` is the `normalizeForIndex`-ed absolute
-    /// path of `urls[i]`. Matches the filename component first, then the full path.
-    static func rankLowered(urls: [URL], lowerPaths: [String],
+    /// Rank an index pool: `lowerPaths[i]` is the `normalizeForIndex`-ed form of
+    /// `paths[i]`. Matches the filename component first, then the full path.
+    /// URLs are materialised for the hits only — building one per pool entry cost
+    /// ~770ms at 124k.
+    static func rankLowered(paths: [String], lowerPaths: [String],
                             query: String, limit: Int) -> [URL] {
         let p = Array(normalizeForIndex(query).unicodeScalars)
         var scored: [(idx: Int, score: Int)] = []
-        scored.reserveCapacity(min(urls.count, 4_096))
-        for i in urls.indices {
+        scored.reserveCapacity(min(paths.count, 4_096))
+        for i in paths.indices {
             let lower = lowerPaths[i]
             let nameStart = lower.lastIndex(of: "/").map { lower.index(after: $0) }
                 ?? lower.startIndex
@@ -141,6 +143,6 @@ enum FuzzyMatch {
             }
         }
         scored.sort { $0.score > $1.score }
-        return scored.prefix(limit).map { urls[$0.idx] }
+        return scored.prefix(limit).map { URL(fileURLWithPath: paths[$0.idx]) }
     }
 }

@@ -139,7 +139,7 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 // ⌘Z undo / ⌘⇧Z redo file operations, then refresh every visible
                 // pane — the change may affect folders shown in other panes.
                 let did = shift ? FileUndo.shared.redo() : FileUndo.shared.undo()
-                if did { workspace.panes.forEach { $0.current.reload() } }
+                if did { workspace.panes.prefix(workspace.layout.count).forEach { $0.current.reload() } }
                 else { NSSound.beep() }
                 return true
             case "t": workspace.activePaneModel.newTab(); return true

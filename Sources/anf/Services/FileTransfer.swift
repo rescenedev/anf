@@ -77,15 +77,21 @@ final class FileTransfer {
             FileOperations.moveToTrash(victims)
         }
 
-        // 3) Same-volume move is metadata-only — do it inline, no HUD.
-        let totalBytes = move ? 0 : Self.totalSize(of: plan.map(\.src))
-        let showHUD = !move && totalBytes > hudThresholdBytes
+        // 3) Size each top-level item ONCE (the per-item progress loop reuses the
+        // same numbers — sizing twice doubled the enumeration of big trees).
+        // A same-volume move is metadata-only (instant, no HUD); a cross-volume
+        // move degrades to copy+delete, so it gets sized + a HUD like a copy.
+        let crossVolume = move && Self.volumeID(of: destination) != Self.volumeID(of: plan[0].src)
+        let needsSizing = !move || crossVolume
+        let itemSizes: [Int64] = needsSizing ? plan.map { Self.totalSize(of: [$0.src]) } : []
+        let totalBytes = itemSizes.reduce(0, +)
+        let showHUD = needsSizing && totalBytes > hudThresholdBytes
 
         if showHUD {
             isActive = true
             fraction = 0
             cancelRequested = false
-            label = "복사 중… (\(plan.count)개 항목)"
+            label = (move ? "이동 중…" : "복사 중…") + " (\(plan.count)개 항목)"
         }
 
         Task { [weak self] in
@@ -94,8 +100,10 @@ final class FileTransfer {
                 var done: [(URL, URL)] = []
                 var failures: [String] = []
                 var copied: Int64 = 0
+                var lastPushed = ContinuousClock.now
                 let fm = FileManager.default
-                for (src, dest) in plan {
+                for (i, pair) in plan.enumerated() {
+                    let (src, dest) = pair
                     if await self?.cancelRequested == true { break }
                     do {
                         if move { try fm.moveItem(at: src, to: dest) }
@@ -105,9 +113,15 @@ final class FileTransfer {
                         failures.append("\(src.lastPathComponent): \(error.localizedDescription)")
                     }
                     if showHUD {
-                        copied += Self.totalSize(of: [src])
-                        let f = totalBytes > 0 ? Double(copied) / Double(totalBytes) : 1
-                        await MainActor.run { self?.fraction = min(f, 1) }
+                        copied += itemSizes[i]
+                        // Throttle main-actor hops: thousands of small files would
+                        // otherwise queue thousands of UI updates.
+                        let now = ContinuousClock.now
+                        if now - lastPushed > .milliseconds(80) || i == plan.count - 1 {
+                            lastPushed = now
+                            let f = totalBytes > 0 ? Double(copied) / Double(totalBytes) : 1
+                            await MainActor.run { self?.fraction = min(f, 1) }
+                        }
                     }
                 }
                 return (done, failures)
@@ -150,6 +164,12 @@ final class FileTransfer {
         case .alertThirdButtonReturn: return .skip
         default: return nil
         }
+    }
+
+    /// Volume identifier for cross-volume move detection (nil on failure).
+    nonisolated static func volumeID(of url: URL) -> Int? {
+        (try? url.resourceValues(forKeys: [.volumeIdentifierKey]))?
+            .volumeIdentifier as? Int
     }
 
     /// Recursive size of `urls` (files + directory contents).
