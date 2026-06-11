@@ -185,6 +185,10 @@ final class BrowserModel: Identifiable {
             FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
         }
         reload()
+        // Land with the first row selected so keyboard navigation continues
+        // immediately. revealFile and friends overwrite this with their own
+        // selection afterwards (this only fills an EMPTY selection).
+        selectFirstWhenLoaded()
     }
 
     func open(_ item: FileItem) {
@@ -222,6 +226,7 @@ final class BrowserModel: Identifiable {
         forward.append(currentURL)
         currentURL = prev
         reload()
+        selectFirstWhenLoaded()
     }
 
     func goForward() {
@@ -229,6 +234,7 @@ final class BrowserModel: Identifiable {
         back.append(currentURL)
         currentURL = next
         reload()
+        selectFirstWhenLoaded()
     }
 
     func goUp() {
@@ -236,11 +242,10 @@ final class BrowserModel: Identifiable {
         if isRemote, let host = remoteHost {
             let parent = (remotePath as NSString).deletingLastPathComponent
             navigate(to: Self.remoteURL(host: host, path: parent.isEmpty ? "/" : parent))
-            selectFirstWhenLoaded()
             return
         }
         navigate(to: currentURL.deletingLastPathComponent())
-        selectFirstWhenLoaded()
+        // navigate() selects the first row once the listing lands.
     }
 
     /// After an async load lands, put the selection on the first row so keyboard
