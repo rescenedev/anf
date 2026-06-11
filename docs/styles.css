@@ -44,6 +44,12 @@ strong { color: var(--txt); font-weight: 600; }
 /* GitHub icon link */
 .nav-gh { display: inline-flex; align-items: center; color: var(--txt-dim); }
 .nav-gh:hover { color: var(--txt); }
+/* Language switcher — small outlined chip, stays visible on mobile */
+.nav-lang {
+  padding: 6px 12px; border-radius: 999px; font-weight: 600;
+  border: 1px solid var(--line); color: var(--txt-dim);
+}
+.nav-lang:hover { color: var(--txt); border-color: var(--txt-faint); }
 /* Sponsor — gradient pill like the footer button */
 .nav-sponsor {
   padding: 7px 16px; border-radius: 999px; font-weight: 600; color: #fff !important;
@@ -370,7 +376,8 @@ kbd {
   h2 { font-size: 32px; }
   .grid { grid-template-columns: 1fr; }
   .band-inner, .showcase { padding: 64px 22px; }
-  .nav-links a:not(:last-child) { display: none; }
+  /* Mobile nav keeps only the essentials: language switcher + sponsor */
+  .nav-links a:not(:last-child):not(.nav-lang) { display: none; }
 }
 
 .closing .sub a { color: var(--accent); }
