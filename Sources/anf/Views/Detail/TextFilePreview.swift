@@ -23,7 +23,7 @@ struct TextFilePreview: View {
         .background(Color(nsColor: .textBackgroundColor).opacity(0.6))
         .safeAreaInset(edge: .bottom) {
             if truncated {
-                Text("미리보기가 잘렸습니다")
+                Text(L("Preview truncated", "미리보기가 잘렸습니다"))
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 3)

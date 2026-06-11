@@ -9,7 +9,7 @@ enum TextPrompt {
         alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: action)
-        alert.addButton(withTitle: "취소")
+        alert.addButton(withTitle: L("Cancel", "취소"))
 
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         field.stringValue = defaultValue
@@ -30,7 +30,7 @@ enum TextPrompt {
         alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: action)
-        alert.addButton(withTitle: "취소")
+        alert.addButton(withTitle: L("Cancel", "취소"))
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 58))
         let f1 = NSTextField(frame: NSRect(x: 0, y: 30, width: 300, height: 22))

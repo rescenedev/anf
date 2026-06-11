@@ -47,11 +47,11 @@ private struct UpdateBanner: View {
         if let v = checker.availableVersion {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles").foregroundStyle(.tint)
-                Text("anf \(v) 출시 — ").font(.system(size: 12))
+                Text(L("anf \(v) is out — ", "anf \(v) 출시 — ")).font(.system(size: 12))
                     + Text("brew upgrade --cask anf").font(.system(size: 12, design: .monospaced))
                 Button {
                     NSWorkspace.shared.open(URL(string: "https://github.com/rescenedev/anf/releases/latest")!)
-                } label: { Text("릴리즈 노트").font(.system(size: 12)) }
+                } label: { Text(L("Release Notes", "릴리즈 노트")).font(.system(size: 12)) }
                 .buttonStyle(.link)
                 Button {
                     checker.dismiss()
@@ -83,7 +83,7 @@ private struct TransferHUD: View {
                 Text(transfer.label)
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .lineLimit(1)
-                Button("취소") { transfer.cancel() }
+                Button(L("Cancel", "취소")) { transfer.cancel() }
                     .controlSize(.small)
             }
             .padding(.horizontal, 16).padding(.vertical, 10)

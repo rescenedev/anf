@@ -5,9 +5,9 @@ import AppKit
 enum SSHPrompt {
     static func run() -> CustomSSHHost? {
         let alert = NSAlert()
-        alert.messageText = "SSH Host 추가"
-        alert.addButton(withTitle: "추가")
-        alert.addButton(withTitle: "취소")
+        alert.messageText = L("Add SSH Host", "SSH Host 추가")
+        alert.addButton(withTitle: L("Add", "추가"))
+        alert.addButton(withTitle: L("Cancel", "취소"))
 
         // Form container: 4 rows of label + field
         let formWidth: CGFloat = 320
@@ -54,9 +54,9 @@ enum SSHPrompt {
         makeLabel("Password", row: 2)
         makeLabel("Key File", row: 3)
 
-        let hostField = makeField(row: 0, placeholder: "hostname 또는 IP")
-        let userField = makeField(row: 1, placeholder: "사용자명 (선택)")
-        let passField = makeSecureField(row: 2, placeholder: "비밀번호 (선택)")
+        let hostField = makeField(row: 0, placeholder: L("hostname or IP", "hostname 또는 IP"))
+        let userField = makeField(row: 1, placeholder: L("user (optional)", "사용자명 (선택)"))
+        let passField = makeSecureField(row: 2, placeholder: L("password (optional)", "비밀번호 (선택)"))
 
         // Key file row: field + browse "…" button side by side
         let browseWidth: CGFloat = 28
@@ -64,7 +64,7 @@ enum SSHPrompt {
         let keyRow = 3
         let keyY = formHeight - CGFloat(keyRow + 1) * rowHeight - CGFloat(keyRow) * rowGap
         let keyField = NSTextField(frame: NSRect(x: fieldX, y: keyY, width: keyFieldWidth, height: 22))
-        keyField.placeholderString = "~/.ssh/id_rsa (선택)"
+        keyField.placeholderString = L("~/.ssh/id_rsa (optional)", "~/.ssh/id_rsa (선택)")
         keyField.font = .systemFont(ofSize: 13)
         container.addSubview(keyField)
 
@@ -109,7 +109,7 @@ private final class BrowseButtonCoordinator: NSObject {
 
     @objc func browse(_ sender: Any) {
         let panel = NSOpenPanel()
-        panel.title = "키 파일 선택"
+        panel.title = L("Choose Key File", "키 파일 선택")
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false

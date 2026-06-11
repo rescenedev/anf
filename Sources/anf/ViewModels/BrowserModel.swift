@@ -544,8 +544,8 @@ final class BrowserModel: Identifiable {
     /// Legacy modal rename (kept for menu use).
     func renameSelected() {
         guard let item = selectedItems.first else { return }
-        guard let newName = TextPrompt.run(title: "이름 변경", message: "‘\(item.name)’의 새 이름:",
-                                           defaultValue: item.name, action: "변경") else { return }
+        guard let newName = TextPrompt.run(title: L("Rename", "이름 변경"), message: L("New name for ‘\(item.name)’:", "‘\(item.name)’의 새 이름:"),
+                                           defaultValue: item.name, action: L("Rename", "변경")) else { return }
         if let dest = FileOperations.rename(item, to: newName) {
             reload(); selection = [dest]
         }
@@ -566,9 +566,9 @@ final class BrowserModel: Identifiable {
         let targets = selectedItems
         guard targets.count > 1 else { renameSelected(); return }
         guard let (find, replace) = TextPrompt.runPair(
-            title: "\(targets.count)개 항목 이름 변경",
-            message: "각 이름에서 찾아 바꿀 텍스트:",
-            label1: "찾기", label2: "바꾸기", action: "변경"),
+            title: L("Rename \(targets.count) Items", "\(targets.count)개 항목 이름 변경"),
+            message: L("Replace text in each name:", "각 이름에서 찾아 바꿀 텍스트:"),
+            label1: L("Find", "찾기"), label2: L("Replace with", "바꾸기"), action: L("Rename", "변경")),
               !find.isEmpty else { return }
         for item in targets {
             let newName = item.name.replacingOccurrences(of: find, with: replace)
@@ -578,9 +578,9 @@ final class BrowserModel: Identifiable {
     }
 
     func goToFolderPrompt() {
-        guard let raw = TextPrompt.run(title: "폴더로 이동",
-                                       message: "경로를 입력하거나 붙여넣기:",
-                                       defaultValue: currentURL.path, action: "이동") else { return }
+        guard let raw = TextPrompt.run(title: L("Go to Folder", "폴더로 이동"),
+                                       message: L("Enter or paste a path:", "경로를 입력하거나 붙여넣기:"),
+                                       defaultValue: currentURL.path, action: L("Go", "이동")) else { return }
         let expanded = (raw as NSString).expandingTildeInPath
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {

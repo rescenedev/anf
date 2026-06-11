@@ -29,10 +29,10 @@ struct FileListView: NSViewRepresentable {
         table.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: true)
         table.setDraggingSourceOperationMask([.copy], forLocal: false)
 
-        addColumn(table, "name", "이름", min: 220, width: 380)
-        addColumn(table, "date", "수정일", min: 120, width: 180)
-        addColumn(table, "size", "크기", min: 70, width: 90)
-        addColumn(table, "kind", "종류", min: 90, width: 160)
+        addColumn(table, "name", L("Name", "이름"), min: 220, width: 380)
+        addColumn(table, "date", L("Date Modified", "수정일"), min: 120, width: 180)
+        addColumn(table, "size", L("Size", "크기"), min: 70, width: 90)
+        addColumn(table, "kind", L("Kind", "종류"), min: 90, width: 160)
 
         table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
         coord.table = table
@@ -286,32 +286,32 @@ struct FileListView: NSViewRepresentable {
                 let t = MenuTarget(action); mi.target = t; mi.representedObject = t
                 menu.addItem(mi)
             }
-            add("열기") { self.model.open(item) }
+            add(L("Open", "열기")) { self.model.open(item) }
             if item.isBrowsableContainer {
-                add("여기서 터미널 열기") { FileOperations.openInTerminal(item.url) }
+                add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(item.url) }
             }
             menu.addItem(.separator())
             if model.selection.count > 1 {
-                add("\(model.selection.count)개 항목 이름 변경…") { self.model.batchRename() }
+                add(L("Rename \(model.selection.count) Items…", "\(model.selection.count)개 항목 이름 변경…")) { self.model.batchRename() }
             } else {
-                add("이름 변경") { self.model.beginRename() }
+                add(L("Rename", "이름 변경")) { self.model.beginRename() }
             }
-            add("복제") { self.model.duplicateSelection() }
+            add(L("Duplicate", "복제")) { self.model.duplicateSelection() }
             menu.addItem(.separator())
             if item.ext == "zip" && model.selection.count <= 1 {
-                add("압축 풀기") { ArchiveService.extract(item) { self.model.reload() } }
+                add(L("Extract", "압축 풀기")) { ArchiveService.extract(item) { self.model.reload() } }
             } else {
-                add(model.selection.count > 1 ? "\(model.selection.count)개 항목 압축" : "압축") {
+                add(model.selection.count > 1 ? L("Compress \(model.selection.count) Items", "\(model.selection.count)개 항목 압축") : L("Compress", "압축")) {
                     ArchiveService.compress(self.model.selectedItems) { self.model.reload() }
                 }
             }
             menu.addItem(.separator())
-            add("복사") { self.model.copySelectionToPasteboard() }
-            add("경로 복사") { self.model.copyPathToPasteboard() }
-            add("붙여넣기") { self.model.pasteFromPasteboard() }
-            add("Finder에서 보기") { self.model.revealSelection() }
+            add(L("Copy", "복사")) { self.model.copySelectionToPasteboard() }
+            add(L("Copy Path", "경로 복사")) { self.model.copyPathToPasteboard() }
+            add(L("Paste", "붙여넣기")) { self.model.pasteFromPasteboard() }
+            add(L("Reveal in Finder", "Finder에서 보기")) { self.model.revealSelection() }
             menu.addItem(.separator())
-            add("휴지통으로 이동") { self.model.trashSelection() }
+            add(L("Move to Trash", "휴지통으로 이동")) { self.model.trashSelection() }
             return menu
         }
     }

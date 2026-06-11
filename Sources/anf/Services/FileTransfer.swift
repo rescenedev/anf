@@ -91,7 +91,7 @@ final class FileTransfer {
             isActive = true
             fraction = 0
             cancelRequested = false
-            label = (move ? "이동 중…" : "복사 중…") + " (\(plan.count)개 항목)"
+            label = (move ? L("Moving…", "이동 중…") : L("Copying…", "복사 중…")) + L(" (\(plan.count) items)", " (\(plan.count)개 항목)")
         }
 
         Task { [weak self] in
@@ -136,10 +136,10 @@ final class FileTransfer {
             }
             if self.cancelRequested {
                 FileOperations.presentFailures(
-                    "복사가 취소되었습니다",
-                    ["완료된 \(result.done.count)개 항목은 유지됩니다."])
+                    L("Copy cancelled", "복사가 취소되었습니다"),
+                    [L("\(result.done.count) completed item(s) were kept.", "완료된 \(result.done.count)개 항목은 유지됩니다.")])
             }
-            FileOperations.presentFailures(move ? "이동하지 못했습니다" : "복사하지 못했습니다",
+            FileOperations.presentFailures(move ? L("Couldn’t move", "이동하지 못했습니다") : L("Couldn’t copy", "복사하지 못했습니다"),
                                            result.failures)
             completion()
         }
@@ -151,13 +151,13 @@ final class FileTransfer {
     private static func askConflict(count: Int, first: String) -> ConflictPolicy? {
         let alert = NSAlert()
         alert.messageText = count == 1
-            ? "‘\(first)’ 항목이 이미 있습니다"
-            : "같은 이름의 항목이 \(count)개 있습니다"
-        alert.informativeText = "둘 다 유지하면 복사본에 번호가 붙습니다. 덮어쓰기한 기존 항목은 휴지통으로 이동합니다."
-        alert.addButton(withTitle: "둘 다 유지")
-        alert.addButton(withTitle: "덮어쓰기")
-        alert.addButton(withTitle: "건너뛰기")
-        alert.addButton(withTitle: "취소")
+            ? L("An item named ‘\(first)’ already exists", "‘\(first)’ 항목이 이미 있습니다")
+            : L("\(count) items with the same names already exist", "같은 이름의 항목이 \(count)개 있습니다")
+        alert.informativeText = L("Keep Both numbers the copies. Overwritten items are moved to the Trash.", "둘 다 유지하면 복사본에 번호가 붙습니다. 덮어쓰기한 기존 항목은 휴지통으로 이동합니다.")
+        alert.addButton(withTitle: L("Keep Both", "둘 다 유지"))
+        alert.addButton(withTitle: L("Overwrite", "덮어쓰기"))
+        alert.addButton(withTitle: L("Skip", "건너뛰기"))
+        alert.addButton(withTitle: L("Cancel", "취소"))
         switch alert.runModal() {
         case .alertFirstButtonReturn: return .keepBoth
         case .alertSecondButtonReturn: return .overwrite

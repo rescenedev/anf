@@ -178,7 +178,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         magnifier.translatesAutoresizingMaskIntoConstraints = false
 
         field = NSTextField()
-        field.placeholderString = "파일 · 폴더 검색…"
+        field.placeholderString = L("Search files & folders…", "파일 · 폴더 검색…")
         field.font = .systemFont(ofSize: 18)
         field.isBordered = false
         field.drawsBackground = false
@@ -420,11 +420,11 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 rows.append(contentsOf: sshRows)
             }
             if !nameRows.isEmpty {
-                rows.append(.divider("파일 · 폴더"))
+                rows.append(.divider(L("Files · Folders", "파일 · 폴더")))
                 rows.append(contentsOf: nameRows)
             }
             if !contentRows.isEmpty {
-                rows.append(.divider("내용"))
+                rows.append(.divider(L("Contents", "내용")))
                 rows.append(contentsOf: contentRows)
             }
             results = rows
@@ -448,7 +448,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         let centerTicker = emptyStatus && searching
         // Center status (no results yet).
         placeholder.isHidden = !emptyStatus
-        if emptyStatus { placeholder.stringValue = searching ? "검색 중…" : "결과 없음" }
+        if emptyStatus { placeholder.stringValue = searching ? L("Searching…", "검색 중…") : L("No Results", "결과 없음") }
         if centerTicker { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         // Footer ticker (content search still running while results are shown).
         let footerTicker = contentScanning && !results.isEmpty
@@ -477,7 +477,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 let centerActive = self.results.isEmpty && !self.query.isEmpty && self.searching
                 let footerActive = self.contentScanning && !self.results.isEmpty
                 scanLabel.stringValue = centerActive ? abbr : ""
-                self.footer?.stringValue = footerActive ? "내용 검색 중  ·  \(abbr)" : ""
+                self.footer?.stringValue = footerActive ? L("Searching contents  ·  \(abbr)", "내용 검색 중  ·  \(abbr)") : ""
             }
         }
     }

@@ -27,7 +27,7 @@ enum ArchiveService {
                 return run("/usr/bin/zip", ["-r", "-q", dest.path] + paths, cwd: dir)
             }.value
             if let error {
-                FileOperations.presentFailures("압축하지 못했습니다", [error])
+                FileOperations.presentFailures(L("Couldn’t compress", "압축하지 못했습니다"), [error])
             } else {
                 FileUndo.shared.record(.created([dest]))
             }
@@ -45,7 +45,7 @@ enum ArchiveService {
                 run("/usr/bin/ditto", ["-x", "-k", item.url.path, dest.path])
             }.value
             if let error {
-                FileOperations.presentFailures("압축을 풀지 못했습니다", [error])
+                FileOperations.presentFailures(L("Couldn’t extract", "압축을 풀지 못했습니다"), [error])
             } else {
                 FileUndo.shared.record(.created([dest]))
             }
@@ -62,10 +62,10 @@ enum ArchiveService {
 
         let alert = NSAlert()
         alert.alertStyle = .critical
-        alert.messageText = "휴지통을 비우시겠습니까?"
-        alert.informativeText = "\(contents.count)개 항목이 영구적으로 삭제됩니다. 되돌릴 수 없습니다."
-        alert.addButton(withTitle: "비우기")
-        alert.addButton(withTitle: "취소")
+        alert.messageText = L("Empty the Trash?", "휴지통을 비우시겠습니까?")
+        alert.informativeText = L("\(contents.count) item(s) will be deleted permanently. This cannot be undone.", "\(contents.count)개 항목이 영구적으로 삭제됩니다. 되돌릴 수 없습니다.")
+        alert.addButton(withTitle: L("Empty Trash", "비우기"))
+        alert.addButton(withTitle: L("Cancel", "취소"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         Task {
@@ -77,7 +77,7 @@ enum ArchiveService {
                 }
                 return fails
             }.value
-            FileOperations.presentFailures("일부 항목을 삭제하지 못했습니다", failures)
+            FileOperations.presentFailures(L("Some items couldn’t be deleted", "일부 항목을 삭제하지 못했습니다"), failures)
             completion()
         }
     }
@@ -97,7 +97,7 @@ enum ArchiveService {
         guard p.terminationStatus == 0 else {
             let msg = String(decoding: errData, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return msg.isEmpty ? "종료 코드 \(p.terminationStatus)" : msg
+            return msg.isEmpty ? L("exit code \(p.terminationStatus)", "종료 코드 \(p.terminationStatus)") : msg
         }
         return nil
     }

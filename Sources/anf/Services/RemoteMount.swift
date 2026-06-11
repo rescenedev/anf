@@ -27,7 +27,7 @@ final class RemoteMount {
 
         guard let sshfs = ExternalTools.path("sshfs") else {
             completion(.failure(
-                "sshfs가 설치되어 있지 않습니다.\n\n그래픽 탐색을 하려면 macFUSE + sshfs가 필요합니다:\n  brew install --cask macfuse\n  brew install gromgit/fuse/sshfs-mac\n\n설치가 어렵다면 사이드바에서 'SFTP (터미널)'을 쓰세요."))
+                L("sshfs is not installed.\n\nMounting needs macFUSE + sshfs:\n  brew install --cask macfuse\n  brew install gromgit/fuse/sshfs-mac\n\nOr use ‘SFTP (Terminal)’ from the sidebar instead.", "sshfs가 설치되어 있지 않습니다.\n\n그래픽 탐색을 하려면 macFUSE + sshfs가 필요합니다:\n  brew install --cask macfuse\n  brew install gromgit/fuse/sshfs-mac\n\n설치가 어렵다면 사이드바에서 'SFTP (터미널)'을 쓰세요.")))
             return
         }
 
@@ -53,7 +53,7 @@ final class RemoteMount {
                     self.mounts[host] = point
                     completion(.success(point))
                 } else {
-                    completion(.failure("‘\(host)’ SFTP 마운트에 실패했습니다.\n호스트 이름과 SSH 접속을 확인하세요."))
+                    completion(.failure(L("Couldn’t mount ‘\(host)’ over SFTP.\nCheck the host name and SSH access.", "‘\(host)’ SFTP 마운트에 실패했습니다.\n호스트 이름과 SSH 접속을 확인하세요.")))
                 }
             }
         }
@@ -75,9 +75,9 @@ final class RemoteMount {
 
     static func presentError(_ message: String) {
         let alert = NSAlert()
-        alert.messageText = "SFTP 마운트"
+        alert.messageText = L("SFTP Mount", "SFTP 마운트")
         alert.informativeText = message
-        alert.addButton(withTitle: "확인")
+        alert.addButton(withTitle: L("OK", "확인"))
         alert.runModal()
     }
 }

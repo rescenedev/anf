@@ -63,7 +63,7 @@ final class FileUndo {
                     done.append((from: to, to: from))
                 } catch { failures.append("\(to.lastPathComponent): \(error.localizedDescription)") }
             }
-            FileOperations.presentFailures("되돌리지 못했습니다", failures)
+            FileOperations.presentFailures(L("Couldn’t undo", "되돌리지 못했습니다"), failures)
             // `done` records the movements just performed; the op whose inverse
             // re-applies the original action is exactly that record. (Flipping it
             // here would make redo repeat the *undo* — and fail.)
@@ -79,7 +79,7 @@ final class FileUndo {
                     if let t = t as URL? { trashedPairs.append((url, t)) }
                 } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
             }
-            FileOperations.presentFailures("되돌리지 못했습니다", failures)
+            FileOperations.presentFailures(L("Couldn’t undo", "되돌리지 못했습니다"), failures)
             return trashedPairs.isEmpty ? nil : .trash(trashedPairs)
 
         case .trash(let pairs):
@@ -93,7 +93,7 @@ final class FileUndo {
                     stillTrashed.append((original, trashed))
                 } catch { failures.append("\(original.lastPathComponent): \(error.localizedDescription)") }
             }
-            FileOperations.presentFailures("휴지통에서 복원하지 못했습니다", failures)
+            FileOperations.presentFailures(L("Couldn’t restore from Trash", "휴지통에서 복원하지 못했습니다"), failures)
             // Redo = trash them again; recording as .created(restored) trashes on next inverse.
             return restored.isEmpty ? nil : .created(restored)
         }

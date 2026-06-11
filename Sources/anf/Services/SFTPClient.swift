@@ -69,7 +69,7 @@ enum SFTPClient {
                     || $0.lowercased().contains("permission denied")
                     || $0.lowercased().contains("connection")
                     || $0.lowercased().contains("could not") })
-                throw SFTPError.message(err ?? "‘\(host)’에 연결하지 못했습니다. 키 인증이 가능한지 확인하세요.")
+                throw SFTPError.message(err ?? L("Couldn’t connect to ‘\(host)’. Check that key authentication works.", "‘\(host)’에 연결하지 못했습니다. 키 인증이 가능한지 확인하세요."))
             }
             return entries
         }.value
@@ -88,7 +88,7 @@ enum SFTPClient {
             _ = ExternalTools.run(sftpPath, baseArgs(host),
                                   stdin: cmd, maxLines: 200, timeout: 120)
             guard FileManager.default.fileExists(atPath: local.path) else {
-                throw SFTPError.message("‘\(name)’ 다운로드에 실패했습니다.")
+                throw SFTPError.message(L("Couldn’t download ‘\(name)’.", "‘\(name)’ 다운로드에 실패했습니다."))
             }
             return local
         }.value

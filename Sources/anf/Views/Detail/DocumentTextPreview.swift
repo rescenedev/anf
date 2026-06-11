@@ -70,7 +70,7 @@ struct DocumentTextPreview: View {
             if loading {
                 VStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("본문 추출 중…").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L("Extracting text…", "본문 추출 중…")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             } else if let text, !text.isEmpty {
                 ScrollView {
@@ -83,7 +83,7 @@ struct DocumentTextPreview: View {
             } else {
                 VStack(spacing: 6) {
                     Image(systemName: "doc.text").font(.system(size: 26)).foregroundStyle(.tertiary)
-                    Text("미리볼 텍스트가 없습니다").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text(L("No text to preview", "미리볼 텍스트가 없습니다")).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
         }

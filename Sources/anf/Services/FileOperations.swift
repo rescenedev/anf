@@ -36,7 +36,7 @@ enum FileOperations {
         if !pairs.isEmpty {
             FileUndo.shared.record(.trash(pairs))
         }
-        presentFailures("휴지통으로 이동하지 못했습니다", failures)
+        presentFailures(L("Couldn’t move to Trash", "휴지통으로 이동하지 못했습니다"), failures)
         return pairs
     }
 
@@ -49,7 +49,7 @@ enum FileOperations {
             FileUndo.shared.record(.created([url]))
             return url
         } catch {
-            presentFailures("폴더를 만들지 못했습니다", [error.localizedDescription])
+            presentFailures(L("Couldn’t create folder", "폴더를 만들지 못했습니다"), [error.localizedDescription])
             return nil
         }
     }
@@ -64,7 +64,7 @@ enum FileOperations {
             FileUndo.shared.record(.move([(from: item.url, to: dest)]))
             return dest
         } catch {
-            presentFailures("이름을 바꾸지 못했습니다", ["\(item.name): \(error.localizedDescription)"])
+            presentFailures(L("Couldn’t rename", "이름을 바꾸지 못했습니다"), ["\(item.name): \(error.localizedDescription)"])
             return nil
         }
     }
@@ -93,7 +93,7 @@ enum FileOperations {
             }
         }
         if !created.isEmpty { FileUndo.shared.record(.created(created)) }
-        presentFailures("복제하지 못했습니다", failures)
+        presentFailures(L("Couldn’t duplicate", "복제하지 못했습니다"), failures)
     }
 
     /// Next available "name", "name 2", "name 3"… in `dir`.
@@ -123,8 +123,8 @@ enum FileOperations {
         alert.alertStyle = .warning
         alert.messageText = title
         alert.informativeText = failures.prefix(5).joined(separator: "\n")
-            + (failures.count > 5 ? "\n외 \(failures.count - 5)건" : "")
-        alert.addButton(withTitle: "확인")
+            + (failures.count > 5 ? L("\nand \(failures.count - 5) more", "\n외 \(failures.count - 5)건") : "")
+        alert.addButton(withTitle: L("OK", "확인"))
         alert.runModal()
     }
 }

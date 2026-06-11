@@ -40,7 +40,7 @@ struct SidebarView: View {
                     ForEach(builtins) { row(name: $0.name, symbol: $0.symbol, url: $0.url, removable: false) }
                 }
             } header: {
-                sectionHeader("즐겨찾기", isOpen: $openFavorites)
+                sectionHeader(L("Favorites", "즐겨찾기"), isOpen: $openFavorites)
             }
             if !workspace.favorites.items.isEmpty {
                 Section {
@@ -51,7 +51,7 @@ struct SidebarView: View {
                         }
                     }
                 } header: {
-                    sectionHeader("핀", isOpen: $openPinned)
+                    sectionHeader(L("Pinned", "핀"), isOpen: $openPinned)
                 }
             }
             if !workspace.savedViews.views.isEmpty {
@@ -69,7 +69,7 @@ struct SidebarView: View {
                         ForEach(locations) { row(name: $0.name, symbol: $0.symbol, url: $0.url, removable: false, ejectable: $0.ejectable) }
                     }
                 } header: {
-                    sectionHeader("위치", isOpen: $openLocations)
+                    sectionHeader(L("Locations", "위치"), isOpen: $openLocations)
                 }
             }
             Section {
@@ -90,7 +90,7 @@ struct SidebarView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("SSH Host 추가")
+                    .help(L("Add SSH Host", "SSH Host 추가"))
                 }
             }
         }
@@ -105,12 +105,12 @@ struct SidebarView: View {
             locations = await Task.detached(priority: .utility) { SidebarBuilder.locations() }.value
             sshHosts = await Task.detached(priority: .utility) { SSHConfig.hosts() }.value
         }
-        .alert("Workspace 이름 변경", isPresented: Binding(
+        .alert(L("Rename Workspace", "Workspace 이름 변경"), isPresented: Binding(
             get: { renamingView != nil },
             set: { if !$0 { renamingView = nil } })) {
-            TextField("이름", text: $renameText)
-            Button("취소", role: .cancel) { renamingView = nil }
-            Button("저장") {
+            TextField(L("Name", "이름"), text: $renameText)
+            Button(L("Cancel", "취소"), role: .cancel) { renamingView = nil }
+            Button(L("Save", "저장")) {
                 if let v = renamingView { workspace.savedViews.rename(id: v.id, to: renameText) }
                 renamingView = nil
             }
@@ -145,7 +145,7 @@ struct SidebarView: View {
             try NSWorkspace.shared.unmountAndEjectDevice(at: url)
             locations = SidebarBuilder.locations()
         } catch {
-            FileOperations.presentFailures("‘\(name)’을(를) 추출하지 못했습니다",
+            FileOperations.presentFailures(L("Could not eject ‘\(name)’", "‘\(name)’을(를) 추출하지 못했습니다"),
                                            [error.localizedDescription])
         }
     }
@@ -175,13 +175,13 @@ struct SidebarView: View {
             .contentShape(Rectangle())
             .onTapGesture { workspace.applyView(view) }
             .contextMenu {
-                Button("이 레이아웃으로 전환") { workspace.applyView(view) }
-                Button("현재 레이아웃으로 덮어쓰기") {
+                Button(L("Switch to This Layout", "이 레이아웃으로 전환")) { workspace.applyView(view) }
+                Button(L("Overwrite with Current Layout", "현재 레이아웃으로 덮어쓰기")) {
                     workspace.savedViews.update(id: view.id, snapshot: workspace.captureSnapshot())
                 }
-                Button("이름 변경…") { renameText = view.name; renamingView = view }
+                Button(L("Rename…", "이름 변경…")) { renameText = view.name; renamingView = view }
                 Divider()
-                Button("삭제", role: .destructive) { workspace.savedViews.remove(id: view.id) }
+                Button(L("Delete", "삭제"), role: .destructive) { workspace.savedViews.remove(id: view.id) }
             }
     }
 
@@ -221,21 +221,21 @@ struct SidebarView: View {
                 }
             }
             .contextMenu {
-                Button("새 탭으로 열기") { workspace.activePaneModel.newTab(at: url) }
-                Button("이 pane에서 열기") { model.navigate(to: url) }
+                Button(L("Open in New Tab", "새 탭으로 열기")) { workspace.activePaneModel.newTab(at: url) }
+                Button(L("Open in This Pane", "이 pane에서 열기")) { model.navigate(to: url) }
                 if url.path == trashURL?.path {
                     Divider()
-                    Button("휴지통 비우기…", role: .destructive) {
+                    Button(L("Empty Trash…", "휴지통 비우기…"), role: .destructive) {
                         ArchiveService.emptyTrash { model.reload() }
                     }
                 }
                 if ejectable {
                     Divider()
-                    Button("‘\(name)’ 추출") { eject(url, name: name) }
+                    Button(L("Eject ‘\(name)’", "‘\(name)’ 추출")) { eject(url, name: name) }
                 }
                 if removable {
                     Divider()
-                    Button("사이드바에서 제거", role: .destructive) { workspace.favorites.remove(url) }
+                    Button(L("Remove from Sidebar", "사이드바에서 제거"), role: .destructive) { workspace.favorites.remove(url) }
                 }
             }
             .onDrag { NSItemProvider(object: url as NSURL) }
@@ -253,9 +253,9 @@ struct SidebarView: View {
             }
             Spacer(minLength: 4)
             if connected {
-                Circle().fill(.green).frame(width: 7, height: 7).help("연결됨")
+                Circle().fill(.green).frame(width: 7, height: 7).help(L("Connected", "연결됨"))
             } else if session != nil {
-                Circle().fill(.secondary.opacity(0.5)).frame(width: 7, height: 7).help("연결 끊김")
+                Circle().fill(.secondary.opacity(0.5)).frame(width: 7, height: 7).help(L("Disconnected", "연결 끊김"))
             }
         }
         .padding(.vertical, 2)
@@ -276,21 +276,21 @@ struct SidebarView: View {
         .help("ssh \(host.subtitle)")
         .contextMenu {
             if let custom = customData {
-                Button("SFTP로 열기") { workspace.openRemote(custom.target) }
-                Button("anf에서 연결") { workspace.openSSH(custom) }
-                Button("SFTP (터미널)") { workspace.openSFTP(custom.target) }
-                Button("SFTP 마운트해서 열기") { workspace.mountSFTP(custom.target) }
-                Button("Ghostty로 연결") { TerminalLauncher.ssh(custom.target) }
+                Button(L("Open over SFTP", "SFTP로 열기")) { workspace.openRemote(custom.target) }
+                Button(L("Connect in anf", "anf에서 연결")) { workspace.openSSH(custom) }
+                Button(L("SFTP (Terminal)", "SFTP (터미널)")) { workspace.openSFTP(custom.target) }
+                Button(L("Mount over SFTP", "SFTP 마운트해서 열기")) { workspace.mountSFTP(custom.target) }
+                Button(L("Connect with Ghostty", "Ghostty로 연결")) { TerminalLauncher.ssh(custom.target) }
                 Divider()
-                Button("사이드바에서 제거", role: .destructive) {
+                Button(L("Remove from Sidebar", "사이드바에서 제거"), role: .destructive) {
                     workspace.customSSH.remove(target: host.alias)
                 }
             } else {
-                Button("SFTP로 열기") { workspace.openRemote(host.alias) }
-                Button("anf에서 연결") { workspace.openSSH(host.alias) }
-                Button("SFTP (터미널)") { workspace.openSFTP(host.alias) }
-                Button("SFTP 마운트해서 열기") { workspace.mountSFTP(host.alias) }
-                Button("Ghostty로 연결") { TerminalLauncher.ssh(host.alias) }
+                Button(L("Open over SFTP", "SFTP로 열기")) { workspace.openRemote(host.alias) }
+                Button(L("Connect in anf", "anf에서 연결")) { workspace.openSSH(host.alias) }
+                Button(L("SFTP (Terminal)", "SFTP (터미널)")) { workspace.openSFTP(host.alias) }
+                Button(L("Mount over SFTP", "SFTP 마운트해서 열기")) { workspace.mountSFTP(host.alias) }
+                Button(L("Connect with Ghostty", "Ghostty로 연결")) { TerminalLauncher.ssh(host.alias) }
             }
         }
     }

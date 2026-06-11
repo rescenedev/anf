@@ -32,16 +32,16 @@ enum SidebarBuilder {
         }
         var items: [SidebarItem] = []
         let home = fm.homeDirectoryForCurrentUser
-        items.append(SidebarItem(name: "홈", symbol: "house", url: home))
-        if let u = dir(.desktopDirectory)   { items.append(.init(name: "데스크탑", symbol: "menubar.dock.rectangle", url: u)) }
-        if let u = dir(.documentDirectory)  { items.append(.init(name: "문서", symbol: "doc", url: u)) }
-        if let u = dir(.downloadsDirectory) { items.append(.init(name: "다운로드", symbol: "arrow.down.circle", url: u)) }
-        if let u = dir(.moviesDirectory)    { items.append(.init(name: "동영상", symbol: "film", url: u)) }
-        if let u = dir(.musicDirectory)     { items.append(.init(name: "음악", symbol: "music.note", url: u)) }
-        if let u = dir(.picturesDirectory)  { items.append(.init(name: "사진", symbol: "photo", url: u)) }
-        items.append(SidebarItem(name: "응용 프로그램", symbol: "app.dashed", url: URL(fileURLWithPath: "/Applications")))
+        items.append(SidebarItem(name: L("Home", "홈"), symbol: "house", url: home))
+        if let u = dir(.desktopDirectory)   { items.append(.init(name: L("Desktop", "데스크탑"), symbol: "menubar.dock.rectangle", url: u)) }
+        if let u = dir(.documentDirectory)  { items.append(.init(name: L("Documents", "문서"), symbol: "doc", url: u)) }
+        if let u = dir(.downloadsDirectory) { items.append(.init(name: L("Downloads", "다운로드"), symbol: "arrow.down.circle", url: u)) }
+        if let u = dir(.moviesDirectory)    { items.append(.init(name: L("Movies", "동영상"), symbol: "film", url: u)) }
+        if let u = dir(.musicDirectory)     { items.append(.init(name: L("Music", "음악"), symbol: "music.note", url: u)) }
+        if let u = dir(.picturesDirectory)  { items.append(.init(name: L("Pictures", "사진"), symbol: "photo", url: u)) }
+        items.append(SidebarItem(name: L("Applications", "응용 프로그램"), symbol: "app.dashed", url: URL(fileURLWithPath: "/Applications")))
         if let trash = dir(.trashDirectory) {
-            items.append(SidebarItem(name: "휴지통", symbol: "trash", url: trash))
+            items.append(SidebarItem(name: L("Trash", "휴지통"), symbol: "trash", url: trash))
         }
         return items
     }
