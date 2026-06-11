@@ -257,8 +257,14 @@ h2 {
 }
 .copy-btn.mini { padding: 6px; top: 6px; right: 6px; }
 
-/* Install section */
-.install-box { max-width: 640px; margin: 44px auto 0; text-align: left; }
+/* Install section — framed as a card (like the tool tiles) so the slate command
+   boxes inside clearly pop against it. */
+.install-box {
+  max-width: 660px; margin: 44px auto 0; text-align: left;
+  background: var(--tile); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 28px;
+}
+.install-box .cmd:first-of-type { margin-top: 0; }
 .install-box .cmd code {
   white-space: pre; line-height: 1.7; padding: 18px 48px 18px 18px; overflow-x: auto;
 }
