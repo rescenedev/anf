@@ -192,11 +192,18 @@ struct SidebarView: View {
                     .padding(.vertical, 1)
             )
             .contentShape(Rectangle())
-            // Navigating a pane is movement *inside* the active Workspace context,
-            // not leaving it — keep the Workspace highlight.
-            .onTapGesture { model.navigate(to: url) }
+            // Click: open as a single pane (a pin is a destination). ⌥-click:
+            // navigate just this pane — keeps split layouts for copy workflows.
+            .onTapGesture {
+                if NSEvent.modifierFlags.contains(.option) {
+                    model.navigate(to: url)
+                } else {
+                    workspace.openPinned(url)
+                }
+            }
             .contextMenu {
                 Button("Open in New Tab") { workspace.activePaneModel.newTab(at: url) }
+                Button("이 pane에서 열기") { model.navigate(to: url) }
                 if removable {
                     Divider()
                     Button("Remove from Sidebar", role: .destructive) { workspace.favorites.remove(url) }
