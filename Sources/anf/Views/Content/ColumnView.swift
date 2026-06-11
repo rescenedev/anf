@@ -64,7 +64,9 @@ private struct ColumnList: View {
             .padding(.vertical, 4)
         }
         .task(id: directory) {
-            items = fs.sorted(await fs.contents(of: directory, showHidden: model.showHidden),
+            // contentsFast = getattrlistbulk (no per-item stat) — the slow
+            // resourceValues path took 1s+ for a 26k-entry column.
+            items = fs.sorted(await fs.contentsFast(of: directory, showHidden: model.showHidden),
                               by: model.sort)
         }
     }

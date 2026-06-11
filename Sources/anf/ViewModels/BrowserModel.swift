@@ -236,9 +236,27 @@ final class BrowserModel: Identifiable {
         if isRemote, let host = remoteHost {
             let parent = (remotePath as NSString).deletingLastPathComponent
             navigate(to: Self.remoteURL(host: host, path: parent.isEmpty ? "/" : parent))
+            selectFirstWhenLoaded()
             return
         }
         navigate(to: currentURL.deletingLastPathComponent())
+        selectFirstWhenLoaded()
+    }
+
+    /// After an async load lands, put the selection on the first row so keyboard
+    /// navigation continues immediately (going up otherwise left nothing focused).
+    private func selectFirstWhenLoaded() {
+        let token = loadToken
+        Task { @MainActor in
+            for _ in 0..<20 {   // poll up to ~1s; loads are usually <100ms
+                guard token == loadToken else { return }   // superseded
+                if let first = items.first {
+                    if selection.isEmpty { selection = [first.id] }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
     }
 
     // MARK: - Loading

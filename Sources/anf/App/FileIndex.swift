@@ -53,7 +53,15 @@ final class FileIndex {
             }
         }
 
-        if let r = root, ready, Self.isUnder(path, r) { return }   // covered; FSEvents keeps it fresh
+        if let r = root, Self.isUnder(path, r) {
+            if ready { return }        // covered & fresh; FSEvents keeps it so
+            // Covered by a scan that's still RUNNING. Returning here is critical:
+            // build() fires on every interaction (onActivity), and restarting the
+            // fd scan each time meant it never finished — and each (re)completion
+            // re-normalized + re-serialized the whole index, pegging a core while
+            // the app sat idle.
+            if task != nil { return }
+        }
         root = path; paths = []; lowerPaths = []; ready = false; generation &+= 1
         refresh(path, force: true)
     }
@@ -75,7 +83,9 @@ final class FileIndex {
                 FileIndex.saveCache(root: rootPath, paths: u.paths)
                 return u
             }.value
-            guard let self, self.root == rootPath else { return }
+            guard let self else { return }
+            self.task = nil            // in-flight marker for build()'s guard
+            guard self.root == rootPath else { return }
             self.paths = scanned.paths
             self.lowerPaths = scanned.lower
             self.generation &+= 1
@@ -192,7 +202,12 @@ final class FileIndex {
             "--exclude", "dist", "--exclude", ".venv", "--exclude", "Pods",
             "--max-results", "\(cap)", ".", path
         ], maxLines: cap, timeout: 20.0)
-        return (lines, lines.map { FuzzyMatch.normalizeForIndex($0) })
+        // Share storage when normalization is a no-op (most ASCII paths): the
+        // lowered array then references the same String buffers instead of
+        // doubling index memory.
+        return (lines, lines.map { p in
+            let l = FuzzyMatch.normalizeForIndex(p); return l == p ? p : l
+        })
     }
 
     // MARK: - Persistence (checkpoint)
@@ -209,7 +224,9 @@ final class FileIndex {
     nonisolated static func loadCache() -> (root: String, paths: [String], lower: [String])? {
         guard let data = try? Data(contentsOf: cacheURL),
               let c = try? JSONDecoder().decode(Cached.self, from: data) else { return nil }
-        return (c.root, c.paths, c.paths.map { FuzzyMatch.normalizeForIndex($0) })
+        return (c.root, c.paths, c.paths.map { p in
+            let l = FuzzyMatch.normalizeForIndex(p); return l == p ? p : l
+        })
     }
 
     nonisolated static func saveCache(root: String, paths: [String]) {
