@@ -117,6 +117,14 @@ enum PaneLayout: String, CaseIterable, Identifiable {
         case .quad:   "square.grid.2x2"
         }
     }
+    var title: String {
+        switch self {
+        case .single: L("Single Pane (⌘1)", "단일창 (⌘1)")
+        case .dual:   L("Two Panes (⌘2)", "2분할 좌우 (⌘2)")
+        case .rows:   L("Two Rows (⌘3)", "2행 상하 (⌘3)")
+        case .quad:   L("Four Panes (⌘4)", "4분할 (⌘4)")
+        }
+    }
 }
 
 /// Top-level window state: the pane layout, the panes themselves, which pane is
@@ -277,6 +285,7 @@ final class WorkspaceModel {
         let home = FileManager.default.homeDirectoryForCurrentUser
         panes = (0..<4).map { _ in PaneModel(start: home) }
         restore()
+        loadPinSnapshots()
         wireActivity()
         // Index the focused folder's subtree (not all of home) so the first ⌘K is
         // instant and the scope follows the focused pane.
@@ -344,6 +353,14 @@ final class WorkspaceModel {
             UserDefaults.standard.set(data, forKey: Self.stateKey)
         }
         _ = fm
+        // Keep the active pin's remembered split in lockstep (layout edits, tab
+        // changes, ratio drags all funnel through save), so quitting mid-context
+        // still restores the arrangement next launch.
+        if let path = activePinPath {
+            if layout.count > 1 { pinSnapshots[path] = captureSnapshot() }
+            else { pinSnapshots.removeValue(forKey: path) }
+            persistPinSnapshots()
+        }
     }
 
     private func restore() {
@@ -449,8 +466,44 @@ final class WorkspaceModel {
     var activeViewID: UUID?
 
     func applyView(_ view: SavedView) {
+        rememberPinContext()
+        activePinPath = nil
         activeViewID = view.id
         applySnapshot(view.snapshot)
+    }
+
+    // MARK: - Pinned-folder split memory
+
+    /// The pinned folder the window is currently "in" (set by openPinned). While
+    /// set, every save() keeps that pin's arrangement up to date, so pin A →
+    /// split & arrange → pin B → pin A restores A's split exactly.
+    @ObservationIgnored private var activePinPath: String?
+    /// Last multi-pane arrangement per pinned folder, persisted across launches.
+    /// Single-pane contexts are intentionally NOT remembered: a pin click is a
+    /// plain "go there" unless the user split while inside it.
+    @ObservationIgnored private var pinSnapshots: [String: ViewSnapshot] = [:]
+    private static let pinSnapshotsKey = "anf.pinSnapshots.v1"
+
+    private func loadPinSnapshots() {
+        guard let data = UserDefaults.standard.data(forKey: Self.pinSnapshotsKey),
+              let decoded = try? JSONDecoder().decode([String: ViewSnapshot].self, from: data)
+        else { return }
+        pinSnapshots = decoded
+    }
+
+    private func persistPinSnapshots() {
+        if let data = try? JSONEncoder().encode(pinSnapshots) {
+            UserDefaults.standard.set(data, forKey: Self.pinSnapshotsKey)
+        }
+    }
+
+    /// Record (or forget) the arrangement of the pin context being left: a split
+    /// is worth coming back to; collapsing to a single pane dissolves it.
+    private func rememberPinContext() {
+        guard let path = activePinPath else { return }
+        if layout.count > 1 { pinSnapshots[path] = captureSnapshot() }
+        else { pinSnapshots.removeValue(forKey: path) }
+        persistPinSnapshots()
     }
 
     var activePaneModel: PaneModel { panes[min(activePane, panes.count - 1)] }
@@ -469,15 +522,26 @@ final class WorkspaceModel {
     /// single layout it just navigates. ⌥-click / context menu keep the old
     /// navigate-in-place behaviour for two-pane copy workflows.
     func openPinned(_ url: URL) {
-        if layout.count > 1 {
-            if activePane != 0 {
-                let cur = panes[activePane]
-                panes[0].replaceTabs(cur.tabs, activeIndex: cur.activeIndex)
+        rememberPinContext()
+        activePinPath = nil   // cleared during the transition so save() can't
+                              // stamp the old pin with the new arrangement
+        let path = url.standardizedFileURL.path
+        if let snap = pinSnapshots[path] {
+            // This pin had a split going — bring the whole arrangement back.
+            activeViewID = nil
+            applySnapshot(snap)
+        } else {
+            if layout.count > 1 {
+                if activePane != 0 {
+                    let cur = panes[activePane]
+                    panes[0].replaceTabs(cur.tabs, activeIndex: cur.activeIndex)
+                }
+                activePane = 0
+                setLayout(.single)
             }
-            activePane = 0
-            setLayout(.single)
+            active.navigate(to: url)
         }
-        active.navigate(to: url)
+        activePinPath = path
     }
 
     func setLayout(_ l: PaneLayout) {

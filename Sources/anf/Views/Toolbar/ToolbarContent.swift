@@ -36,14 +36,16 @@ struct ToolbarLeadingView: View {
                 ToolbarIconButton(symbol: "chevron.up", help: L("Enclosing Folder (⌘↑)", "상위 폴더 (⌘↑)"), enabled: model.canGoUp) { model.goUp() }
             }
             Picker("", selection: Binding(get: { model.viewMode }, set: { model.viewMode = $0 })) {
-                ForEach(ViewMode.allCases) { Image(systemName: $0.symbol).tag($0) }
+                ForEach(ViewMode.allCases) { Image(systemName: $0.symbol).tag($0).help($0.title) }
             }
             .pickerStyle(.segmented).labelsHidden().frame(width: 150)
+            .help(L("View Mode (⌘[ / ⌘])", "보기 형태 (⌘[ / ⌘])"))
 
             Picker("", selection: Binding(get: { workspace.layout }, set: { workspace.setLayout($0) })) {
-                ForEach(PaneLayout.allCases) { Image(systemName: $0.symbol).tag($0) }
+                ForEach(PaneLayout.allCases) { Image(systemName: $0.symbol).tag($0).help($0.title) }
             }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 140).help(L("Pane Layout", "창 분할"))
+            .pickerStyle(.segmented).labelsHidden().frame(width: 140)
+            .help(L("Pane Layout (⌘1–4)", "창 분할 (⌘1–4)"))
         }
         .padding(.horizontal, 6)
         .fixedSize()
@@ -129,5 +131,6 @@ struct ToolbarTrailingView: View {
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
         .background(Capsule().fill(.quaternary))
+        .help(L("Filter the current folder by name", "현재 폴더를 이름으로 필터"))
     }
 }

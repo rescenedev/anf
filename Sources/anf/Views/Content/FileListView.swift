@@ -144,8 +144,10 @@ struct FileListView: NSViewRepresentable {
             table.removeRows(at: removals, withAnimation: .effectFade)
             table.insertRows(at: insertions, withAnimation: .effectFade)
             table.endUpdates()
-            // Rows that stayed put may still carry fresh metadata.
+            // Rows that stayed put may still carry fresh metadata — and their
+            // indices (so their zebra stripes) may have shifted.
             reloadVisibleRows(table)
+            restripe(table)
         }
 
         private func reloadVisibleRows(_ table: NSTableView) {
@@ -254,7 +256,17 @@ struct FileListView: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-            RoundedRowView()
+            let view = RoundedRowView()
+            view.stripe = row % 2 == 1
+            return view
+        }
+
+        /// Row indices shift on incremental diffs, so re-derive every visible
+        /// row's zebra stripe after structural changes.
+        private func restripe(_ table: NSTableView) {
+            table.enumerateAvailableRowViews { rowView, row in
+                (rowView as? RoundedRowView)?.stripe = row % 2 == 1
+            }
         }
 
         // MARK: Drag
@@ -293,6 +305,20 @@ struct FileListView: NSViewRepresentable {
 /// when the pane is narrow (horizontal scrolling) — custom drawing is identical
 /// everywhere.
 final class RoundedRowView: NSTableRowView {
+    /// Finder-style zebra striping: every other row gets a faint wash so the eye
+    /// can follow a row across the date/size columns. Translucent (textColor at
+    /// 4%) so the under-window blur keeps showing through in both appearances.
+    var stripe = false {
+        didSet { if stripe != oldValue { needsDisplay = true } }
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard stripe else { return }
+        NSColor.textColor.withAlphaComponent(0.04).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 6, dy: 1), xRadius: 7, yRadius: 7).fill()
+    }
+
     override func drawSelection(in dirtyRect: NSRect) {
         guard selectionHighlightStyle != .none else { return }
         let rect = bounds.insetBy(dx: 6, dy: 1)

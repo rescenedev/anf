@@ -286,40 +286,61 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   <section id="release" class="band">
     <div class="band-inner">
       <h2 class="centered">릴리즈 노트.</h2>
-      <p class="sub centered">v0.1 — 첫 출시.</p>
+      <p class="sub centered">v0.2 — 첫 공개.</p>
       <div class="release">
         <div class="rel-block">
           <h3>탐색 · 성능</h3>
           <ul>
             <li><code>getattrlistbulk(2)</code> 네이티브 벌크 읽기로 2만 6천 개 폴더도 ~0.1초 진입</li>
-            <li>파일 목록을 SwiftUI가 아닌 <code>NSTableView</code>로 렌더링 — 수만 개도 즉각 스크롤·정렬·이동</li>
-            <li>1 · 2분할 · 상하 2행 · 4분할 레이아웃, 분할선 드래그, 레이아웃·보기 형태 기억</li>
-            <li>현재 레이아웃·탭 구성을 이름 붙여 저장하는 <strong>Workspace</strong></li>
+            <li>리스트·아이콘 그리드·사이드바 전부 네이티브 AppKit 렌더링 — 수만 개도 즉각 스크롤·정렬</li>
+            <li>리스트 · 아이콘 · 컬럼 · 갤러리 보기 (⌘[ / ⌘]), 아이콘·글자 크기 ⌘±</li>
+            <li><strong>폴더별 보기 형태 기억 + 하위 폴더 상속</strong> — 상위에서 바꾸면 서브트리가 따라옴</li>
+            <li>유휴 CPU ~0% — 검색 인덱스는 필요할 때만 갱신</li>
+          </ul>
+        </div>
+        <div class="rel-block">
+          <h3>분할 · Workspace</h3>
+          <ul>
+            <li>1 · 2분할 · 상하 2행 · 4분할 (⌘1–4), 분할선 드래그</li>
+            <li><strong>분할하면 새 패널이 현재 폴더에서 시작</strong> — 배치한 뒤 Workspace로 저장</li>
+            <li>Workspace: 레이아웃 + 탭 구성을 이름 붙여 저장/복원, 단일 폴더는 핀 ★</li>
+            <li>탭(⌘T·⌃Tab), Tab으로 패널 포커스 전환, F5/F6 패널 간 복사·이동</li>
+          </ul>
+        </div>
+        <div class="rel-block">
+          <h3>키보드</h3>
+          <ul>
+            <li><strong>타입어헤드</strong> — p를 치면 p 항목으로 점프, 한글은 초성 매칭(ㅍ → 플레이그라운드)</li>
+            <li>Shift+화살표: 리스트는 연속 범위, 아이콘 그리드는 직사각형 블록 선택</li>
+            <li>PgUp/PgDn/Home/End 스크롤, 스페이스 Quick Look, Enter 인라인 이름 변경</li>
+            <li>한글 입력 상태에서도 동작하는 ⌘ 단축키 (물리 키 기준)</li>
           </ul>
         </div>
         <div class="rel-block">
           <h3>검색 · 미리보기</h3>
           <ul>
-            <li>⌘K 커맨드 팔레트: 파일명은 fd, 내용은 ripgrep, 백그라운드 인덱스 + 내장 퍼지 랭킹</li>
+            <li>⌘K 커맨드 팔레트: 파일명은 fd + 퍼지 랭킹, 내용은 ripgrep, 백그라운드 인덱스</li>
             <li><strong>hwpx·docx·pptx·xlsx 본문 검색</strong> 및 인스펙터 텍스트 미리보기 (알한글 불필요)</li>
-            <li>커맨드 팔레트에서 SSH 호스트 바로 연결</li>
-            <li>인스펙터 Quick Look + 가독성 텍스트 뷰어, ⌘± 폰트 크기</li>
+            <li>NFC/NFD 한글 파일명 정규화 일치, 팔레트에서 SSH 호스트·Workspace 점프</li>
+            <li>인스펙터(⌘I) Quick Look + 가독성 텍스트 뷰어, ⌘± 폰트 크기</li>
           </ul>
         </div>
         <div class="rel-block">
-          <h3>원격 · 터미널</h3>
+          <h3>파일 작업 · 안전망</h3>
+          <ul>
+            <li><strong>⌘Z / ⌘⇧Z</strong> — 이동·이름 변경·휴지통·새 폴더 되돌리기/재실행</li>
+            <li>이름 충돌 시 둘 다 유지/덮어쓰기/건너뛰기, 대용량 작업 진행 HUD + 취소</li>
+            <li>zip 압축/풀기, 휴지통 비우기, 디스크 추출, 숨김 파일 ⌘⇧., 드래그&amp;드롭</li>
+            <li>인라인 이름 변경(확장자 제외 자동 선택), 여러 항목 일괄 이름 변경</li>
+          </ul>
+        </div>
+        <div class="rel-block">
+          <h3>원격 · 터미널 · 프라이버시</h3>
           <ul>
             <li><strong>GUI SFTP</strong> — SSH 호스트를 일반 폴더처럼 탐색 (sshfs·macFUSE 불필요)</li>
-            <li>창 하단 전역 터미널 드로어, 실제 PTY, ⌘± 글자 크기, SSH 한 번에 연결</li>
-            <li>~/.ssh/config 자동 인식 · 라이브 세션 표시</li>
-          </ul>
-        </div>
-        <div class="rel-block">
-          <h3>편집 · 조작</h3>
-          <ul>
-            <li>파인더식 인라인 이름 변경 (별도 팝업 없이 그 자리에서)</li>
-            <li>키보드 중심 단축키, 한글 입력 상태에서도 동작하는 ⌘ 단축키</li>
-            <li>iCloud 미다운로드 인지, 복사·이동·휴지통·중복 등 기본 파일 작업</li>
+            <li>내장 터미널(실제 PTY, ⌃`) + <strong>터미널 다중 탭</strong>, "여기서 터미널 열기"</li>
+            <li>~/.ssh/config 자동 인식, 비밀번호 입력·저장 없음(키/에이전트 인증)</li>
+            <li>텔레메트리 없음 — 네트워크 요청은 하루 1회 버전 확인뿐, 한국어/영어 UI</li>
           </ul>
         </div>
       </div>

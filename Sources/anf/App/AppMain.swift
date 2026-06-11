@@ -184,6 +184,9 @@ final class AppController: NSObject, NSApplicationDelegate {
 /// App entry point. Lives in the `anf` library so the logic is unit-testable;
 /// the thin `anfapp` executable target just calls this.
 public func anfMain() {
+    // Toolbar icons rely on hover tooltips to explain themselves — the system
+    // default delay (~1.5s) makes them feel absent, so shorten it app-wide.
+    UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 500])
     let app = NSApplication.shared
     let controller = AppController()
     app.delegate = controller
