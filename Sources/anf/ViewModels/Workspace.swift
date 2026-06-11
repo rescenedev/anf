@@ -402,10 +402,23 @@ final class WorkspaceModel {
     func saveCurrentView(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        savedViews.add(SavedView(name: trimmed, snapshot: captureSnapshot()))
+        let snap = captureSnapshot()
+        // Saving the exact same arrangement twice just highlights the existing
+        // Workspace instead of creating a duplicate row.
+        if let existing = savedViews.views.first(where: { $0.snapshot == snap }) {
+            activeViewID = existing.id
+            return
+        }
+        let view = SavedView(name: trimmed, snapshot: snap)
+        savedViews.add(view)
+        // The window currently *is* this arrangement — make it the active context.
+        activeViewID = view.id
     }
 
-    /// The saved view currently applied (drives the sidebar selection highlight).
+    /// The Workspace (saved view) currently providing the window's arrangement —
+    /// drives the sidebar highlight. This is a *context*, not a location: it stays
+    /// active while the user navigates panes/tabs inside it, and clears only when
+    /// the structure changes (another Workspace applied, or the layout edited).
     var activeViewID: UUID?
 
     func applyView(_ view: SavedView) {
@@ -424,6 +437,10 @@ final class WorkspaceModel {
     }
 
     func setLayout(_ l: PaneLayout) {
+        // Editing the layout by hand leaves the saved Workspace's arrangement —
+        // drop the context highlight. (applySnapshot sets `layout` directly, so
+        // applying a Workspace doesn't pass through here.)
+        activeViewID = nil
         layout = l
         if activePane >= l.count { activePane = 0 }
         save()

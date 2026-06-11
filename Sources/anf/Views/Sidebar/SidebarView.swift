@@ -172,9 +172,9 @@ struct SidebarView: View {
     }
 
     private func row(name: String, symbol: String, url: URL, removable: Bool) -> some View {
-        // A folder row highlights only when no Workspace is the active sidebar
-        // selection — so a folder and a Workspace pointing at the same path never
-        // both light up. Clicking a folder clears the Workspace selection.
+        // One highlight in the sidebar, always: while a Workspace context is
+        // active it owns the highlight, and folder rows stay unlit even when the
+        // current folder matches (the path bar shows location anyway).
         let selected = workspace.activeViewID == nil
             && url.standardizedFileURL.path == model.currentURL.standardizedFileURL.path
         return Label {
@@ -192,7 +192,9 @@ struct SidebarView: View {
                     .padding(.vertical, 1)
             )
             .contentShape(Rectangle())
-            .onTapGesture { workspace.activeViewID = nil; model.navigate(to: url) }
+            // Navigating a pane is movement *inside* the active Workspace context,
+            // not leaving it — keep the Workspace highlight.
+            .onTapGesture { model.navigate(to: url) }
             .contextMenu {
                 Button("Open in New Tab") { workspace.activePaneModel.newTab(at: url) }
                 if removable {
