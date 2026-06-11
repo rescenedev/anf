@@ -6,6 +6,23 @@ macOS를 위한 가볍고 빠른 **네이티브 파일 브라우저**. Finder ·
 
 🔗 랜딩 페이지: **https://rescenedev.github.io/anf/**
 
+## 설치
+
+### Homebrew (권장)
+
+```bash
+brew tap rescenedev/anf
+brew trust rescenedev/anf          # 서드파티 tap 신뢰 (최신 Homebrew 요구)
+brew install --cask anf
+```
+
+업데이트는 `brew upgrade --cask anf`.
+
+> self-signed 빌드(노터라이즈 안 됨)라 첫 실행 시 Gatekeeper가 막을 수 있습니다 —
+> **anf.app 우클릭 → 열기**, 또는 시스템 설정 > 개인정보 보호 및 보안 > "확인 없이 열기".
+
+### 소스에서 빌드
+
 ```bash
 ./build.sh run      # 빌드 + 실행
 ./build.sh          # anf.app 만 빌드
