@@ -208,7 +208,7 @@ h2 {
 /* ---- Tools ---- */
 .tile code {
   display: block; margin-top: 16px; padding: 10px 13px;
-  background: #1e2632; border: 1px solid rgba(148, 163, 184, .32);
+  background: #15191f; border: 1px solid rgba(148, 163, 184, .32);
   border-radius: 10px; font-size: 12.5px; color: var(--accent-2);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   overflow-x: auto; white-space: nowrap;
@@ -231,7 +231,7 @@ h2 {
 .install-row { position: relative; cursor: pointer; }
 .install-row code {
   display: block; text-align: left; padding: 14px 48px 14px 16px;
-  background: #1e2632; border: 1px solid rgba(148, 163, 184, .32); border-radius: 12px;
+  background: #15191f; border: 1px solid rgba(148, 163, 184, .32); border-radius: 12px;
   color: var(--accent-2); font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 13.5px; overflow-x: auto; white-space: nowrap;
 }
@@ -252,9 +252,9 @@ h2 {
 .cmd { position: relative; margin-top: 16px; cursor: pointer; }
 .cmd code {
   display: block; margin-top: 0; padding: 14px 48px 14px 16px;
-  background: #1e2632; border: 1px solid rgba(148, 163, 184, .32);
+  background: #11151b; border: 1px solid rgba(148, 163, 184, .26);
   border-radius: 12px;
-  color: var(--accent-2);
+  color: var(--txt);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 13.5px; overflow-x: auto;
 }

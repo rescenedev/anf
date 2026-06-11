@@ -239,31 +239,20 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   <!-- Recommended tools -->
   <section id="tools" class="showcase">
     <h2 class="centered">검색은 fd + ripgrep으로.</h2>
-    <p class="sub centered">현재 폴더 이하를 fd로 즉시 찾고, ripgrep으로 내용까지. 퍼지 랭킹은 내장 — 아래 두 도구만 설치하면 됩니다.</p>
-
-    <div class="install-all">
-      <span class="install-label">한 번에 설치</span>
-      <div class="install-row">
-        <code id="cmd-all">brew install fd ripgrep && brew install --cask postmelee/tap/alhangeul</code>
-        <button class="copy-btn" type="button" data-target="cmd-all" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
-      </div>
-    </div>
+    <p class="sub centered">현재 폴더 이하를 fd로 즉시 찾고, ripgrep으로 내용까지. 퍼지 랭킹은 내장 — 설치는 위 <a href="#install">설치</a> 섹션에서 안내합니다.</p>
 
     <div class="grid tools-grid">
       <div class="tile">
         <h3>fd</h3>
         <p>현재 폴더 이하 파일명을 초고속으로 검색.</p>
-        <div class="cmd"><code id="cmd-fd">brew install fd</code><button class="copy-btn mini" type="button" data-target="cmd-fd" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
       </div>
       <div class="tile">
         <h3>ripgrep</h3>
         <p>커맨드 팔레트에서 파일 <strong>내용</strong>까지 검색.</p>
-        <div class="cmd"><code id="cmd-rg">brew install ripgrep</code><button class="copy-btn mini" type="button" data-target="cmd-rg" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
       </div>
       <div class="tile">
         <h3><a href="https://postmelee.github.io/alhangeul-macos/" target="_blank" rel="noopener">알한글 ↗</a></h3>
         <p>HWP/HWPX 본문 텍스트는 anf가 직접 추출해 보여줍니다. 알한글은 서식까지 포함한 전체 QuickLook 미리보기용(선택).</p>
-        <div class="cmd"><code id="cmd-al">brew install --cask postmelee/tap/alhangeul</code><button class="copy-btn mini" type="button" data-target="cmd-al" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
       </div>
     </div>
     <p class="note centered">퍼지 랭킹은 anf에 내장. fd·ripgrep이 없으면 macOS Spotlight(mdfind)으로 자동 폴백하니 설치 없이도 검색됩니다. 알한글은 한글 미리보기용입니다.</p>
