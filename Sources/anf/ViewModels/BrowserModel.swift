@@ -457,10 +457,21 @@ final class BrowserModel: Identifiable {
         let anchor = selAnchor ?? (current ?? cursor)
         selAnchor = anchor
         selCursor = cursor
-        // Contiguous reading-order range from anchor to cursor — this is what
-        // Finder does in BOTH list and icon views (a rectangle felt wrong).
-        let lo = min(anchor, cursor), hi = max(anchor, cursor)
-        selection = Set(items[lo...hi].map(\.id))
+        if viewMode == .icons || viewMode == .gallery {
+            // Finder's icon view extends by PATH, not by range: shift+arrow adds
+            // just the cell the cursor moved onto; stepping back over an already
+            // selected cell retracts the one you left.
+            var sel = selection
+            if let prev = current, sel.contains(items[cursor].id), prev != cursor {
+                sel.remove(items[prev].id)
+            }
+            sel.insert(items[cursor].id)
+            selection = sel
+        } else {
+            // List/columns: contiguous reading-order range from anchor to cursor.
+            let lo = min(anchor, cursor), hi = max(anchor, cursor)
+            selection = Set(items[lo...hi].map(\.id))
+        }
     }
 
     func bumpScale(_ direction: Int) {
