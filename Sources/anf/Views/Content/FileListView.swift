@@ -118,18 +118,17 @@ struct FileListView: NSViewRepresentable {
             let newIDs = items.map(\.id)
             defer { lastIDs = newIDs }
 
-            // Same rows in the same order → only the content of some rows changed
-            // (sizes/dates from a reload). Refresh just what's on screen.
-            if newIDs == lastIDs {
+            switch ListDiff.strategy(old: lastIDs, new: newIDs) {
+            case .visibleRefresh:
+                // Same rows in the same order → only the content of some rows
+                // changed (sizes/dates from a reload). Refresh what's on screen.
                 reloadVisibleRows(table)
                 return
-            }
-            // Mostly-different listing (navigation, first load, sort change) → a
-            // plain reload is cheaper and there's nothing visual to preserve.
-            let commonCount = Set(newIDs).intersection(Set(lastIDs)).count
-            guard !lastIDs.isEmpty, commonCount * 2 > max(newIDs.count, lastIDs.count) else {
+            case .reload:
                 table.reloadData()
                 return
+            case .incremental:
+                break
             }
             let diff = newIDs.difference(from: lastIDs)
             table.beginUpdates()
@@ -304,6 +303,28 @@ struct FileListView: NSViewRepresentable {
 /// renders it correctly in a lone pane but falls back to square full-bleed rows
 /// when the pane is narrow (horizontal scrolling) — custom drawing is identical
 /// everywhere.
+/// Decides how the table reconciles a listing change. Pulled out of the
+/// coordinator so the decision is unit-testable — the Myers diff
+/// (`difference(from:)`) is O(N·D), and a sort flip produces the worst case
+/// (same 26k IDs, edit distance ≈ 2N → seconds of main-thread beachball), so
+/// it must NEVER be fed a reorder.
+enum ListDiff {
+    enum Strategy: Equatable { case visibleRefresh, reload, incremental }
+
+    static func strategy(old: [FileItem.ID], new: [FileItem.ID]) -> Strategy {
+        if new == old { return .visibleRefresh }
+        guard !old.isEmpty else { return .reload }
+        let common = Set(new).intersection(Set(old)).count
+        // Mostly-different listing (navigation, filter) → nothing to animate.
+        guard common * 2 > max(new.count, old.count) else { return .reload }
+        // Same IDs in a different order (sort change) → the diff would be the
+        // pathological case, and an animated 26k-row shuffle is useless anyway.
+        if common == new.count, common == old.count { return .reload }
+        // Small membership change (file created/renamed/deleted) → animate.
+        return .incremental
+    }
+}
+
 final class RoundedRowView: NSTableRowView {
     /// Finder-style zebra striping: every other row gets a faint wash so the eye
     /// can follow a row across the date/size columns. Translucent (textColor at

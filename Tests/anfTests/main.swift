@@ -22,6 +22,7 @@ runViewModePrefsTests()
 runGridSelectionTests()
 runTypeaheadTests()
 runListingCacheTests()
+runListDiffTests()
 
 print("")
 if T.failures.isEmpty {
