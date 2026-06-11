@@ -432,25 +432,10 @@ final class BrowserModel: Identifiable {
         let anchor = selAnchor ?? (current ?? cursor)
         selAnchor = anchor
         selCursor = cursor
-        let grid = (viewMode == .icons || viewMode == .gallery)
-        if grid {
-            // Rectangle between anchor and cursor (arrow-shaped grid selection).
-            let cols = max(1, gridColumns)
-            let aR = anchor / cols, aC = anchor % cols
-            let cR = cursor / cols, cC = cursor % cols
-            let r0 = min(aR, cR), r1 = max(aR, cR), c0 = min(aC, cC), c1 = max(aC, cC)
-            var sel = Set<FileItem.ID>()
-            for r in r0...r1 {
-                for c in c0...c1 {
-                    let i = r * cols + c
-                    if i < n { sel.insert(items[i].id) }
-                }
-            }
-            selection = sel
-        } else {
-            let lo = min(anchor, cursor), hi = max(anchor, cursor)
-            selection = Set(items[lo...hi].map(\.id))
-        }
+        // Contiguous reading-order range from anchor to cursor — this is what
+        // Finder does in BOTH list and icon views (a rectangle felt wrong).
+        let lo = min(anchor, cursor), hi = max(anchor, cursor)
+        selection = Set(items[lo...hi].map(\.id))
     }
 
     func bumpScale(_ direction: Int) {
