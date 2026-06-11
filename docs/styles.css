@@ -228,36 +228,36 @@ h2 {
   display: block; font-size: 13px; font-weight: 600; color: var(--txt-faint);
   margin-bottom: 10px; text-align: left;
 }
-.install-row { display: flex; gap: 10px; align-items: stretch; }
+.install-row { position: relative; cursor: pointer; }
 .install-row code {
-  flex: 1; text-align: left; padding: 14px 16px;
+  display: block; text-align: left; padding: 14px 48px 14px 16px;
   background: rgba(0,0,0,.45); border: 1px solid var(--line); border-radius: 12px;
   color: var(--accent-2); font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 13.5px; overflow-x: auto; white-space: nowrap;
 }
+/* Copy = a slate icon in the corner of the command box; the whole cell copies. */
 .copy-btn {
-  flex: 0 0 auto; padding: 0 14px; border-radius: 12px; border: none;
-  background: var(--accent); color: #fff; font-weight: 600; font-size: 14px;
-  cursor: pointer; transition: background .15s, transform .1s;
-  display: inline-flex; align-items: center; justify-content: center; min-width: 44px;
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  padding: 7px; border-radius: 8px; border: none; background: transparent;
+  color: #8b95a5; /* slate */
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: color .15s, background .15s, transform .1s;
 }
 .copy-btn svg { display: block; }
-.copy-btn:hover { background: #1f86ec; }
+.cmd:hover .copy-btn { color: #c3cbd6; background: rgba(255,255,255,.07); }
 .copy-btn:active { transform: translateY(1px); }
-.copy-btn.copied { background: #30d158; }
+.copy-btn.copied { color: #30d158; background: transparent; }
 
-/* Per-tile command + mini copy */
-.cmd { display: flex; gap: 8px; align-items: stretch; margin-top: 16px; }
-.cmd code { flex: 1; margin-top: 0; }
-.copy-btn.mini { padding: 0 13px; font-size: 12.5px; }
+/* Command box — the whole cell is clickable to copy. */
+.cmd { position: relative; margin-top: 16px; cursor: pointer; }
+.cmd code { display: block; margin-top: 0; padding-right: 48px; }
+.copy-btn.mini { padding: 6px; top: 6px; right: 6px; }
 
 /* Install section */
 .install-box { max-width: 640px; margin: 44px auto 0; text-align: left; }
-.install-box .cmd { align-items: flex-start; }
 .install-box .cmd code {
-  white-space: pre; line-height: 1.7; padding: 16px 18px; overflow-x: auto;
+  white-space: pre; line-height: 1.7; padding: 18px 48px 18px 18px; overflow-x: auto;
 }
-.install-box .copy-btn { display: flex; align-items: center; }
 .install-box .note { margin-top: 16px; color: var(--txt-dim); font-size: 13.5px; }
 .install-box .note a { color: var(--accent); }
 .install-box .note code {

@@ -60,9 +60,9 @@
         <div class="cmd"><code id="cmd-brew">brew tap rescenedev/anf
 brew trust rescenedev/anf
 brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
-        <p class="note">업데이트는 <code>brew upgrade --cask anf</code>. cask가 quarantine를 자동 제거하지만,
-          그래도 막히면 <strong>anf.app 우클릭 → 열기</strong>, 또는
-          <code>xattr -dr com.apple.quarantine /Applications/anf.app</code> 실행.</p>
+        <p class="note">업데이트는 <code>brew upgrade --cask anf</code>. self-signed 빌드라 첫 실행 시 Gatekeeper가 막으면
+          <strong>anf.app 우클릭 → 열기</strong>, 또는 아래 명령으로 quarantine를 제거하세요.</p>
+        <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/anf.app</code><button class="copy-btn" type="button" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">소스에서 빌드: <a href="https://github.com/rescenedev/anf#소스에서-빌드" target="_blank" rel="noopener">GitHub README ↗</a> (<code>./build.sh run</code>, Command Line Tools만 필요)</p>
       </div>
     </div>
@@ -377,14 +377,15 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   restart();
 })();
 
-// Copy-to-clipboard for install commands
+// Copy-to-clipboard — clicking anywhere on a command cell copies it.
 document.addEventListener('click', function (e) {
-  var btn = e.target.closest('.copy-btn');
-  if (!btn) return;
-  var el = document.getElementById(btn.dataset.target);
-  if (!el) return;
-  navigator.clipboard.writeText(el.textContent.trim()).then(function () {
-    if (btn.dataset.busy) return;
+  var cell = e.target.closest('.cmd, .install-row');
+  if (!cell) return;
+  var code = cell.querySelector('code');
+  if (!code) return;
+  var btn = cell.querySelector('.copy-btn');
+  navigator.clipboard.writeText(code.textContent.trim()).then(function () {
+    if (!btn || btn.dataset.busy) return;
     btn.dataset.busy = '1';
     var original = btn.innerHTML;
     btn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
