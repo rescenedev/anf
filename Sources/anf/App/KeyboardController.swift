@@ -156,6 +156,7 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case "v": model.pasteFromPasteboard(); return true
             case "a": model.selectAll(); return true
             case "i": workspace.inspectorVisible.toggle(); return true
+            case "/": workspace.pathBarVisible.toggle(); workspace.save(); return true
             case "d": shift ? workspace.toggleFavoriteCurrent() : model.duplicateSelection(); return true
             case "l": model.goToFolderPrompt(); return true
             case "p": palette.toggle(); return true

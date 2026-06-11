@@ -1,5 +1,24 @@
 import AppKit
 
+/// Target for the 보기 menu — holds the workspace and keeps the checkmark in sync.
+@MainActor
+final class ViewMenuController: NSObject, NSMenuItemValidation {
+    static let shared = ViewMenuController()
+    weak var workspace: WorkspaceModel?
+
+    @objc func toggleStatusBar(_ sender: Any?) {
+        workspace?.pathBarVisible.toggle()
+        workspace?.save()
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(toggleStatusBar(_:)) {
+            item.state = (workspace?.pathBarVisible ?? false) ? .on : .off
+        }
+        return workspace != nil
+    }
+}
+
 /// Minimal native menu bar. Standard editing selectors keep text fields (filter,
 /// rename) fully functional; the App/Window menus give Quit, Hide and zoom.
 enum MainMenu {
@@ -34,6 +53,16 @@ enum MainMenu {
         editMenu.addItem(withTitle: "복사하기", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "붙여넣기", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "전체 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        // View menu
+        let viewItem = NSMenuItem()
+        main.addItem(viewItem)
+        let viewMenu = NSMenu(title: "보기")
+        viewItem.submenu = viewMenu
+        let statusBar = viewMenu.addItem(withTitle: "상태 막대 보기",
+                                         action: #selector(ViewMenuController.toggleStatusBar(_:)),
+                                         keyEquivalent: "/")
+        statusBar.target = ViewMenuController.shared
 
         // Window menu
         let windowItem = NSMenuItem()

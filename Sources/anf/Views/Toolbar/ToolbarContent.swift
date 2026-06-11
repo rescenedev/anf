@@ -104,6 +104,8 @@ struct ToolbarTrailingView: View {
             Toggle("오름차순", isOn: Binding(get: { model.sort.ascending }, set: { model.sort.ascending = $0 }))
             Divider()
             Toggle("숨김 파일 보기", isOn: Binding(get: { model.showHidden }, set: { model.showHidden = $0 }))
+            Toggle("상태 막대 보기", isOn: Binding(get: { workspace.pathBarVisible },
+                                              set: { workspace.pathBarVisible = $0; workspace.save() }))
             if model.viewMode == .icons {
                 Divider()
                 Text("아이콘 크기")

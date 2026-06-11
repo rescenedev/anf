@@ -129,6 +129,8 @@ final class WorkspaceModel {
     var activePane: Int = 0
     var layout: PaneLayout = .single
     var sidebarVisible = true
+    /// Bottom status/path bar — hidden by default; 보기 메뉴 / ⌘/ toggles it.
+    var pathBarVisible = false
     var inspectorVisible = false
     var inspectorWidth: CGFloat = 300
     var paletteVisible = false {
@@ -290,6 +292,7 @@ final class WorkspaceModel {
         var sidebarVisible: Bool
         var inspectorVisible: Bool
         var inspectorWidth: Double?
+        var pathBarVisible: Bool?
         var splitRatioH: Double?
         var splitRatioV: Double?
         var terminalFontSize: Double?
@@ -304,6 +307,7 @@ final class WorkspaceModel {
             sidebarVisible: sidebarVisible,
             inspectorVisible: inspectorVisible,
             inspectorWidth: inspectorWidth,
+            pathBarVisible: pathBarVisible,
             splitRatioH: splitRatioH,
             splitRatioV: splitRatioV,
             terminalFontSize: terminalFontSize,
@@ -333,6 +337,7 @@ final class WorkspaceModel {
         if let w = state.inspectorWidth {
             inspectorWidth = Self.clampInspectorWidth(CGFloat(w))
         }
+        if let p = state.pathBarVisible { pathBarVisible = p }
         if let r = state.splitRatioH { splitRatioH = Self.clampSplitRatio(CGFloat(r)) }
         if let r = state.splitRatioV { splitRatioV = Self.clampSplitRatio(CGFloat(r)) }
         if let fs = state.terminalFontSize {

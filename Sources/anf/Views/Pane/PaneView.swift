@@ -15,7 +15,9 @@ struct PaneView: View {
             TabStripView(workspace: workspace, index: index)
             Divider()
             ContentArea(model: pane.current)
-            PathBarView(model: pane.current)
+            if workspace.pathBarVisible {
+                PathBarView(model: pane.current)
+            }
         }
         .overlay(alignment: .top) {
             if multiPane && isActive {

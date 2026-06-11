@@ -36,6 +36,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             let workspace = WorkspaceModel()
             self.workspace = workspace
             self.keyboard = KeyboardController(workspace: workspace)
+            ViewMenuController.shared.workspace = workspace
 
             // Native split: a real sidebar item (full-height floating glass on macOS
             // 26, correct traffic-light inset) + content. This is how Finder is built
