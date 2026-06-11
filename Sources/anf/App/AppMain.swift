@@ -42,11 +42,11 @@ final class AppController: NSObject, NSApplicationDelegate {
             // 26, correct traffic-light inset) + content. This is how Finder is built
             // and it makes window resizing work natively — no SwiftUI hacks.
             // Edge-resize-friendly hosting so the window grabs resize from its edges.
-            let sidebarHC = HostingViewController(rootView: SidebarView(workspace: workspace))
+            let sidebarVC = SidebarViewController(workspace: workspace)
             let contentHC = HostingViewController(rootView: ContentRootView(workspace: workspace))
 
             let split = NSSplitViewController()
-            let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarHC)
+            let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarVC)
             sidebarItem.minimumThickness = 184
             sidebarItem.maximumThickness = 340
             sidebarItem.canCollapse = true
