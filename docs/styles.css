@@ -251,9 +251,12 @@ h2 {
 /* Command box — the whole cell is clickable to copy. */
 .cmd { position: relative; margin-top: 16px; cursor: pointer; }
 .cmd code {
-  display: block; margin-top: 0; padding-right: 48px;
+  display: block; margin-top: 0; padding: 14px 48px 14px 16px;
   background: #2a3444; border: 1px solid rgba(148, 163, 184, .32);
   border-radius: 12px;
+  color: var(--accent-2);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 13.5px; overflow-x: auto;
 }
 .copy-btn.mini { padding: 6px; top: 6px; right: 6px; }
 
@@ -261,8 +264,9 @@ h2 {
    boxes inside clearly pop against it. */
 .install-box {
   max-width: 660px; margin: 44px auto 0; text-align: left;
-  background: var(--tile); border: 1px solid var(--line);
+  background: #1c2029; border: 1px solid rgba(255,255,255,.16);
   border-radius: var(--radius); padding: 28px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
 }
 .install-box .cmd:first-of-type { margin-top: 0; }
 .install-box .cmd code {
