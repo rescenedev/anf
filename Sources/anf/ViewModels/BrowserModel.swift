@@ -32,7 +32,15 @@ final class BrowserModel: Identifiable {
     private(set) var itemsVersion = 0
 
     // Presentation
-    var viewMode: ViewMode = .list
+    /// True while restoring a folder's remembered view mode, so the didSet
+    /// doesn't write the restored value back as a user preference.
+    @ObservationIgnored private var applyingFolderViewMode = false
+    var viewMode: ViewMode = .list {
+        didSet {
+            guard !applyingFolderViewMode, viewMode != oldValue else { return }
+            ViewModePrefs.shared.set(viewMode, for: currentURL)
+        }
+    }
     var sort = SortOrder() { didSet { recomputeItems() } }
     var showHidden = false { didSet { reload() } }
     var iconSize: Double = 84
@@ -74,7 +82,16 @@ final class BrowserModel: Identifiable {
 
     init(start: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.currentURL = start
+        applyFolderViewMode()
         reload()
+    }
+
+    /// Restore this folder's remembered view mode, if any.
+    private func applyFolderViewMode() {
+        guard let m = ViewModePrefs.shared.mode(for: currentURL), m != viewMode else { return }
+        applyingFolderViewMode = true
+        viewMode = m
+        applyingFolderViewMode = false
     }
 
     // MARK: - Derived
@@ -184,6 +201,7 @@ final class BrowserModel: Identifiable {
             RecentFolders.shared.record(url)
             FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
         }
+        applyFolderViewMode()
         reload()
         // Land with the first row selected so keyboard navigation continues
         // immediately. revealFile and friends overwrite this with their own
@@ -225,6 +243,7 @@ final class BrowserModel: Identifiable {
         guard let prev = back.popLast() else { return }
         forward.append(currentURL)
         currentURL = prev
+        applyFolderViewMode()
         reload()
         selectFirstWhenLoaded()
     }
@@ -233,6 +252,7 @@ final class BrowserModel: Identifiable {
         guard let next = forward.popLast() else { return }
         back.append(currentURL)
         currentURL = next
+        applyFolderViewMode()
         reload()
         selectFirstWhenLoaded()
     }
