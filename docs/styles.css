@@ -208,7 +208,7 @@ h2 {
 /* ---- Tools ---- */
 .tile code {
   display: block; margin-top: 16px; padding: 10px 13px;
-  background: rgba(0,0,0,.4); border: 1px solid var(--line);
+  background: rgba(51, 65, 85, .5); border: 1px solid rgba(148, 163, 184, .22);
   border-radius: 10px; font-size: 12.5px; color: var(--accent-2);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   overflow-x: auto; white-space: nowrap;
@@ -231,7 +231,7 @@ h2 {
 .install-row { position: relative; cursor: pointer; }
 .install-row code {
   display: block; text-align: left; padding: 14px 48px 14px 16px;
-  background: rgba(0,0,0,.45); border: 1px solid var(--line); border-radius: 12px;
+  background: rgba(51, 65, 85, .5); border: 1px solid rgba(148, 163, 184, .22); border-radius: 12px;
   color: var(--accent-2); font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 13.5px; overflow-x: auto; white-space: nowrap;
 }
@@ -250,7 +250,11 @@ h2 {
 
 /* Command box — the whole cell is clickable to copy. */
 .cmd { position: relative; margin-top: 16px; cursor: pointer; }
-.cmd code { display: block; margin-top: 0; padding-right: 48px; }
+.cmd code {
+  display: block; margin-top: 0; padding-right: 48px;
+  background: rgba(51, 65, 85, .5); border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 12px;
+}
 .copy-btn.mini { padding: 6px; top: 6px; right: 6px; }
 
 /* Install section */
