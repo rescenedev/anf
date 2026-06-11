@@ -282,41 +282,7 @@ struct FileListView: NSViewRepresentable {
 
         func menu(forRow row: Int) -> NSMenu? {
             guard row >= 0, row < items.count else { return nil }
-            let item = items[row]
-            if !model.selection.contains(item.id) { model.selection = [item.id] }
-            let menu = NSMenu()
-            func add(_ title: String, _ action: @escaping () -> Void) {
-                let mi = NSMenuItem(title: title, action: #selector(MenuTarget.fire), keyEquivalent: "")
-                let t = MenuTarget(action); mi.target = t; mi.representedObject = t
-                menu.addItem(mi)
-            }
-            add(L("Open", "열기")) { self.model.open(item) }
-            if item.isBrowsableContainer {
-                add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(item.url) }
-            }
-            menu.addItem(.separator())
-            if model.selection.count > 1 {
-                add(L("Rename \(model.selection.count) Items…", "\(model.selection.count)개 항목 이름 변경…")) { self.model.batchRename() }
-            } else {
-                add(L("Rename", "이름 변경")) { self.model.beginRename() }
-            }
-            add(L("Duplicate", "복제")) { self.model.duplicateSelection() }
-            menu.addItem(.separator())
-            if item.ext == "zip" && model.selection.count <= 1 {
-                add(L("Extract", "압축 풀기")) { ArchiveService.extract(item) { self.model.reload() } }
-            } else {
-                add(model.selection.count > 1 ? L("Compress \(model.selection.count) Items", "\(model.selection.count)개 항목 압축") : L("Compress", "압축")) {
-                    ArchiveService.compress(self.model.selectedItems) { self.model.reload() }
-                }
-            }
-            menu.addItem(.separator())
-            add(L("Copy", "복사")) { self.model.copySelectionToPasteboard() }
-            add(L("Copy Path", "경로 복사")) { self.model.copyPathToPasteboard() }
-            add(L("Paste", "붙여넣기")) { self.model.pasteFromPasteboard() }
-            add(L("Reveal in Finder", "Finder에서 보기")) { self.model.revealSelection() }
-            menu.addItem(.separator())
-            add(L("Move to Trash", "휴지통으로 이동")) { self.model.trashSelection() }
-            return menu
+            return FileItemMenu.build(for: items[row], model: model)
         }
     }
 }
@@ -335,13 +301,6 @@ final class RoundedRowView: NSTableRowView {
         color.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7).fill()
     }
-}
-
-/// Retains a closure for an NSMenuItem target.
-private final class MenuTarget: NSObject {
-    let action: () -> Void
-    init(_ action: @escaping () -> Void) { self.action = action }
-    @objc func fire() { action() }
 }
 
 /// NSTableView that builds a row-aware context menu and lets the global keyboard

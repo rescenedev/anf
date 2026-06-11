@@ -1,0 +1,76 @@
+import AppKit
+
+/// Retains a closure for an NSMenuItem target.
+final class MenuTarget: NSObject {
+    let action: () -> Void
+    init(_ action: @escaping () -> Void) { self.action = action }
+    @objc func fire() { action() }
+}
+
+/// Shared right-click menus (AppKit `NSMenu`) used by the list table and the
+/// icon-grid collection view, so both views behave identically.
+@MainActor
+enum FileItemMenu {
+
+    /// Menu for a clicked item. Selects it first if it isn't in the selection.
+    static func build(for item: FileItem, model: BrowserModel) -> NSMenu {
+        if !model.selection.contains(item.id) { model.selection = [item.id] }
+        let menu = NSMenu()
+        func add(_ title: String, _ action: @escaping () -> Void) {
+            let mi = NSMenuItem(title: title, action: #selector(MenuTarget.fire), keyEquivalent: "")
+            let t = MenuTarget(action); mi.target = t; mi.representedObject = t
+            menu.addItem(mi)
+        }
+        add(L("Open", "열기")) { model.open(item) }
+        if item.isBrowsableContainer {
+            add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(item.url) }
+        }
+        menu.addItem(.separator())
+        if model.selection.count > 1 {
+            add(L("Rename \(model.selection.count) Items…", "\(model.selection.count)개 항목 이름 변경…")) { model.batchRename() }
+        } else {
+            add(L("Rename", "이름 변경")) { model.beginRename() }
+        }
+        add(L("Duplicate", "복제")) { model.duplicateSelection() }
+        menu.addItem(.separator())
+        if item.ext == "zip" && model.selection.count <= 1 {
+            add(L("Extract", "압축 풀기")) { ArchiveService.extract(item) { model.reload() } }
+        } else {
+            add(model.selection.count > 1
+                ? L("Compress \(model.selection.count) Items", "\(model.selection.count)개 항목 압축")
+                : L("Compress", "압축")) {
+                ArchiveService.compress(model.selectedItems) { model.reload() }
+            }
+        }
+        menu.addItem(.separator())
+        add(L("Copy", "복사")) { model.copySelectionToPasteboard() }
+        add(L("Copy Path", "경로 복사")) { model.copyPathToPasteboard() }
+        add(L("Paste", "붙여넣기")) { model.pasteFromPasteboard() }
+        add(L("Reveal in Finder", "Finder에서 보기")) { model.revealSelection() }
+        menu.addItem(.separator())
+        add(L("Move to Trash", "휴지통으로 이동")) { model.trashSelection() }
+        return menu
+    }
+
+    /// Menu for empty space inside a folder.
+    static func background(model: BrowserModel) -> NSMenu {
+        let menu = NSMenu()
+        func add(_ title: String, _ action: @escaping () -> Void) {
+            let mi = NSMenuItem(title: title, action: #selector(MenuTarget.fire), keyEquivalent: "")
+            let t = MenuTarget(action); mi.target = t; mi.representedObject = t
+            menu.addItem(mi)
+        }
+        add(L("New Folder", "새 폴더")) { model.makeNewFolder() }
+        add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(model.currentURL) }
+        menu.addItem(.separator())
+        add(L("Paste", "붙여넣기")) { model.pasteFromPasteboard() }
+        add(L("Go to Folder…", "폴더로 이동…")) { model.goToFolderPrompt() }
+        add(L("Copy Path", "경로 복사")) { model.copyPathToPasteboard() }
+        menu.addItem(.separator())
+        add(model.showHidden ? L("Hide Hidden Files", "숨김 파일 가리기")
+                             : L("Show Hidden Files", "숨김 파일 보기")) {
+            model.showHidden.toggle()
+        }
+        return menu
+    }
+}
