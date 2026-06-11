@@ -13,6 +13,7 @@
   <div class="nav-inner">
     <a class="brand" href="#top">anf</a>
     <nav class="nav-links">
+      <a href="#install">설치</a>
       <a href="#features">기능</a>
       <a href="#performance">왜 빠른가</a>
       <a href="#terminal">터미널</a>
@@ -46,6 +47,22 @@
         <button class="dot" type="button"><span class="k">B</span> 2분할 좌우</button>
         <button class="dot" type="button"><span class="k">C</span> 2분할 상하</button>
         <button class="dot" type="button"><span class="k">D</span> 4분할</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section id="install" class="band">
+    <div class="band-inner">
+      <h2 class="centered">설치.</h2>
+      <p class="sub centered">Homebrew 한 번이면 끝. macOS Apple Silicon 권장.</p>
+      <div class="install-box">
+        <div class="cmd"><code id="cmd-brew">brew tap rescenedev/anf
+brew trust rescenedev/anf
+brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew">복사</button></div>
+        <p class="note">업데이트는 <code>brew upgrade --cask anf</code>. self-signed 빌드라 첫 실행 시
+          <strong>anf.app 우클릭 → 열기</strong>, 또는 시스템 설정 &gt; 개인정보 보호 및 보안 &gt; "확인 없이 열기"가 필요할 수 있습니다.</p>
+        <p class="note">소스에서 빌드: <a href="https://github.com/rescenedev/anf#소스에서-빌드" target="_blank" rel="noopener">GitHub README ↗</a> (<code>./build.sh run</code>, Command Line Tools만 필요)</p>
       </div>
     </div>
   </section>

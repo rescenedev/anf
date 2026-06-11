@@ -239,6 +239,19 @@ h2 {
 .cmd code { flex: 1; margin-top: 0; }
 .copy-btn.mini { padding: 0 13px; font-size: 12.5px; }
 
+/* Install section */
+.install-box { max-width: 640px; margin: 44px auto 0; text-align: left; }
+.install-box .cmd { align-items: flex-start; }
+.install-box .cmd code {
+  white-space: pre; line-height: 1.7; padding: 16px 18px; overflow-x: auto;
+}
+.install-box .copy-btn { display: flex; align-items: center; }
+.install-box .note { margin-top: 16px; color: var(--txt-dim); font-size: 13.5px; }
+.install-box .note a { color: var(--accent); }
+.install-box .note code {
+  display: inline; padding: 1px 6px; white-space: nowrap; font-size: .9em;
+}
+
 /* Palette duo (empty state + live search) */
 .duo {
   display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 52px;
