@@ -11,7 +11,8 @@ enum MainMenu {
         main.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About anf", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let about = appMenu.addItem(withTitle: "About anf", action: #selector(AboutController.show(_:)), keyEquivalent: "")
+        about.target = AboutController.shared
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide anf", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthers = appMenu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
