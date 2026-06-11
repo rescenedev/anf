@@ -89,6 +89,7 @@ struct FileListView: NSViewRepresentable {
         /// Reconcile the table with the model (called from updateNSView).
         func sync() {
             guard let table else { return }
+            model.contentScrollView = table.enclosingScrollView
             if lastScale != model.textScale {
                 lastScale = model.textScale
                 applyRowHeight()

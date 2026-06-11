@@ -110,6 +110,12 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 }
                 return false
             case 51:  model.trashSelection(); return true           // delete → trash
+            // PgUp/PgDn/Home/End scroll the listing (Finder parity). The grid /
+            // table isn't reliably first responder, so route it explicitly.
+            case 116: if pageScroll(#selector(NSResponder.scrollPageUp(_:))) { return true }
+            case 121: if pageScroll(#selector(NSResponder.scrollPageDown(_:))) { return true }
+            case 115: if pageScroll(#selector(NSResponder.scrollToBeginningOfDocument(_:))) { return true }
+            case 119: if pageScroll(#selector(NSResponder.scrollToEndOfDocument(_:))) { return true }
             case 96:  workspace.transferToOtherPane(move: false); return true // F5 copy
             case 97:  workspace.transferToOtherPane(move: true); return true   // F6 move
             case 53:  if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared().orderOut(nil); return true } // esc
@@ -193,6 +199,16 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             }
         }
         return false
+    }
+
+    /// Scroll the active tab's listing (PgUp/PgDn/Home/End). Returns false when
+    /// no live scroll view is registered so the event can fall through to the
+    /// responder chain (e.g. the columns view).
+    private func pageScroll(_ action: Selector) -> Bool {
+        guard let scroll = model.contentScrollView, scroll.window != nil else { return false }
+        scroll.perform(action, with: nil)
+        scroll.flashScrollers()
+        return true
     }
 
     /// ⌘[ / ⌘] cycles the active tab's view mode (list / icons / columns / …).

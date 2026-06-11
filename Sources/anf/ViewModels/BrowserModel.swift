@@ -63,6 +63,11 @@ final class BrowserModel: Identifiable {
     /// whole row instead of stepping one item.
     @ObservationIgnored var gridColumns: Int = 1
 
+    /// The scroll view currently presenting this tab's listing (list table or
+    /// icon grid), reported by the view, so PgUp/PgDn/Home/End can scroll it —
+    /// the views aren't reliably first responder with the global key monitor.
+    @ObservationIgnored weak var contentScrollView: NSScrollView?
+
     /// Keyboard-selection anchor/cursor indices. Shift-extension grows the
     /// selection from the anchor to the moving cursor — a contiguous run in
     /// list/columns, a rectangle in the icon/gallery grid.

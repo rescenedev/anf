@@ -74,6 +74,7 @@ struct IconGridView: NSViewRepresentable {
 
         func sync() {
             guard let cv = collection else { return }
+            model.contentScrollView = cv.enclosingScrollView
             if lastIconSize != model.iconSize {
                 lastIconSize = model.iconSize
                 if let layout = cv.collectionViewLayout as? NSCollectionViewFlowLayout {
