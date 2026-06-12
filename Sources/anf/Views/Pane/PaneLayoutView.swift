@@ -3,58 +3,80 @@ import SwiftUI
 /// Arranges the visible panes for the current layout (1 / 2 columns / 2 rows / 4),
 /// with draggable dividers between panes. Proportions live in the workspace
 /// (`splitRatioH`/`splitRatioV`) so quad keeps its columns aligned.
+///
+/// Panes are positioned by absolute frame inside ONE stable `ZStack` (not a
+/// `switch` that returns a different view tree per layout). A `switch` makes
+/// SwiftUI tear down and rebuild every pane's NSTableView on each ⌘1–4 — and
+/// rebuilding a 26k-row listing is what made layout switching feel slow. Here
+/// each pane keeps a stable identity (its index), so a pane that stays visible
+/// across a layout change is reused, not recreated; only genuinely newly-revealed
+/// or hidden panes mount/unmount.
 struct PaneLayoutView: View {
     @Bindable var workspace: WorkspaceModel
 
     private let grip: CGFloat = 9
 
     var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<4, id: \.self) { i in
+                    if let r = rect(for: i, in: geo.size) {
+                        pane(i)
+                            .frame(width: r.width, height: r.height)
+                            .offset(x: r.minX, y: r.minY)
+                    }
+                }
+                if workspace.layout == .dual || workspace.layout == .quad {
+                    columnHandle(totalWidth: geo.size.width - grip)
+                        .offset(x: (geo.size.width - grip) * workspace.splitRatioH)
+                }
+                if workspace.layout == .rows || workspace.layout == .quad {
+                    rowHandle(totalHeight: geo.size.height - grip)
+                        .offset(y: (geo.size.height - grip) * workspace.splitRatioV)
+                }
+            }
+        }
+    }
+
+    /// Frame for pane `index` in the current layout, or nil if it isn't shown.
+    private func rect(for index: Int, in size: CGSize) -> CGRect? {
+        let availW = size.width - grip
+        let col0 = availW * workspace.splitRatioH
+        let col1 = availW - col0
+        let col1X = col0 + grip
+        let availH = size.height - grip
+        let row0 = availH * workspace.splitRatioV
+        let row1 = availH - row0
+        let row1Y = row0 + grip
+
         switch workspace.layout {
         case .single:
-            pane(0)
+            return index == 0 ? CGRect(x: 0, y: 0, width: size.width, height: size.height) : nil
         case .dual:
-            GeometryReader { geo in
-                let avail = geo.size.width - grip
-                HStack(spacing: 0) {
-                    pane(0).frame(width: avail * workspace.splitRatioH)
-                    columnHandle(totalWidth: avail)
-                    pane(1)
-                }
+            switch index {
+            case 0: return CGRect(x: 0, y: 0, width: col0, height: size.height)
+            case 1: return CGRect(x: col1X, y: 0, width: col1, height: size.height)
+            default: return nil
             }
         case .rows:
-            GeometryReader { geo in
-                let avail = geo.size.height - grip
-                VStack(spacing: 0) {
-                    pane(0).frame(height: avail * workspace.splitRatioV)
-                    rowHandle(totalHeight: avail)
-                    pane(1)
-                }
+            switch index {
+            case 0: return CGRect(x: 0, y: 0, width: size.width, height: row0)
+            case 1: return CGRect(x: 0, y: row1Y, width: size.width, height: row1)
+            default: return nil
             }
         case .quad:
-            GeometryReader { geo in
-                let availW = geo.size.width - grip
-                let availH = geo.size.height - grip
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        pane(0).frame(width: availW * workspace.splitRatioH)
-                        columnHandle(totalWidth: availW)
-                        pane(1)
-                    }
-                    .frame(height: availH * workspace.splitRatioV)
-                    rowHandle(totalHeight: availH)
-                    HStack(spacing: 0) {
-                        pane(2).frame(width: availW * workspace.splitRatioH)
-                        columnHandle(totalWidth: availW)
-                        pane(3)
-                    }
-                }
+            switch index {
+            case 0: return CGRect(x: 0, y: 0, width: col0, height: row0)
+            case 1: return CGRect(x: col1X, y: 0, width: col1, height: row0)
+            case 2: return CGRect(x: 0, y: row1Y, width: col0, height: row1)
+            case 3: return CGRect(x: col1X, y: row1Y, width: col1, height: row1)
+            default: return nil
             }
         }
     }
 
     private func pane(_ index: Int) -> some View {
         PaneView(workspace: workspace, index: index)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func columnHandle(totalWidth: CGFloat) -> some View {
@@ -64,6 +86,7 @@ struct PaneLayoutView: View {
             write: { workspace.splitRatioH = WorkspaceModel.clampSplitRatio($0 / max(totalWidth, 1)) },
             onEnded: { workspace.save() }
         )
+        .frame(width: grip)
     }
 
     private func rowHandle(totalHeight: CGFloat) -> some View {
@@ -73,5 +96,6 @@ struct PaneLayoutView: View {
             write: { workspace.splitRatioV = WorkspaceModel.clampSplitRatio($0 / max(totalHeight, 1)) },
             onEnded: { workspace.save() }
         )
+        .frame(height: grip)
     }
 }
