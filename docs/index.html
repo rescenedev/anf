@@ -20,7 +20,7 @@
 <meta name="theme-color" content="#060607">
 <link rel="alternate" hreflang="ko" href="https://rescenedev.github.io/anf/">
 <link rel="alternate" hreflang="en" href="https://rescenedev.github.io/anf/en/">
-<link rel="stylesheet" href="styles.css?v=18">
+<link rel="stylesheet" href="styles.css?v=19">
 </head>
 <body>
 
@@ -45,8 +45,9 @@
     <h1>Finder, reforged.</h1>
     <p class="lead">분할 뷰, 내장 터미널, 커맨드 팔레트.<br>macOS를 위한 가볍고 빠른 네이티브 파일 브라우저.</p>
     <div class="hero-cta">
-      <a class="hero-dl" href="https://github.com/rescenedev/anf/releases/latest/download/anf.dmg"><span class="dl-ic">⤓</span> 다운로드</a>
+      <a class="hero-dl is-soon" href="#install"><span class="dl-ic">⤓</span> 다운로드 준비 중</a>
     </div>
+    <p class="hero-hint">정식 .dmg는 준비 중입니다 — 지금은 <a href="#install">Homebrew로 설치</a>하세요.</p>
     <p class="hero-specs">초경량 네이티브 단일 바이너리 · <strong>단 3.4&thinsp;MB</strong> · 텔레메트리 0 · 오픈소스</p>
     <div class="carousel">
       <div class="car-frames">
@@ -67,13 +68,15 @@
   <!-- Install -->
   <section id="install" class="band">
     <div class="band-inner">
-      <h2 class="centered">또는 Homebrew로.</h2>
-      <p class="sub centered">자동 업데이트가 필요하면 Homebrew로 설치하세요.</p>
+      <h2 class="centered">Homebrew로 설치.</h2>
+      <p class="sub centered">정식 .dmg가 준비되기 전까지는 Homebrew로 설치하세요. 자동 업데이트는 덤.</p>
       <div class="install-box">
         <div class="cmd multiline"><code id="cmd-brew">brew tap rescenedev/anf
 brew trust rescenedev/anf
 brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">업데이트는 <code>brew upgrade --cask anf</code>.</p>
+        <p class="note">아직 공증(notarize) 전이라 첫 실행을 Gatekeeper가 막으면 <strong>우클릭 → 열기</strong>, 또는 격리 속성을 제거하세요:</p>
+        <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/anf.app</code><button class="copy-btn" type="button" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">선택 — 더 빠른 파일명·내용 검색을 위해 <code>fd</code>·<code>ripgrep</code> 설치(없으면 Spotlight로 자동 폴백):</p>
         <div class="cmd"><code>brew install fd ripgrep</code><button class="copy-btn" type="button" aria-label="복사"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">선택 — HWP/HWPX 전체 서식 미리보기(알한글). 본문 텍스트는 알한글 없이도 anf가 추출합니다:</p>

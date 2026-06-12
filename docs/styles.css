@@ -491,6 +491,10 @@ kbd {
 }
 .hero-dl:hover { filter: brightness(1.07); transform: translateY(-1px); }
 .hero-dl .dl-ic { font-size: 18px; }
+.hero-dl.is-soon { filter: grayscale(.35) brightness(.92); }
+.hero-hint { margin-top: 12px; font-size: 13.5px; color: var(--txt-faint); }
+.hero-hint a { color: var(--txt-dim); text-decoration: underline; text-underline-offset: 2px; }
+.hero-hint a:hover { color: var(--txt); }
 .hero-specs {
   margin-top: 18px; font-size: 14px; color: var(--txt-faint);
   letter-spacing: .01em;

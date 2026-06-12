@@ -20,7 +20,7 @@
 <meta name="theme-color" content="#060607">
 <link rel="alternate" hreflang="ko" href="https://rescenedev.github.io/anf/">
 <link rel="alternate" hreflang="en" href="https://rescenedev.github.io/anf/en/">
-<link rel="stylesheet" href="../styles.css?v=18">
+<link rel="stylesheet" href="../styles.css?v=19">
 </head>
 <body>
 
@@ -45,8 +45,9 @@
     <h1>Finder, reforged.</h1>
     <p class="lead">Split panes, a built-in terminal, a command palette.<br>A fast, lightweight native file browser for macOS.</p>
     <div class="hero-cta">
-      <a class="hero-dl" href="https://github.com/rescenedev/anf/releases/latest/download/anf.dmg"><span class="dl-ic">⤓</span> Download</a>
+      <a class="hero-dl is-soon" href="#install"><span class="dl-ic">⤓</span> Download — coming soon</a>
     </div>
+    <p class="hero-hint">The signed .dmg is on the way — for now, <a href="#install">install with Homebrew</a>.</p>
     <p class="hero-specs">A featherweight native single binary · <strong>just 3.4&thinsp;MB</strong> · zero telemetry · open source</p>
     <div class="carousel">
       <div class="car-frames">
@@ -67,13 +68,15 @@
   <!-- Install -->
   <section id="install" class="band">
     <div class="band-inner">
-      <h2 class="centered">Or with Homebrew.</h2>
-      <p class="sub centered">Prefer auto-updates? Install with Homebrew.</p>
+      <h2 class="centered">Install with Homebrew.</h2>
+      <p class="sub centered">Until the signed .dmg ships, install with Homebrew — auto-updates included.</p>
       <div class="install-box">
         <div class="cmd multiline"><code id="cmd-brew">brew tap rescenedev/anf
 brew trust rescenedev/anf
 brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">Update with <code>brew upgrade --cask anf</code>.</p>
+        <p class="note">Not notarized yet — if Gatekeeper blocks the first launch, <strong>right-click → Open</strong>, or strip the quarantine flag:</p>
+        <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/anf.app</code><button class="copy-btn" type="button" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">Optional — install <code>fd</code> and <code>ripgrep</code> for faster name/content search (falls back to Spotlight without them):</p>
         <div class="cmd"><code>brew install fd ripgrep</code><button class="copy-btn" type="button" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
         <p class="note">Optional — full rich HWP/HWPX previews (alhangeul). anf extracts the body text on its own even without it:</p>
