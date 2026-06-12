@@ -42,6 +42,7 @@ runFileTagsTests()
 runVaultTests()
 runArchiveTests()
 MainActor.assumeIsolated { runWorkspacePinTests() }
+runQLPreviewSelectionTests()
 
 print("")
 if T.failures.isEmpty {
