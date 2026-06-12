@@ -98,30 +98,30 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case 36, 76: model.beginRename(); return true           // return / enter → inline rename
             case 48: workspace.cyclePane(shift ? -1 : 1); return true // Tab → switch pane
             case 125:   // ↓ — icon/gallery grids jump a whole row
-                model.moveSelection(by: gridStep, extend: shift); return true
+                moveSel(by: gridStep, extend: shift); return true
             case 126:   // ↑
-                model.moveSelection(by: -gridStep, extend: shift); return true
+                moveSel(by: -gridStep, extend: shift); return true
             // ←/→ move the selection in icon/gallery grids (no native arrow
             // handling there). In list/columns they fall through to the native
             // view. Folder history stays on ⌘←/⌘→.
             case 123:
                 if model.viewMode == .icons || model.viewMode == .gallery {
-                    model.moveSelection(by: -1, extend: shift); return true
+                    moveSel(by: -1, extend: shift); return true
                 }
                 return false
             case 124:
                 if model.viewMode == .icons || model.viewMode == .gallery {
-                    model.moveSelection(by: 1, extend: shift); return true
+                    moveSel(by: 1, extend: shift); return true
                 }
                 return false
             case 51:  model.trashSelection(); return true           // delete → trash
             // PgUp/PgDn move the SELECTION a viewport's worth (Explorer-style —
             // works even when there's nothing to scroll); Home/End jump it to
             // the first/last item. The views scroll to follow the selection.
-            case 116: model.moveSelection(by: -pageRows(), extend: shift); return true
-            case 121: model.moveSelection(by: pageRows(), extend: shift); return true
-            case 115: model.moveSelection(by: -model.items.count, extend: shift); return true
-            case 119: model.moveSelection(by: model.items.count, extend: shift); return true
+            case 116: moveSel(by: -pageRows(), extend: shift); return true
+            case 121: moveSel(by: pageRows(), extend: shift); return true
+            case 115: moveSel(by: -model.items.count, extend: shift); return true
+            case 119: moveSel(by: model.items.count, extend: shift); return true
             case 96:  workspace.transferToOtherPane(move: false); return true // F5 copy
             case 97:  workspace.transferToOtherPane(move: true); return true   // F6 move
             case 53:  if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared().orderOut(nil); return true } // esc
@@ -135,6 +135,7 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             if !ctrl, let typed = e.characters, !typed.isEmpty,
                typed.unicodeScalars.allSatisfy({ $0.value > 0x20 && !(0xF700...0xF8FF).contains($0.value) }) {
                 model.typeSelect(typed, fallback: Self.latinLetter[code])
+                refreshQLPanelIfVisible()
                 return true
             }
         }
@@ -289,6 +290,20 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
     }
 
     // MARK: - Quick Look
+
+    /// Wraps moveSelection and refreshes the QL panel when it is open, so the
+    /// preview tracks the cursor as the user navigates.
+    private func moveSel(by delta: Int, extend: Bool = false) {
+        model.moveSelection(by: delta, extend: extend)
+        refreshQLPanelIfVisible()
+    }
+
+    private func refreshQLPanelIfVisible() {
+        guard QLPreviewPanel.sharedPreviewPanelExists(),
+              let panel = QLPreviewPanel.shared(),
+              panel.isVisible else { return }
+        panel.reloadData()
+    }
 
     private var previewURLs: [URL] {
         let sel = model.selectedItems.map(\.url)
