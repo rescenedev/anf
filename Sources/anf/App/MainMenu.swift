@@ -1,10 +1,15 @@
 import AppKit
 
-/// Target for the 보기 menu — holds the workspace and keeps the checkmark in sync.
+/// Target for the 보기 menu. Resolves the workspace from the key window so the
+/// menu acts on whichever window is frontmost (multi-window correct).
 @MainActor
 final class ViewMenuController: NSObject, NSMenuItemValidation {
     static let shared = ViewMenuController()
-    weak var workspace: WorkspaceModel?
+    private var workspace: WorkspaceModel? { WindowRegistry.current }
+
+    @objc func newWindow(_ sender: Any?) {
+        AppController.newWindow()
+    }
 
     @objc func toggleStatusBar(_ sender: Any?) {
         workspace?.pathBarVisible.toggle()
@@ -50,6 +55,18 @@ enum MainMenu {
         appMenu.addItem(withTitle: L("Show All", "모두 보기"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: L("Quit anf", "anf 종료"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        // File menu — New Window (⌘N) opens an independent window.
+        let fileItem = NSMenuItem()
+        main.addItem(fileItem)
+        let fileMenu = NSMenu(title: L("File", "파일"))
+        fileItem.submenu = fileMenu
+        let newWin = fileMenu.addItem(withTitle: L("New Window", "새 창"),
+                                      action: #selector(ViewMenuController.newWindow(_:)),
+                                      keyEquivalent: "n")
+        newWin.target = ViewMenuController.shared
+        // No ⌘W here: KeyboardController owns ⌘W contextually (close tab → pane →
+        // window), and its monitor consumes the event before the menu sees it.
 
         // Edit menu (standard responder-chain selectors)
         let editItem = NSMenuItem()

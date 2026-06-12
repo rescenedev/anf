@@ -12,6 +12,10 @@ final class SidebarDividerResizer: NSView {
     private var monitorDragging = false
     private var eventMonitor: Any?
 
+    deinit {
+        if let m = eventMonitor { NSEvent.removeMonitor(m) }
+    }
+
     @discardableResult
     static func install(in window: NSWindow, splitView: NSSplitView) -> SidebarDividerResizer? {
         guard let frameView = window.contentView?.superview else { return nil }

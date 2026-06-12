@@ -32,6 +32,10 @@ final class WindowEdgeResizer: NSView {
     private var startFrame: NSRect = .zero
     private var startMouse: NSPoint = .zero
     private var eventMonitor: Any?
+
+    deinit {
+        if let m = eventMonitor { NSEvent.removeMonitor(m) }
+    }
     private var wasInZone = false
 
     @discardableResult

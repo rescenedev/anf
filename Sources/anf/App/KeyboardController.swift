@@ -8,9 +8,15 @@ import WebKit
 /// field is being edited, everything passes straight through so typing works.
 @MainActor
 final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
-    private let workspace: WorkspaceModel
+    /// The workspace of the window the user is actually in — resolved per event
+    /// so one shared monitor drives every window correctly. `nil` only between
+    /// the last window closing and the app quitting.
+    private var workspace: WorkspaceModel! { WindowRegistry.current }
     private var monitor: Any?
-    private lazy var palette = CommandPaletteController(workspace: workspace)
+    /// The key window owns its palette (see AnfWindowController), so ⌘K targets
+    /// that window and the palette dies with it — no per-workspace cache to leak
+    /// or collide on ObjectIdentifier reuse.
+    private var palette: CommandPaletteController? { WindowRegistry.currentController?.palette }
 
     /// Physical keycode → Latin letter, so ⌘-letter shortcuts work under any
     /// input source (Korean IME makes `charactersIgnoringModifiers` return e.g.
@@ -22,11 +28,10 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         45: "n", 46: "m",
     ]
 
-    init(workspace: WorkspaceModel) {
-        self.workspace = workspace
+    override init() {
         super.init()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
+            guard let self, self.workspace != nil else { return event }
             return self.handle(event) ? nil : event
         }
     }
@@ -165,10 +170,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 return true
             case "t": workspace.activePaneModel.newTab(); return true
             case "w":
-                // Close the current tab; if it's the last tab, close the pane.
+                // Close the current tab → pane → window (Finder/browser order).
                 let pane = workspace.activePaneModel
                 if pane.tabs.count > 1 { pane.closeCurrent() }
-                else { workspace.closeActivePane() }
+                else if workspace.layout.count > 1 { workspace.closeActivePane() }
+                else { NSApp.keyWindow?.performClose(nil) }   // last tab+pane → close window
                 return true
             case "=", "+": bumpScale(1); return true
             case "-": bumpScale(-1); return true
@@ -180,8 +186,8 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case "/": workspace.pathBarVisible.toggle(); workspace.save(); return true
             case "d": shift ? workspace.toggleFavoriteCurrent() : model.duplicateSelection(); return true
             case "l": model.goToFolderPrompt(); return true
-            case "p": palette.toggle(); return true
-            case "k": palette.toggle(); return true   // ⌘K command palette
+            case "p": palette?.toggle(); return true
+            case "k": palette?.toggle(); return true   // ⌘K command palette
             case "g": if shift { model.goToFolderPrompt(); return true }
             case "n": if shift { model.makeNewFolder(); return true }
             case "r": model.reload(); return true
