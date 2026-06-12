@@ -1,0 +1,14 @@
+{
+  "name": "anf-dl-notify",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-12",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "STATE",
+      "id": "bd30493208a14dbbb6029725147e8976"
+    }
+  ]
+}
