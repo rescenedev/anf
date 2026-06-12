@@ -43,6 +43,7 @@ runVaultTests()
 runArchiveTests()
 MainActor.assumeIsolated { runWorkspacePinTests() }
 runQLPreviewSelectionTests()
+runTerminalUnicodeTests()
 
 print("")
 if T.failures.isEmpty {
