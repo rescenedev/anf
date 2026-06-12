@@ -475,8 +475,15 @@ kbd {
   display: flex; align-items: center; gap: 14px; justify-content: center;
   margin-top: 30px; flex-wrap: wrap;
 }
-.hero-cmd { margin-top: 0; }
-.hero-cmd code { padding: 13px 46px 13px 18px; font-size: 14px; }
+.hero-dl {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 13px 24px; border-radius: 12px; color: #fff;
+  font-weight: 700; font-size: 15px;
+  background: linear-gradient(90deg, #2997ff, #7c5cff 60%, #ff5ea8);
+  box-shadow: 0 8px 24px rgba(124,92,255,.3); transition: filter .15s, transform .12s;
+}
+.hero-dl:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.hero-dl .dl-ic { font-size: 18px; }
 .hero-btn {
   padding: 12px 22px; border-radius: 12px; font-weight: 600;
   border: 1px solid var(--line); color: var(--txt-dim); background: var(--tile);
