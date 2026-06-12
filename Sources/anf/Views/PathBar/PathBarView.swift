@@ -47,6 +47,8 @@ struct PathBarView: View {
             let bytes = model.selectedItems.reduce(Int64(0)) { $0 + $1.size }
             return L("\(sel) of \(total) selected · \(Format.bytes(bytes))", "\(total)개 중 \(sel)개 선택됨 · \(Format.bytes(bytes))")
         }
-        return L("\(total) item\(total == 1 ? "" : "s")", "\(total)개 항목")
+        let items = L("\(total) item\(total == 1 ? "" : "s")", "\(total)개 항목")
+        let free = model.freeSpaceLabel
+        return free.isEmpty ? items : "\(items)  ·  \(free)"
     }
 }

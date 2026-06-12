@@ -38,6 +38,7 @@ runListDiffTests()
 runTransferTests()
 runL10nTests()
 runThumbnailThrottleTests()
+runFileTagsTests()
 
 print("")
 if T.failures.isEmpty {

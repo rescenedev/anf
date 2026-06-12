@@ -147,6 +147,7 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                     shift ? model.copyCurrentFolderPath() : model.copyPathToPasteboard()
                     return true
                 }
+                if chars == "i" { model.showGetInfo(); return true }   // ⌘⌥I → Get Info
                 // Tab selection ⌘⌥1…⌘⌥9
                 if let n = Int(chars), (1...9).contains(n) {
                     workspace.activePaneModel.select(n - 1); return true

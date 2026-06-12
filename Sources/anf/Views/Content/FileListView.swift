@@ -371,6 +371,7 @@ private extension NSUserInterfaceItemIdentifier {
 private final class NameCell: NSTableCellView {
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    private let tagDot = NSView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -381,7 +382,10 @@ private final class NameCell: NSTableCellView {
         label.isBordered = false
         label.drawsBackground = false
         label.focusRingType = .none
-        addSubview(icon); addSubview(label)
+        tagDot.translatesAutoresizingMaskIntoConstraints = false
+        tagDot.wantsLayer = true
+        tagDot.layer?.cornerRadius = 3.5
+        addSubview(icon); addSubview(label); addSubview(tagDot)
         textField = label
         imageView = icon
         NSLayoutConstraint.activate([
@@ -390,8 +394,13 @@ private final class NameCell: NSTableCellView {
             icon.widthAnchor.constraint(equalToConstant: 16),
             icon.heightAnchor.constraint(equalToConstant: 16),
             label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            // A tag swatch sits after the name; the name truncates before it.
+            label.trailingAnchor.constraint(lessThanOrEqualTo: tagDot.leadingAnchor, constant: -6),
+            tagDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            tagDot.centerYAnchor.constraint(equalTo: centerYAnchor),
+            tagDot.widthAnchor.constraint(equalToConstant: 7),
+            tagDot.heightAnchor.constraint(equalToConstant: 7),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -401,6 +410,9 @@ private final class NameCell: NSTableCellView {
         label.stringValue = item.name
         label.font = .systemFont(ofSize: fontSize)
         label.isEditable = true   // rename starts via editColumn; clicks won't edit
+        let tagColor = FileTags.primaryColor(of: item.url)
+        tagDot.isHidden = tagColor == nil
+        tagDot.layer?.backgroundColor = tagColor?.cgColor
     }
 }
 

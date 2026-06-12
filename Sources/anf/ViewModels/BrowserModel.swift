@@ -209,6 +209,21 @@ final class BrowserModel: Identifiable {
         return urls
     }
 
+    /// "23.4 GB available" for the current folder's volume, recomputed when the
+    /// volume changes (not per render). Empty for remote folders.
+    @ObservationIgnored private var freeSpaceCache: (volume: String, label: String)?
+    var freeSpaceLabel: String {
+        guard !isRemote else { return "" }
+        let key = (try? currentURL.resourceValues(forKeys: [.volumeIdentifierKey]))
+            .flatMap { ($0.volumeIdentifier as? NSObject)?.description } ?? currentURL.path
+        if let c = freeSpaceCache, c.volume == key { return c.label }
+        let bytes = (try? currentURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage
+        let label = bytes.map { L("\(Format.bytes($0)) available", "\(Format.bytes($0)) 사용 가능") } ?? ""
+        freeSpaceCache = (key, label)
+        return label
+    }
+
     // MARK: - Navigation
 
     func navigate(to url: URL, recordHistory: Bool = true) {
@@ -319,6 +334,7 @@ final class BrowserModel: Identifiable {
         let url = currentURL
         let hidden = showHidden
         isLoading = true
+        FileTags.clearColorCache()   // tags may have changed since last listing
         selection.removeAll()
         if isRemote { reloadRemote(token: token); return }
         // Paint the last known listing instantly (no read, no sort) — the fresh
@@ -434,6 +450,22 @@ final class BrowserModel: Identifiable {
                 selection = [url]
             }
         }
+    }
+
+    /// Finder-style Get Info (⌘⌥I) for each selected item (or the current folder
+    /// if nothing is selected).
+    func showGetInfo() {
+        let targets = selectedItems.isEmpty
+            ? (FileItem(url: currentURL).map { [$0] } ?? [])
+            : selectedItems
+        for item in targets.prefix(8) { GetInfoPanel.show(for: item) }
+    }
+
+    /// Toggle a colour tag on every selected item, then refresh so the swatch
+    /// updates in the list.
+    func toggleTag(_ tag: String) {
+        for item in selectedItems { FileTags.toggle(tag, on: item.url) }
+        reload()
     }
 
     func revealSelection() {

@@ -7,6 +7,16 @@ final class MenuTarget: NSObject {
     @objc func fire() { action() }
 }
 
+/// Small filled circle for a tag menu item.
+@MainActor func tagSwatch(_ color: NSColor) -> NSImage {
+    let img = NSImage(size: NSSize(width: 12, height: 12))
+    img.lockFocus()
+    color.setFill()
+    NSBezierPath(ovalIn: NSRect(x: 1, y: 1, width: 10, height: 10)).fill()
+    img.unlockFocus()
+    return img
+}
+
 /// Shared right-click menus (AppKit `NSMenu`) used by the list table and the
 /// icon-grid collection view, so both views behave identically.
 @MainActor
@@ -25,6 +35,23 @@ enum FileItemMenu {
         if item.isBrowsableContainer {
             add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(item.url) }
         }
+        add(L("Get Info", "정보 가져오기")) { model.showGetInfo() }
+        menu.addItem(.separator())
+
+        // Colour tags submenu (Finder parity).
+        let tagItem = NSMenuItem(title: L("Tags", "태그"), action: nil, keyEquivalent: "")
+        let tagMenu = NSMenu()
+        let active = Set(model.selectedItems.flatMap { FileTags.tags(of: $0.url) })
+        for (name, color) in FileTags.standard {
+            let mi = NSMenuItem(title: name, action: #selector(MenuTarget.fire), keyEquivalent: "")
+            let t = MenuTarget { model.toggleTag(name) }
+            mi.target = t; mi.representedObject = t
+            mi.state = active.contains(name) ? .on : .off
+            mi.image = tagSwatch(color)
+            tagMenu.addItem(mi)
+        }
+        tagItem.submenu = tagMenu
+        menu.addItem(tagItem)
         menu.addItem(.separator())
         if model.selection.count > 1 {
             add(L("Rename \(model.selection.count) Items…", "\(model.selection.count)개 항목 이름 변경…")) { model.batchRename() }
