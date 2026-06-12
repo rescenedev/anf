@@ -23,6 +23,7 @@
       <a href="#shortcuts">단축키</a>
       <a href="#tools">권장 도구</a>
       <a href="#opensource">오픈소스</a>
+      <a href="#privacy">프라이버시</a>
       <a href="#release">릴리즈 노트</a>
       <a class="nav-lang" href="en/">EN</a>
       <a class="nav-gh" href="https://github.com/rescenedev/anf" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.32.47-2.39 1.24-3.23-.13-.3-.54-1.53.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22 0 1.61-.01 2.9-.01 3.29 0 .32.21.7.82.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg></a>
@@ -317,6 +318,37 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
           <p>가상 터미널을 fork/exec 하는 작은 C 헬퍼.</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Privacy -->
+  <section id="privacy" class="band">
+    <div class="band-inner">
+      <h2 class="centered">아무것도 수집하지 않습니다.</h2>
+      <p class="sub centered">프라이버시는 기능이 아니라 기본값입니다. 전부 코드로 검증할 수 있습니다 — 오픈소스니까요.</p>
+      <div class="grid">
+        <div class="tile">
+          <div class="ic">0</div>
+          <h3>텔레메트리 제로</h3>
+          <p>사용 통계도, 크래시 리포트도, 분석 도구도, 광고 식별자도 없습니다. 계정 가입조차 없습니다. 수집하는 것이 없으니 제3자에게 줄 것도 없습니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">1</div>
+          <h3>네트워크 요청은 단 하나</h3>
+          <p>하루 1회 GitHub에 새 버전이 있는지 묻는 것이 전부 — 어떤 사용자 데이터도 싣지 않고, 오프라인이면 조용히 건너뜁니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">⌂</div>
+          <h3>모든 데이터는 내 Mac에</h3>
+          <p>설정·검색 인덱스·캐시 전부 로컬에만 저장됩니다. <code>brew uninstall --zap --cask anf</code> 한 줄이면 흔적까지 정리됩니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">🔑</div>
+          <h3>비밀번호를 모릅니다</h3>
+          <p>SSH/SFTP는 키·에이전트 인증만 사용합니다 — 비밀번호를 입력받지도, 저장하지도 않습니다. 진단 로그도 기본 꺼짐(옵트인)입니다.</p>
+        </div>
+      </div>
+      <p class="note centered">자세한 내용은 <a href="privacy.html">개인정보처리방침</a> — 한 페이지면 충분할 만큼 짧습니다.</p>
     </div>
   </section>
 
