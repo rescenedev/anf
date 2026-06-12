@@ -533,12 +533,18 @@ final class WorkspaceModel {
         activePane = (activePane + delta + n) % n
     }
 
-    /// Sidebar folder click: a pinned/favorite folder is a *destination*, not an
-    /// arrangement — so in a split layout it collapses to a single pane showing
-    /// that folder (the focused pane's tabs survive, like closeActivePane). In
-    /// single layout it just navigates. ⌥-click / context menu keep the old
-    /// navigate-in-place behaviour for two-pane copy workflows.
+    /// Sidebar folder click. In a SPLIT layout it navigates only the focused
+    /// pane (issue #3: people park a network drive in one pane and browse local
+    /// folders in the other — a click must never clobber the opposite pane).
+    /// In single layout, a pin that had a split going restores that whole
+    /// arrangement; otherwise it just navigates.
     func openPinned(_ url: URL) {
+        if layout.count > 1 {
+            // Pure navigation: leave the pin-context machinery alone so the
+            // current context keeps tracking this (still-live) arrangement.
+            active.navigate(to: url)
+            return
+        }
         rememberPinContext()
         activePinPath = nil   // cleared during the transition so save() can't
                               // stamp the old pin with the new arrangement
@@ -548,14 +554,6 @@ final class WorkspaceModel {
             activeViewID = nil
             applySnapshot(snap)
         } else {
-            if layout.count > 1 {
-                if activePane != 0 {
-                    let cur = panes[activePane]
-                    panes[0].replaceTabs(cur.tabs, activeIndex: cur.activeIndex)
-                }
-                activePane = 0
-                setLayout(.single)
-            }
             active.navigate(to: url)
         }
         activePinPath = path

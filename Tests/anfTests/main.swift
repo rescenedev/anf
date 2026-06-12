@@ -41,6 +41,7 @@ runThumbnailThrottleTests()
 runFileTagsTests()
 runVaultTests()
 runArchiveTests()
+MainActor.assumeIsolated { runWorkspacePinTests() }
 
 print("")
 if T.failures.isEmpty {

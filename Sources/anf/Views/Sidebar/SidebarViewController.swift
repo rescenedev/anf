@@ -324,7 +324,9 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             if NSEvent.modifierFlags.contains(.option) {
                 model.navigate(to: url)        // navigate just this pane
             } else {
-                workspace.openPinned(url)      // collapse splits; a pin is a destination
+                // In a split this navigates only the focused pane; from a single
+                // pane it may restore the pin's remembered split arrangement.
+                workspace.openPinned(url)
             }
         case .workspaceRow(let view):
             workspace.applyView(view)
