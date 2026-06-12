@@ -106,7 +106,9 @@ struct DocumentTextPreview: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: url) {
             loading = true
-            text = await Task.detached(priority: .userInitiated) { DocumentText.extract(url) }.value
+            text = await Task.detached(priority: .userInitiated) {
+                DocumentTextCache.shared.text(for: url)
+            }.value
             loading = false
         }
     }

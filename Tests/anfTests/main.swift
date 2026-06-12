@@ -3,9 +3,13 @@ import Foundation
 // Lightweight test runner (no XCTest/Swift-Testing — unavailable on Command Line
 // Tools). Run with `swift run anfTests`. Exit code 0 = all passed.
 
-// Perf harness, not a test: ANF_BENCH=/big/folder swift run anfTests
+// Perf harnesses, not tests: ANF_BENCH=/big/folder, ANF_BENCH_PDF=/pdf/folder
 if let benchPath = ProcessInfo.processInfo.environment["ANF_BENCH"] {
     runNavBench(path: benchPath)
+    exit(0)
+}
+if let pdfPath = ProcessInfo.processInfo.environment["ANF_BENCH_PDF"] {
+    runPDFBench(path: pdfPath)
     exit(0)
 }
 

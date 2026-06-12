@@ -36,6 +36,16 @@ func runDocumentTextTests() {
         let body = DocumentText.extract(url)
         T.expect(body?.contains("hello PDF") == true, "extracts latin text from the PDF")
         T.expect(body?.contains("검색 테스트") == true, "extracts Korean text from the PDF")
+
+        // Cache: hit returns the same body; rewriting the file (new mtime)
+        // invalidates and re-extracts.
+        T.expect(DocumentTextCache.shared.text(for: url)?.contains("hello PDF") == true,
+                 "cache returns the extracted body")
+        _ = writeTestPDF(to: url, text: "second version 두번째")
+        try? FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(5)], ofItemAtPath: url.path)
+        T.expect(DocumentTextCache.shared.text(for: url)?.contains("두번째") == true,
+                 "mtime change invalidates the cached body")
     }
 }
 

@@ -908,10 +908,10 @@ enum PaletteSearch {
             lock.lock(); let enough = matched.count >= cap; lock.unlock()
             if enough { return }
             let url = URL(fileURLWithPath: files[i])
-            // Extract only the text-bearing XML (not the whole archive — that dumps
-            // binary entries too, which break UTF-8 decoding). Match in Swift, which
-            // is Unicode-canonical so it's immune to NFC/NFD differences.
-            guard let body = DocumentText.extract(url) else { return }
+            // Extract only the text-bearing parts and match in Swift (Unicode-
+            // canonical, immune to NFC/NFD differences). Bodies are cached by
+            // mtime, so only the first query of a session pays for extraction.
+            guard let body = DocumentTextCache.shared.text(for: url) else { return }
             if body.localizedCaseInsensitiveContains(needle) {
                 lock.lock(); if matched.count < cap { matched.append(url) }; lock.unlock()
             }

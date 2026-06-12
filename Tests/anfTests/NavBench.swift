@@ -1,6 +1,49 @@
 import Foundation
 @testable import anf
 
+/// PDF body-extraction latency breakdown. Run with
+///   ANF_BENCH_PDF=/folder/with/pdfs swift run anfTests
+/// Prints per-file size/pages/ms plus the worst case and the wall-clock of the
+/// same parallel sweep `docContent` performs during a palette search.
+func runPDFBench(path: String) {
+    let clock = ContinuousClock()
+    @inline(__always) func ms(_ d: Duration) -> Double {
+        Double(d.components.attoseconds) / 1e15
+    }
+    let fm = FileManager.default
+    var pdfs: [URL] = []
+    if let walker = fm.enumerator(at: URL(fileURLWithPath: path),
+                                  includingPropertiesForKeys: [.fileSizeKey]) {
+        for case let url as URL in walker where url.pathExtension.lowercased() == "pdf" {
+            pdfs.append(url)
+        }
+    }
+    print("pdf bench: \(pdfs.count) files under \(path)")
+    var total = 0.0, worst = (0.0, "")
+    for url in pdfs {
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        let t0 = clock.now
+        let body = DocumentText.extract(url)
+        let elapsed = ms(clock.now - t0)
+        total += elapsed
+        if elapsed > worst.0 { worst = (elapsed, url.lastPathComponent) }
+        print(String(format: "  %7.1fms  %6.1fKB  %7d chars  %@",
+                     elapsed, Double(size) / 1024, body?.count ?? 0, url.lastPathComponent))
+    }
+    print(String(format: "serial total %.0fms, worst %.0fms (%@)", total, worst.0, worst.1))
+
+    // The palette path: parallel sweep through the cache, same as docContent.
+    // Cold = first query of a session; warm = every following keystroke.
+    for label in ["cold", "warm"] {
+        let t0 = clock.now
+        DispatchQueue.concurrentPerform(iterations: pdfs.count) { i in
+            _ = DocumentTextCache.shared.text(for: pdfs[i])?
+                .localizedCaseInsensitiveContains("zz없는단어zz")
+        }
+        print(String(format: "parallel sweep (%@ cache): %.0fms wall", label, ms(clock.now - t0)))
+    }
+}
+
 /// Folder-entry latency breakdown. Not part of the pass/fail suite — run with
 ///   ANF_BENCH=/path/to/big/folder swift run anfTests
 /// and it prints where the milliseconds go (bulk read → FileItem build → sort).
