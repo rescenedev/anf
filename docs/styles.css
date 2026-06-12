@@ -380,6 +380,13 @@ kbd {
   .nav-links a:not(:last-child):not(.nav-lang) { display: none; }
 }
 
+/* Korean sub-headline under the English hero */
+.hero-ko {
+  margin-top: 14px; font-size: 24px; font-weight: 650; letter-spacing: -.01em;
+  color: var(--txt-dim);
+}
+@media (max-width: 880px) { .hero-ko { font-size: 19px; } }
+
 /* ---- Performance table ---- */
 .perf-wrap {
   max-width: 880px; margin: 44px auto 16px;
