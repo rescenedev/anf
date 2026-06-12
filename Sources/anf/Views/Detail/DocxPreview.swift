@@ -35,7 +35,9 @@ struct DocxPreview: View {
             blocks = nil
             let target = url
             blocks = await Task.detached(priority: .userInitiated) {
-                DocxStructure.parse(docxAt: target)
+                target.pathExtension.lowercased() == "hwpx"
+                    ? HwpxStructure.parse(hwpxAt: target)
+                    : DocxStructure.parse(docxAt: target)
             }.value
         }
     }

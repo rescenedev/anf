@@ -46,6 +46,7 @@ runQLPreviewSelectionTests()
 MainActor.assumeIsolated { runInspectorTests() }
 runKeymapTests()
 runDocxStructureTests()
+runHwpxStructureTests()
 
 print("")
 if T.failures.isEmpty {

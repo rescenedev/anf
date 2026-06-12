@@ -142,14 +142,14 @@ struct InfoInspector: View {
                         RemotePreviewPlaceholder(item: target)
                     } else if target.isOpaqueBinary {
                         BinaryPreviewPlaceholder(item: target)
-                    } else if target.ext == "docx" {
-                        // Native structured render (headings/tables/lists/bold)
-                        // parsed from the document XML — instant and full-width,
-                        // unlike Quick Look's paginated page image.
+                    } else if target.ext == "docx" || target.ext == "hwpx" {
+                        // Native structured render (headings/tables/lists/bold;
+                        // hwpx collects only hp:t body runs, so form-field
+                        // metadata junk never reaches the preview) — instant
+                        // and full-width, no Quick Look page image.
                         DocxPreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else if target.isExtractableDocument {
-                        // hwpx/pptx/xlsx: extracted body text (hwpx has no system
-                        // QL generator; slides/sheets read fine as text).
+                        // pptx/xlsx: extracted text (slides/sheets read fine).
                         DocumentTextPreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else if target.isMarkdown {
                         MarkdownPreview(url: target.url, fontSize: workspace.previewTextSize)
