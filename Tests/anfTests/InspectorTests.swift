@@ -43,6 +43,17 @@ func runInspectorTests() {
             T.expect(make("c.txt")?.isMarkdown == false, ".txt stays plain text")
         }
 
+        T.group("preview text size: defaults large, persists, clamps") {
+            let key = "anf.previewTextSize"
+            UserDefaults.standard.removeObject(forKey: key)
+            T.equal(WorkspaceModel.loadPreviewTextSize(), 14, "default is 14 — reading size")
+            UserDefaults.standard.set(18.0, forKey: key)
+            T.equal(WorkspaceModel.loadPreviewTextSize(), 18, "⌘± choice survives relaunch")
+            UserDefaults.standard.set(99.0, forKey: key)
+            T.equal(WorkspaceModel.loadPreviewTextSize(), 14, "out-of-range value falls back")
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
         T.group("JSONPretty") {
             let pretty = JSONPretty.prettyString(Data(#"{"b":1,"a":{"k":[true,null,"s"]}}"#.utf8))
             T.expect(pretty?.contains("\n") == true, "re-indents")

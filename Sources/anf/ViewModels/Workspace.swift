@@ -155,8 +155,19 @@ final class WorkspaceModel {
     var splitRatioH: CGFloat = 0.5
     var splitRatioV: CGFloat = 0.5
 
-    /// Font size for the inspector's plain-text preview (⌘+ / ⌘− adjusts it).
-    var previewTextSize: CGFloat = 12.5
+    /// Font size for the inspector's text previews (markdown/json/plain text/
+    /// office bodies). ⌘+ / ⌘− adjusts it while the inspector shows one; the
+    /// choice persists across launches. Default leans large — previews are for
+    /// reading, not editing.
+    var previewTextSize: CGFloat = WorkspaceModel.loadPreviewTextSize() {
+        didSet { UserDefaults.standard.set(Double(previewTextSize), forKey: Self.previewTextSizeKey) }
+    }
+    private static let previewTextSizeKey = "anf.previewTextSize"
+
+    static func loadPreviewTextSize() -> CGFloat {
+        let stored = UserDefaults.standard.double(forKey: previewTextSizeKey)
+        return stored >= 9 && stored <= 28 ? CGFloat(stored) : 14
+    }
 
     func bumpPreviewTextSize(_ direction: Int) {
         previewTextSize = min(max(previewTextSize + CGFloat(direction), 9), 28)
