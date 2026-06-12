@@ -380,6 +380,19 @@ kbd {
   .nav-links a:not(:last-child):not(.nav-lang) { display: none; }
 }
 
+/* Hero install CTA */
+.hero-cta {
+  display: flex; align-items: center; gap: 14px; justify-content: center;
+  margin-top: 30px; flex-wrap: wrap;
+}
+.hero-cmd { margin-top: 0; }
+.hero-cmd code { padding: 13px 46px 13px 18px; font-size: 14px; }
+.hero-btn {
+  padding: 12px 22px; border-radius: 12px; font-weight: 600;
+  border: 1px solid var(--line); color: var(--txt-dim); background: var(--tile);
+}
+.hero-btn:hover { color: var(--txt); border-color: var(--txt-faint); }
+
 /* Korean sub-headline under the English hero */
 .hero-ko {
   margin-top: 14px; font-size: 24px; font-weight: 650; letter-spacing: -.01em;
