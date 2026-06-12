@@ -11,15 +11,57 @@ export default {
   },
 
   // Manual trigger for testing: GET /poke?key=<POKE_KEY>
+  // GitHub webhook (issues): POST /webhook, HMAC-verified with WEBHOOK_SECRET.
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/poke" && url.searchParams.get("key") === env.POKE_KEY) {
       const report = await check(env, { verbose: true });
       return new Response(report, { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
+    if (url.pathname === "/webhook" && req.method === "POST") {
+      return webhook(req, env);
+    }
     return new Response("anf-dl-notify", { status: 200 });
   },
 };
+
+async function webhook(req, env) {
+  const body = await req.text();
+  if (!(await validSignature(env.WEBHOOK_SECRET, body, req.headers.get("x-hub-signature-256")))) {
+    return new Response("bad signature", { status: 401 });
+  }
+  const event = req.headers.get("x-github-event");
+  const p = JSON.parse(body);
+  if (event === "ping") {
+    await tg(env, "GitHub 웹훅 연결됨 — 이슈 알림 시작");
+  } else if (event === "issues" && ["opened", "reopened"].includes(p.action)) {
+    const i = p.issue;
+    await tg(env, [
+      `🐛 이슈 ${p.action === "opened" ? "등록" : "다시 열림"} #${i.number}`,
+      i.title,
+      `by ${i.user?.login}`,
+      i.html_url,
+    ].join("\n"));
+  } else if (event === "issue_comment" && p.action === "created") {
+    const c = p.comment;
+    await tg(env, [
+      `💬 이슈 #${p.issue?.number} 새 댓글 (by ${c.user?.login})`,
+      (c.body ?? "").slice(0, 300),
+      c.html_url,
+    ].join("\n"));
+  }
+  return new Response("ok");
+}
+
+async function validSignature(secret, body, header) {
+  if (!secret || !header?.startsWith("sha256=")) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, enc.encode(body));
+  const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `sha256=${hex}` === header;
+}
 
 async function check(env, { verbose = false } = {}) {
   const gh = (path) =>
