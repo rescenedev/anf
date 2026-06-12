@@ -20,7 +20,7 @@
 <meta name="theme-color" content="#060607">
 <link rel="alternate" hreflang="ko" href="https://rescenedev.github.io/anf/">
 <link rel="alternate" hreflang="en" href="https://rescenedev.github.io/anf/en/">
-<link rel="stylesheet" href="../styles.css?v=17">
+<link rel="stylesheet" href="../styles.css?v=18">
 </head>
 <body>
 
@@ -46,21 +46,20 @@
     <p class="lead">Split panes, a built-in terminal, a command palette.<br>A fast, lightweight native file browser for macOS.</p>
     <div class="hero-cta">
       <a class="hero-dl" href="https://github.com/rescenedev/anf/releases/latest/download/anf.dmg"><span class="dl-ic">⤓</span> Download</a>
-      <a class="btn hero-btn" href="#install">Other install options</a>
     </div>
     <p class="hero-specs">A featherweight native single binary · <strong>just 3.4&thinsp;MB</strong> · zero telemetry · open source</p>
     <div class="carousel">
       <div class="car-frames">
-        <figure class="car-frame active"><img src="../assets/layout-single.png" alt="Single pane layout" loading="eager"></figure>
-        <figure class="car-frame"><img src="../assets/layout-dual.png" alt="Two panes side by side" loading="lazy"></figure>
-        <figure class="car-frame"><img src="../assets/layout-rows.png" alt="Two rows" loading="lazy"></figure>
-        <figure class="car-frame"><img src="../assets/layout-quad.png" alt="Four panes" loading="lazy"></figure>
+        <figure class="car-frame active"><img src="../assets/layout-single.png?v=2" alt="Single pane layout" loading="eager"></figure>
+        <figure class="car-frame"><img src="../assets/layout-dual.png?v=2" alt="Two panes side by side" loading="lazy"></figure>
+        <figure class="car-frame"><img src="../assets/layout-rows.png?v=2" alt="Two rows" loading="lazy"></figure>
+        <figure class="car-frame"><img src="../assets/layout-quad.png?v=2" alt="Four panes" loading="lazy"></figure>
       </div>
       <div class="dots">
-        <button class="dot active" type="button"><span class="k">A</span> Single</button>
-        <button class="dot" type="button"><span class="k">B</span> Two Panes</button>
-        <button class="dot" type="button"><span class="k">C</span> Two Rows</button>
-        <button class="dot" type="button"><span class="k">D</span> Four Panes</button>
+        <button class="dot active" type="button">Single</button>
+        <button class="dot" type="button">Two Panes</button>
+        <button class="dot" type="button">Two Rows</button>
+        <button class="dot" type="button">Four Panes</button>
       </div>
     </div>
   </section>
@@ -68,30 +67,18 @@
   <!-- Install -->
   <section id="install" class="band">
     <div class="band-inner">
-      <h2 class="centered">Install.</h2>
-      <p class="sub centered">Download the .dmg and drag it to Applications. macOS Apple Silicon recommended.</p>
-      <div class="dl-row">
-        <a class="dl-btn" href="https://github.com/rescenedev/anf/releases/latest/download/anf.dmg">
-          <span class="dl-ic">⤓</span>
-          <span class="dl-txt"><b>Download</b><small>macOS 14+ · Apple Silicon</small></span>
-        </a>
-        <a class="dl-alt" href="https://github.com/rescenedev/anf/releases/latest">All releases ↗</a>
-      </div>
-      <p class="note centered" style="margin-top:14px">Then <strong>drag anf.app into your Applications folder</strong>.</p>
-
-      <details class="install-more">
-        <summary>Or install with Homebrew (auto-updates)</summary>
-        <div class="install-box">
-          <div class="cmd multiline"><code id="cmd-brew">brew tap rescenedev/anf
+      <h2 class="centered">Or with Homebrew.</h2>
+      <p class="sub centered">Prefer auto-updates? Install with Homebrew.</p>
+      <div class="install-box">
+        <div class="cmd multiline"><code id="cmd-brew">brew tap rescenedev/anf
 brew trust rescenedev/anf
 brew install --cask anf</code><button class="copy-btn" type="button" data-target="cmd-brew" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
-          <p class="note">Update with <code>brew upgrade --cask anf</code>.</p>
-          <p class="note">Optional — install <code>fd</code> and <code>ripgrep</code> for faster name/content search (falls back to Spotlight without them):</p>
-          <div class="cmd"><code>brew install fd ripgrep</code><button class="copy-btn" type="button" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
-          <p class="note">Optional — full rich HWP/HWPX previews (alhangeul). anf extracts the body text on its own even without it:</p>
-          <div class="cmd"><code>brew install --cask postmelee/tap/alhangeul</code><button class="copy-btn" type="button" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
-        </div>
-      </details>
+        <p class="note">Update with <code>brew upgrade --cask anf</code>.</p>
+        <p class="note">Optional — install <code>fd</code> and <code>ripgrep</code> for faster name/content search (falls back to Spotlight without them):</p>
+        <div class="cmd"><code>brew install fd ripgrep</code><button class="copy-btn" type="button" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+        <p class="note">Optional — full rich HWP/HWPX previews (alhangeul). anf extracts the body text on its own even without it:</p>
+        <div class="cmd"><code>brew install --cask postmelee/tap/alhangeul</code><button class="copy-btn" type="button" aria-label="Copy"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+      </div>
     </div>
   </section>
 

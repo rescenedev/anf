@@ -132,7 +132,7 @@ strong { color: var(--txt); font-weight: 600; }
 }
 .car-frame.active { opacity: 1; pointer-events: auto; }
 .car-frame img {
-  width: 100%; border-radius: var(--radius); border: 1px solid var(--line);
+  width: 100%; border-radius: var(--radius);
   box-shadow: 0 40px 100px rgba(0,0,0,.6);
 }
 /* Grid (not wrap) so the 4 layout buttons fall into even rows — 4, then 2+2,
