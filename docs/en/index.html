@@ -145,6 +145,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
         <tr><td>Open that folder (read+sort+render)</td><td class="num">~0.1 s</td><td>first visit</td></tr>
         <tr><td>Revisit the same folder</td><td class="num">0 ms</td><td>cached listing paints first, changes reconcile behind it</td></tr>
         <tr><td>Sort 26,549 Korean names</td><td class="num">98 ms</td><td>packed-integer comparison — 5× over locale compare (480ms)</td></tr>
+        <tr><td>⌘K fuzzy search (300k-path pool)</td><td class="num">~40 ms</td><td>per keystroke — in-memory index with 초성 matching; scrolling, arrows and sort flips stay instant via row recycling / O(1) maps</td></tr>
         <tr><td>Content-search sweep over 32 PDFs</td><td class="num">410 ms → 4 ms</td><td>extracted once per session, then cached per keystroke</td></tr>
         <tr><td>Copy a 55,860-entry (622MB) folder</td><td class="num">6.8 s</td><td>parallel APFS clones — faster than cp -Rc (8.4s), fully background with progress + instant cancel</td></tr>
         <tr><td>Soak across 150,696 directories</td><td class="num">0 failures</td><td>a real home tree through the production read+sort path, all &lt;55ms except the 26k outlier</td></tr>

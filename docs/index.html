@@ -145,6 +145,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
         <tr><td>26,549개 폴더 진입 (읽기+정렬+렌더)</td><td class="num">~0.1 초</td><td>첫 진입 기준</td></tr>
         <tr><td>같은 폴더 재진입</td><td class="num">0 ms</td><td>목록 캐시가 먼저 그리고 변경분만 뒤에서 반영</td></tr>
         <tr><td>한글 이름 26,549개 정렬</td><td class="num">98 ms</td><td>정수 패킹 비교 — locale 비교(480ms) 대비 5×</td></tr>
+        <tr><td>⌘K 퍼지 검색 (30만 경로 풀)</td><td class="num">~40 ms</td><td>키 입력당 — 인메모리 인덱스 + 초성 매칭, 스크롤·화살표·정렬 전환은 행 재활용/O(1) 맵으로 항상 즉각</td></tr>
         <tr><td>PDF 32개 본문 검색 스윕</td><td class="num">410 ms → 4 ms</td><td>첫 검색만 추출, 이후 키 입력은 캐시 매칭</td></tr>
         <tr><td>55,860개 항목(622MB) 폴더 복사</td><td class="num">6.8 초</td><td>병렬 APFS 클론 — cp -Rc(8.4s)보다 빠름, 전 과정 백그라운드 + 진행률 + 즉시 취소</td></tr>
         <tr><td>디렉토리 150,696개 소크</td><td class="num">실패 0</td><td>실제 홈 트리 전체를 읽기+정렬 경로로 순회, kr 외 전부 &lt;55ms</td></tr>
