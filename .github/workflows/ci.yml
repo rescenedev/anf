@@ -20,3 +20,6 @@ jobs:
 
       - name: Unit tests
         run: swift run anfTests
+
+      - name: L10n template in sync
+        run: python3 tools/gen-l10n.py --check

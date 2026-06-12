@@ -36,6 +36,7 @@ runTypeaheadTests()
 runListingCacheTests()
 runListDiffTests()
 runTransferTests()
+runL10nTests()
 
 print("")
 if T.failures.isEmpty {

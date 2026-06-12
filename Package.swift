@@ -19,7 +19,8 @@ let package = Package(
             dependencies: ["PTYHelper"],
             path: "Sources/anf",
             resources: [
-                .copy("Resources/xterm")
+                .copy("Resources/xterm"),
+                .copy("Resources/l10n")
             ],
             swiftSettings: [
                 .unsafeFlags(["-Onone"], .when(configuration: .debug)),
