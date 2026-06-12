@@ -30,6 +30,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true   # 디버그: 실행 내역을 로그에 남긴다 (공개 저장소 주의)
           additional_permissions: |
             actions: read
           prompt: |
