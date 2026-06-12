@@ -29,6 +29,9 @@ final class GetInfoPanel: NSObject {
         w.title = L("\(item.name) Info", "\(item.name) 정보")
         w.isFloatingPanel = true
         w.hidesOnDeactivate = false
+        // This object owns the panel's lifetime; without this AppKit also
+        // releases it on close (default true) → double free, like the window bug.
+        w.isReleasedWhenClosed = false
         self.window = w
         super.init()
         w.center()
