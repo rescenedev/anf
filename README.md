@@ -1,6 +1,6 @@
 # anf — all new finder
 
-**Finder, reforged. — Finder, 처음부터 다시.**
+**Finder, reforged.**
 
 macOS를 위한 가볍고 빠른 **네이티브 파일 브라우저**. 분할 뷰, 내장 터미널, 커맨드 팔레트를
 하나로 — Finder · Windows 탐색기 · 정통 오쏘독스(Mdir / Norton Commander) 스타일을
