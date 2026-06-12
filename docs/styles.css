@@ -357,6 +357,7 @@ kbd {
 
 /* ---- Footer ---- */
 .footer { border-top: 1px solid var(--line); }
+.footer .heart { color: #ff5ea8; }
 .footer-inner {
   max-width: 1080px; margin: 0 auto; padding: 30px 22px;
   display: flex; justify-content: space-between; align-items: center;
