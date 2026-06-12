@@ -380,5 +380,29 @@ kbd {
   .nav-links a:not(:last-child):not(.nav-lang) { display: none; }
 }
 
+/* ---- Performance table ---- */
+.perf-table {
+  width: 100%; max-width: 880px; margin: 0 auto 16px;
+  border-collapse: collapse; font-size: 14.5px;
+}
+.perf-table th, .perf-table td {
+  text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line);
+  color: var(--txt-dim); vertical-align: top;
+}
+.perf-table th {
+  color: var(--txt-faint); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.perf-table .num { color: var(--txt); font-weight: 650; white-space: nowrap; }
+.perf-caption {
+  max-width: 880px; margin: 0 auto 48px; color: var(--txt-faint);
+  font-size: 12.5px; text-align: center;
+}
+.perf-caption a { color: var(--accent); }
+@media (max-width: 720px) {
+  .perf-table { font-size: 13px; }
+  .perf-table th, .perf-table td { padding: 9px 8px; }
+}
+
 .closing .sub a { color: var(--accent); }
 .closing .sub a:hover { text-decoration: underline; }

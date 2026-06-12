@@ -137,7 +137,22 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   <!-- Why fast -->
   <section id="performance" class="showcase">
     <h2 class="centered">Why it's fast.</h2>
-    <p class="sub centered">Speed is a design decision, not an accident.</p>
+    <p class="sub centered">Speed is a design decision, not an accident. All numbers measured.</p>
+    <table class="perf-table">
+      <thead><tr><th>Benchmark</th><th>Result</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Bulk-read a 26,549-entry folder</td><td class="num">23.8 ms</td><td>getattrlistbulk — <strong>46×</strong> faster than the old Foundation full-stat path (1,084ms)</td></tr>
+        <tr><td>Open that folder (read+sort+render)</td><td class="num">~0.1 s</td><td>first visit</td></tr>
+        <tr><td>Revisit the same folder</td><td class="num">0 ms</td><td>cached listing paints first, changes reconcile behind it</td></tr>
+        <tr><td>Sort 26,549 Korean names</td><td class="num">98 ms</td><td>packed-integer comparison — 5× over locale compare (480ms)</td></tr>
+        <tr><td>Content-search sweep over 32 PDFs</td><td class="num">410 ms → 4 ms</td><td>extracted once per session, then cached per keystroke</td></tr>
+        <tr><td>Soak across 150,696 directories</td><td class="num">0 failures</td><td>a real home tree through the production read+sort path, all &lt;55ms except the 26k outlier</td></tr>
+        <tr><td>Idle CPU</td><td class="num">~0 %</td><td>the index refreshes only when needed</td></tr>
+      </tbody>
+    </table>
+    <p class="perf-caption">Apple M4 Pro · macOS 26. Harnesses, baselines and repro steps are public in
+      <a href="https://github.com/rescenedev/anf/blob/main/PERFORMANCE.md" target="_blank" rel="noopener">PERFORMANCE.md</a> and
+      <a href="https://github.com/rescenedev/anf/blob/main/TESTING.md" target="_blank" rel="noopener">TESTING.md</a>.</p>
     <div class="grid">
       <div class="tile">
         <div class="ic">⚡</div>

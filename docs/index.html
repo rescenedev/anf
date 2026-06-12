@@ -137,7 +137,22 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   <!-- Why fast -->
   <section id="performance" class="showcase">
     <h2 class="centered">왜 빠른가.</h2>
-    <p class="sub centered">속도는 우연이 아니라 설계입니다. anf가 가벼운 이유.</p>
+    <p class="sub centered">속도는 우연이 아니라 설계입니다. 전부 실측한 수치입니다.</p>
+    <table class="perf-table">
+      <thead><tr><th>측정 항목</th><th>결과</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td>26,549개 폴더 벌크 읽기</td><td class="num">23.8 ms</td><td>getattrlistbulk — 옛 Foundation 풀 stat(1,084ms) 대비 <strong>46×</strong></td></tr>
+        <tr><td>26,549개 폴더 진입 (읽기+정렬+렌더)</td><td class="num">~0.1 초</td><td>첫 진입 기준</td></tr>
+        <tr><td>같은 폴더 재진입</td><td class="num">0 ms</td><td>목록 캐시가 먼저 그리고 변경분만 뒤에서 반영</td></tr>
+        <tr><td>한글 이름 26,549개 정렬</td><td class="num">98 ms</td><td>정수 패킹 비교 — locale 비교(480ms) 대비 5×</td></tr>
+        <tr><td>PDF 32개 본문 검색 스윕</td><td class="num">410 ms → 4 ms</td><td>첫 검색만 추출, 이후 키 입력은 캐시 매칭</td></tr>
+        <tr><td>디렉토리 150,696개 소크</td><td class="num">실패 0</td><td>실제 홈 트리 전체를 읽기+정렬 경로로 순회, kr 외 전부 &lt;55ms</td></tr>
+        <tr><td>유휴 CPU</td><td class="num">~0 %</td><td>인덱스는 필요할 때만 갱신</td></tr>
+      </tbody>
+    </table>
+    <p class="perf-caption">Apple M4 Pro · macOS 26 기준. 측정 하니스·기준선·재현 방법은
+      <a href="https://github.com/rescenedev/anf/blob/main/PERFORMANCE.md" target="_blank" rel="noopener">PERFORMANCE.md</a>와
+      <a href="https://github.com/rescenedev/anf/blob/main/TESTING.md" target="_blank" rel="noopener">TESTING.md</a>에 공개되어 있습니다.</p>
     <div class="grid">
       <div class="tile">
         <div class="ic">⚡</div>
