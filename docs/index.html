@@ -23,6 +23,7 @@
       <a href="#shortcuts">단축키</a>
       <a href="#tools">권장 도구</a>
       <a href="#opensource">오픈소스</a>
+      <a href="#safety">안전성</a>
       <a href="#privacy">프라이버시</a>
       <a href="#release">릴리즈 노트</a>
       <a class="nav-lang" href="en/">EN</a>
@@ -321,6 +322,37 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
     </div>
   </section>
 
+  <!-- Safety / engineering rigor -->
+  <section id="safety" class="band">
+    <div class="band-inner">
+      <h2 class="centered">믿고 맡길 수 있게.</h2>
+      <p class="sub centered">파일은 잃어버리면 끝입니다. 그래서 안전을 기능이 아니라 토대로 깔았습니다.</p>
+      <div class="grid">
+        <div class="tile">
+          <div class="ic">↩</div>
+          <h3>되돌릴 수 있는 파일 작업</h3>
+          <p>이동·이름변경·복사·휴지통 모두 ⌘Z로 취소. 덮어쓰기는 기존 파일을 지우지 않고 휴지통으로 보내 복구 가능, 이름 충돌은 묻고 진행합니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">147</div>
+          <h3>테스트가 지킵니다</h3>
+          <p>유닛·통합 147개 + 합성 이벤트 UI 테스트 + 15만 디렉토리 소크. push마다 CI가 돌고, 버그 신고는 그 입력 그대로 회귀 테스트로 박제됩니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">⌀</div>
+          <h3>누수·크래시 감사</h3>
+          <p>창을 수십 번 열고 닫으며 <code>heap</code>·<code>leaks</code>로 메모리를 검증합니다. 이벤트 모니터·옵저버·윈도우 수명까지 추적해 새는 곳을 막았습니다.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">⏏</div>
+          <h3>절대 멈추지 않게</h3>
+          <p>대용량 읽기·정렬·복사·검색은 전부 백그라운드. 메인 스레드 100ms 정지 감지기로 버벅임을 수치로 잡고, 비치볼이 날 자리를 미리 막았습니다.</p>
+        </div>
+      </div>
+      <p class="note centered">방법론 전체는 <a href="https://github.com/rescenedev/anf/blob/main/METHODOLOGY.md" target="_blank" rel="noopener">METHODOLOGY.md</a>, 테스트 시나리오는 <a href="https://github.com/rescenedev/anf/blob/main/TESTING.md" target="_blank" rel="noopener">TESTING.md</a>에 공개되어 있습니다.</p>
+    </div>
+  </section>
+
   <!-- Privacy -->
   <section id="privacy" class="band">
     <div class="band-inner">
@@ -356,7 +388,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   <section id="release" class="band">
     <div class="band-inner">
       <h2 class="centered">릴리즈 노트.</h2>
-      <p class="sub centered">v0.7 — 첫 공개.</p>
+      <p class="sub centered">v0.8 — 첫 공개.</p>
       <div class="release">
         <div class="rel-block">
           <h3>탐색 · 성능</h3>
@@ -377,6 +409,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
             <li><strong>분할하면 새 패널이 현재 폴더에서 시작</strong> — 배치한 뒤 Workspace로 저장</li>
             <li>Workspace: 레이아웃 + 탭 구성을 이름 붙여 저장/복원, 단일 폴더는 핀 ★</li>
             <li>탭(⌘T·⌃Tab), Tab으로 패널 포커스 전환, F5/F6 패널 간 복사·이동</li>
+            <li><strong>멀티윈도우</strong> — ⌘N로 독립 창, 각 창이 자기 폴더·탭·선택을 따로 유지</li>
             <li>실수로 접어도 안전 — 보기 → <strong>마지막 분할 배치 복원</strong></li>
           </ul>
         </div>

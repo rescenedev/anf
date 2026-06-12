@@ -23,6 +23,7 @@
       <a href="#shortcuts">Shortcuts</a>
       <a href="#tools">Tools</a>
       <a href="#opensource">Open Source</a>
+      <a href="#safety">Safety</a>
       <a href="#privacy">Privacy</a>
       <a href="#release">Release Notes</a>
       <a class="nav-lang" href="../">한국어</a>
@@ -321,6 +322,37 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
     </div>
   </section>
 
+  <!-- Safety / engineering rigor -->
+  <section id="safety" class="band">
+    <div class="band-inner">
+      <h2 class="centered">Built to be trusted.</h2>
+      <p class="sub centered">Lose a file and it's gone. So safety here isn't a feature — it's the foundation.</p>
+      <div class="grid">
+        <div class="tile">
+          <div class="ic">↩</div>
+          <h3>Reversible file operations</h3>
+          <p>Move, rename, copy and Trash all undo with ⌘Z. Overwrite sends the existing file to the Trash (recoverable) instead of deleting it; name clashes ask first.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">147</div>
+          <h3>Guarded by tests</h3>
+          <p>147 unit/integration checks + synthetic-event UI tests + a 150k-directory soak. CI runs on every push, and every bug report becomes a regression test keyed to its exact input.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">⌀</div>
+          <h3>Leak & crash audited</h3>
+          <p>Windows opened and closed dozens of times under <code>heap</code> and <code>leaks</code>. Event monitors, observers and window lifetimes are all tracked so nothing leaks.</p>
+        </div>
+        <div class="tile">
+          <div class="ic">⏏</div>
+          <h3>Never beachballs</h3>
+          <p>Big reads, sorts, copies and searches all run in the background. A main-thread stall detector turns "feels janky" into numbers, and the beachball spots are closed before they happen.</p>
+        </div>
+      </div>
+      <p class="note centered">The full methodology is in <a href="https://github.com/rescenedev/anf/blob/main/METHODOLOGY.md" target="_blank" rel="noopener">METHODOLOGY.md</a>; the test scenarios in <a href="https://github.com/rescenedev/anf/blob/main/TESTING.md" target="_blank" rel="noopener">TESTING.md</a>.</p>
+    </div>
+  </section>
+
   <!-- Privacy -->
   <section id="privacy" class="band">
     <div class="band-inner">
@@ -356,7 +388,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
   <section id="release" class="band">
     <div class="band-inner">
       <h2 class="centered">Release notes.</h2>
-      <p class="sub centered">v0.7 — first public release.</p>
+      <p class="sub centered">v0.8 — first public release.</p>
       <div class="release">
         <div class="rel-block">
           <h3>Browsing · Performance</h3>
@@ -376,6 +408,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
             <li><strong>Splitting starts new panes at the current folder</strong> — arrange them, then save as a Workspace</li>
             <li>Workspaces: save/restore the layout + tabs under a name; single folders use pins ★</li>
             <li>Tabs (⌘T · ⌃Tab), Tab to switch panes, F5/F6 copy/move across panes</li>
+            <li><strong>Multiple windows</strong> — ⌘N opens independent windows, each with its own folders, tabs and selection</li>
             <li>Collapse by accident, restore in one click — View → <strong>Restore Last Split Layout</strong></li>
           </ul>
         </div>
