@@ -36,6 +36,18 @@ enum FileItemMenu {
             add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(item.url) }
         }
         add(L("Get Info", "정보 가져오기")) { model.showGetInfo() }
+
+        // Vault: protect the clicked folder itself (one folder at a time).
+        if item.isBrowsableContainer && model.selection.count <= 1 {
+            menu.addItem(.separator())
+            if VaultWatcher.shared.isVault(item.url) {
+                add(L("Vault Timeline…", "Vault 타임라인…")) { VaultTimelinePanel.show(for: item.url) }
+                add(L("Snapshot Now", "지금 스냅샷")) { VaultWatcher.shared.snapshotNow(item.url) }
+                add(L("Turn Off Vault…", "Vault 끄기…")) { model.confirmDisableVault(item.url) }
+            } else {
+                add(L("Protect with Vault…", "Vault로 보호하기…")) { model.enableVault(item.url) }
+            }
+        }
         menu.addItem(.separator())
 
         // Colour tags submenu (Finder parity).

@@ -470,9 +470,9 @@ final class BrowserModel: Identifiable {
 
     // MARK: - Vault
 
-    /// Protect the current folder with a time-travel Vault.
-    func enableVault() {
-        let url = currentURL
+    /// Protect a folder with a time-travel Vault (defaults to the open folder).
+    func enableVault(_ target: URL? = nil) {
+        let url = target ?? currentURL
         VaultWatcher.shared.enable(url) { [weak self] ok in
             if ok { self?.reload() }
             else { FileOperations.presentFailures(
@@ -484,7 +484,8 @@ final class BrowserModel: Identifiable {
         }
     }
 
-    func confirmDisableVault() {
+    func confirmDisableVault(_ target: URL? = nil) {
+        let url = target ?? currentURL
         let alert = NSAlert()
         alert.messageText = L("Turn off Vault for this folder?", "이 폴더의 Vault를 끌까요?")
         alert.informativeText = L("Your files stay. The version history and protection are removed.",
@@ -492,7 +493,7 @@ final class BrowserModel: Identifiable {
         alert.addButton(withTitle: L("Turn Off", "끄기"))
         alert.addButton(withTitle: L("Cancel", "취소"))
         if alert.runModal() == .alertFirstButtonReturn {
-            VaultWatcher.shared.disable(currentURL)
+            VaultWatcher.shared.disable(url)
             reload()
         }
     }

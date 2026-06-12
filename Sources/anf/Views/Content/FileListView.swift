@@ -292,7 +292,9 @@ struct FileListView: NSViewRepresentable {
         // MARK: Context menu
 
         func menu(forRow row: Int) -> NSMenu? {
-            guard row >= 0, row < items.count else { return nil }
+            // Empty space → the folder's background menu (New Folder, Vault, …),
+            // matching the icon grid. A clicked row → that item's menu.
+            guard row >= 0, row < items.count else { return FileItemMenu.background(model: model) }
             return FileItemMenu.build(for: items[row], model: model)
         }
     }
