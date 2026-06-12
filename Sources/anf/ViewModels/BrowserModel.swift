@@ -536,6 +536,20 @@ final class BrowserModel: Identifiable {
         return typeaheadKeys
     }
 
+    /// 초성 keys (one lead consonant per syllable, "금융위원회" → "ㄱㅇㅇㅇㅎ"),
+    /// index-aligned with `items`. A consonants-only query can never appear in
+    /// the full jamo key (vowels interleave), so it matches against these.
+    @ObservationIgnored private var choseongKeys: [String] = []
+    @ObservationIgnored private var choseongKeysVersion = -1
+
+    func nameChoseongKeys() -> [String] {
+        if choseongKeysVersion != itemsVersion {
+            choseongKeysVersion = itemsVersion
+            choseongKeys = items.map { HangulJamo.choseongKey($0.name) }
+        }
+        return choseongKeys
+    }
+
     /// Finder's type-to-select: typing jumps the selection to the first item
     /// whose name starts with the typed prefix; quick successive keys accumulate
     /// ("pl" → "playground") and the buffer resets after a short pause. Korean
@@ -557,9 +571,21 @@ final class BrowserModel: Identifiable {
             selCursor = i
         }
         // Prefix match, preferring what the IME produced over the raw key.
+        // A consonants-only buffer also tries the 초성 keys — ㄱㅇㅇ must reach
+        // 금융위원회 even though the full jamo key interleaves vowels.
         for candidate in [typed, fallback].compactMap({ $0 }) {
-            let query = HangulJamo.searchKey(typeahead + candidate)
+            let buffer = typeahead + candidate
+            let query = HangulJamo.searchKey(buffer)
             if let hit = typeaheadKeys.firstIndex(where: { $0.hasPrefix(query) }) {
+                typeahead += candidate
+                select(hit)
+                return true
+            }
+            // `contains`, not prefix: kr-style names lead with "(부처명)" and
+            // nobody types the parenthesis — jump to the first item whose
+            // syllable leads contain the typed run.
+            if HangulJamo.isChoseongQuery(buffer),
+               let hit = nameChoseongKeys().firstIndex(where: { $0.contains(buffer) }) {
                 typeahead += candidate
                 select(hit)
                 return true

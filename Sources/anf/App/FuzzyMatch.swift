@@ -28,7 +28,7 @@ enum FuzzyMatch {
         for ch in text.lowercased() {
             textCount += 1
             if done { continue }   // keep counting for the length penalty
-            if ch == p[pi] {
+            if ch == p[pi] || choseongEquals(p[pi], ch) {
                 var bonus = 1
                 if ti == prevMatch + 1 {
                     run += 1
@@ -55,6 +55,16 @@ enum FuzzyMatch {
         guard done else { return nil }
         total -= textCount / 24                  // prefer shorter / less noisy
         return total
+    }
+
+    /// Character-level 초성 match: a lone consonant jamo in the pattern matches
+    /// a syllable that starts with it (ㄱ matches 금융위원회's 금).
+    @inline(__always)
+    private static func choseongEquals(_ pattern: Character, _ text: Character) -> Bool {
+        guard let ps = pattern.unicodeScalars.first, pattern.unicodeScalars.count == 1,
+              let ts = text.unicodeScalars.first, text.unicodeScalars.count == 1
+        else { return false }
+        return HangulJamo.choseongMatches(pattern: ps, text: ts)
     }
 
     /// Rank URLs by fuzzy score of the query against the filename (falling back to
@@ -97,7 +107,7 @@ enum FuzzyMatch {
         var ti = 0
         var prev: Unicode.Scalar = "\0"
         for ch in text {
-            if ch == p[pi] {
+            if ch == p[pi] || HangulJamo.choseongMatches(pattern: p[pi], text: ch) {
                 var bonus = 1
                 if ti == prevMatch + 1 { run += 1; bonus += 5 + run * 2 }
                 else { run = 0 }

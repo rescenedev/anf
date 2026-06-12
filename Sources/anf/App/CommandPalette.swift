@@ -388,9 +388,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             // jamo keys make 초성 queries (ㄱㅊ) match here too.
             let qKey = HangulJamo.searchKey(q)
             let keys = workspace.active.nameSearchKeys()
+            // Consonants-only query (ㄱㅇㅇ) → match syllable LEADS; the full
+            // jamo key interleaves vowels so it can never contain such a run.
+            let choKeys = HangulJamo.isChoseongQuery(q)
+                ? workspace.active.nameChoseongKeys() : nil
             let folderItems = workspace.active.items
             var folderMatches = 0
-            for i in keys.indices where keys[i].contains(qKey) {
+            for i in keys.indices where keys[i].contains(qKey) || choKeys?[i].contains(q) == true {
                 guard i < folderItems.count else { break }
                 let item = folderItems[i]
                 filteredLocal.append(.init(name: item.name, url: item.url,

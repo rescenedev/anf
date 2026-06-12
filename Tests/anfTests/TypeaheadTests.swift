@@ -10,12 +10,34 @@ func runTypeaheadTests() {
         T.equal(HangulJamo.searchKey("값"), "ㄱㅏㅂㅅ", "tail clusters expand too")
     }
 
+    T.group("HangulJamo: 초성") {
+        T.equal(HangulJamo.choseongKey("금융위원회"), "ㄱㅇㅇㅇㅎ", "one lead per syllable")
+        T.equal(HangulJamo.choseongKey("(경찰청)규칙A"), "(ㄱㅊㅊ)ㄱㅊa", "non-Hangul passes through lowercased")
+        T.expect(HangulJamo.isChoseongQuery("ㄱㅇㅇ"), "consonant run is a 초성 query")
+        T.expect(!HangulJamo.isChoseongQuery("ㄱㅏ"), "vowel disqualifies")
+        T.expect(!HangulJamo.isChoseongQuery("gy"), "latin disqualifies")
+        T.expect(HangulJamo.choseongMatches(pattern: "ㄱ", text: "금"), "ㄱ matches 금")
+        T.expect(!HangulJamo.choseongMatches(pattern: "ㄴ", text: "금"), "ㄴ doesn't match 금")
+    }
+
+    T.group("FuzzyMatch: 초성 subsequence") {
+        T.expect(FuzzyMatch.score(pattern: "ㄱㅇㅇㅇㅎ", text: "금융위원회") != nil,
+                 "full 초성 run matches in the fuzzy scorer")
+        T.expect(FuzzyMatch.score(pattern: "ㄱㅇㅇ", text: "(금융위원회)감독규정") != nil,
+                 "partial 초성 matches inside decorated names")
+        let p = Array(FuzzyMatch.normalizeForIndex("ㄱㅇㅇ").unicodeScalars)
+        let t = FuzzyMatch.normalizeForIndex("(금융위원회)감독규정")
+        T.expect(FuzzyMatch.scoreNormalized(pattern: p, text: t[...].unicodeScalars) != nil,
+                 "scalar scorer (index path) matches 초성 too")
+    }
+
     MainActor.assumeIsolated {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent("anftype-\(UUID().uuidString)")
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            for name in ["archives", "backup", "blog", "playground", "presentation", "플레이그라운드"] {
+            for name in ["archives", "backup", "blog", "playground", "presentation",
+                         "플레이그라운드", "(금융위원회)감독규정"] {
                 try fm.createDirectory(at: dir.appendingPathComponent(name),
                                        withIntermediateDirectories: true)
             }
@@ -24,11 +46,11 @@ func runTypeaheadTests() {
 
         let model = BrowserModel(start: dir)
         let deadline = Date().addingTimeInterval(5)
-        while model.items.count != 6 && Date() < deadline {
+        while model.items.count != 7 && Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.02))
         }
-        T.equal(model.items.count, 6, "fixture listing loaded")
-        guard model.items.count == 6 else { return }
+        T.equal(model.items.count, 7, "fixture listing loaded")
+        guard model.items.count == 7 else { return }
 
         @MainActor func selectedName() -> String {
             model.items.first { model.selection.contains($0.id) }?.name ?? "(none)"
@@ -71,6 +93,14 @@ func runTypeaheadTests() {
             model.typeSelect("ㅍ", fallback: "v", now: t0.addingTimeInterval(15))
             T.equal(selectedName(), "플레이그라운드",
                     "Korean prefix still wins over the fallback letter")
+        }
+
+        T.group("typeSelect: 초성 run jumps by syllable leads") {
+            model.typeSelect("ㄱ", now: t0.addingTimeInterval(18))
+            model.typeSelect("ㅇ", now: t0.addingTimeInterval(18.2))
+            model.typeSelect("ㅇ", now: t0.addingTimeInterval(18.4))
+            T.equal(selectedName(), "(금융위원회)감독규정",
+                    "ㄱㅇㅇ reaches 금융위원회 (the regression: vowels interleaved in the full key)")
         }
     }
 }
