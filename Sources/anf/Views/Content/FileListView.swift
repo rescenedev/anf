@@ -181,8 +181,14 @@ struct FileListView: NSViewRepresentable {
             guard let id = model.editingItemID,
                   let row = items.firstIndex(where: { $0.id == id }) else { return }
             table.scrollRowToVisible(row)
-            DispatchQueue.main.async { [weak table] in
-                guard let table else { return }
+            DispatchQueue.main.async { [weak self, weak table] in
+                guard let self, let table else { return }
+                // Re-resolve the row: a reload may have landed between scheduling
+                // and now, so the captured index could point at a different (or
+                // nonexistent) item — editColumn on a stale row edits the wrong
+                // file or crashes out of range.
+                guard let row = self.items.firstIndex(where: { $0.id == id }),
+                      row < table.numberOfRows else { return }
                 // The table must be first responder for editColumn to open the
                 // field editor — after a previous rename committed, focus may have
                 // moved off it, which is why a second Enter did nothing.

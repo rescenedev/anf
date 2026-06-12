@@ -112,7 +112,8 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     override func viewDidLoad() {
         super.viewDidLoad()
         rebuildTree()
-        observeModels()
+        observeStructure()
+        observeSelection()
         Task { [weak self] in
             let locs = await Task.detached(priority: .utility) { SidebarBuilder.locations() }.value
             let hosts = await Task.detached(priority: .utility) { SSHConfig.hosts() }.value
@@ -124,13 +125,29 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     }
 
     /// Observation-driven refresh: any tracked model change rebuilds the tree.
-    private func observeModels() {
+    /// Inputs that change the sidebar's STRUCTURE (rows added/removed) — these
+    /// need a full rebuildTree.
+    private func observeStructure() {
         withObservationTracking {
             _ = workspace.favorites.items
             _ = workspace.savedViews.views
-            _ = workspace.activeViewID
             _ = workspace.customSSH.hosts
             _ = workspace.terminals.map(\.isRunning)
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.rebuildTree()
+                self.observeStructure()
+            }
+        }
+    }
+
+    /// Inputs that only move the HIGHLIGHT (which row is "current"). Rebuilding
+    /// the whole tree on every folder navigation walked all favorites/ws/ssh and
+    /// reloaded the outline per arrow-key — now just repaint the visible rows.
+    private func observeSelection() {
+        withObservationTracking {
+            _ = workspace.activeViewID
             _ = workspace.showTerminal
             _ = workspace.activeTerminalIndex
             _ = workspace.active.currentURL
@@ -138,9 +155,37 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                self.rebuildTree()
-                self.observeModels()
+                self.refreshHighlights()
+                self.observeSelection()
             }
+        }
+    }
+
+    /// Repaint only the on-screen rows' highlight pills — no tree rebuild, no
+    /// reloadData (which would collapse groups and lose scroll position).
+    private func refreshHighlights() {
+        let rows = outline.rows(in: outline.visibleRect)
+        guard rows.length > 0 else { return }
+        for row in rows.location ..< rows.location + rows.length {
+            guard let node = outline.item(atRow: row) as? Node,
+                  let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarRowCell
+            else { continue }
+            cell.setHighlighted(isHighlighted(node))
+        }
+    }
+
+    /// Whether a node is the current highlight target (matches viewFor's logic).
+    private func isHighlighted(_ node: Node) -> Bool {
+        switch node.kind {
+        case .folder(_, _, let url, _, _):
+            return workspace.activeViewID == nil
+                && url.standardizedFileURL.path == model.currentURL.standardizedFileURL.path
+        case .workspaceRow(let view):
+            return workspace.activeViewID == view.id
+        case .sshRow(let host, _):
+            return workspace.showTerminal && workspace.terminal?.sshHost == host.alias
+        case .header:
+            return false
         }
     }
 
@@ -512,10 +557,16 @@ final class SidebarRowCell: NSTableCellView {
         name.stringValue = text
         icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         icon.contentTintColor = tint
-        pill.layer?.backgroundColor = highlighted
-            ? NSColor.labelColor.withAlphaComponent(0.12).cgColor
-            : NSColor.clear.cgColor
+        setHighlighted(highlighted)
         dotView.isHidden = dot == nil
         dotView.layer?.backgroundColor = dot?.cgColor
+    }
+
+    /// Just the highlight pill — used by the navigation-only refresh that must
+    /// not rebuild the whole row.
+    func setHighlighted(_ on: Bool) {
+        pill.layer?.backgroundColor = on
+            ? NSColor.labelColor.withAlphaComponent(0.12).cgColor
+            : NSColor.clear.cgColor
     }
 }

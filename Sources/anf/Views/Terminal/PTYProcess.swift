@@ -10,6 +10,10 @@ final class PTYProcess {
     var onExit: ((Int32) -> Void)?
 
     private var readSource: DispatchSourceRead?
+    /// All masterFD lifetime ops (read, close) are serialized here so the read
+    /// handler can never read a fd that teardown closed mid-call (and which the
+    /// OS may have already reused for another file).
+    private let ioQueue = DispatchQueue(label: "com.anf.pty.io")
 
     // MARK: - Spawn
 
@@ -81,9 +85,9 @@ final class PTYProcess {
     // MARK: - Internals
 
     private func startReading() {
-        let src = DispatchSource.makeReadSource(fileDescriptor: masterFD,
-                                               queue: .global(qos: .userInteractive))
+        let src = DispatchSource.makeReadSource(fileDescriptor: masterFD, queue: ioQueue)
         src.setEventHandler { [weak self] in
+            // Runs on ioQueue — serialized with teardown's close().
             guard let self, self.masterFD >= 0 else { return }
             var buf = [UInt8](repeating: 0, count: 4096)
             let n = Darwin.read(self.masterFD, &buf, buf.count)
@@ -91,7 +95,7 @@ final class PTYProcess {
                 let data = Data(buf[0..<n])
                 DispatchQueue.main.async { self.onOutput?(data) }
             } else if n <= 0 {
-                DispatchQueue.main.async { self.teardown() }
+                self.teardownLocked()
             }
         }
         src.resume()
@@ -106,7 +110,14 @@ final class PTYProcess {
         }
     }
 
+    /// Public teardown (from kill/main): hop onto ioQueue so the close is
+    /// serialized with any in-flight read on that queue.
     private func teardown() {
+        ioQueue.async { [weak self] in self?.teardownLocked() }
+    }
+
+    /// Must run on ioQueue.
+    private func teardownLocked() {
         readSource?.cancel(); readSource = nil
         if masterFD >= 0 { close(masterFD); masterFD = -1 }
     }

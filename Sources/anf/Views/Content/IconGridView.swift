@@ -297,11 +297,11 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
         label.stringValue = item.name
         iconW?.constant = iconSide
         iconH?.constant = iconSide
-        icon.image = ThumbnailProvider.shared.cached(for: item, side: iconSide * 2)
-            ?? IconProvider.shared.icon(for: item)
+        // One cache lookup, not two (this runs per cell on every scroll frame).
+        let cachedThumb = ThumbnailProvider.shared.cached(for: item, side: iconSide * 2)
+        icon.image = cachedThumb ?? IconProvider.shared.icon(for: item)
 
-        if item.supportsThumbnail,
-           ThumbnailProvider.shared.cached(for: item, side: iconSide * 2) == nil {
+        if item.supportsThumbnail, cachedThumb == nil {
             let id = item.id
             Task { [weak self] in
                 guard let thumb = await ThumbnailProvider.shared.thumbnail(for: item, side: iconSide * 2),

@@ -37,6 +37,7 @@ runListingCacheTests()
 runListDiffTests()
 runTransferTests()
 runL10nTests()
+runThumbnailThrottleTests()
 
 print("")
 if T.failures.isEmpty {

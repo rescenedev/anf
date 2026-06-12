@@ -21,6 +21,25 @@ final class ThumbnailProvider {
         Int(image.size.width * image.size.height) * 4 * 4   // RGBA × ~2x scale²
     }
 
+    /// Bounds concurrent QL generation. Scrolling an image-heavy folder used to
+    /// fire one `generateBestRepresentation` PER visible cell with no ceiling —
+    /// hundreds in flight, none cancelled as they scrolled off. A small pool
+    /// keeps the generator (and CPU/IO) from being flooded; off-screen cells
+    /// just wait their turn or get superseded by `currentID` on arrival.
+    private var running = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private let maxConcurrent = 6
+
+    private func acquire() async {
+        if running < maxConcurrent { running += 1; return }
+        await withCheckedContinuation { waiters.append($0) }
+        running += 1
+    }
+    private func release() {
+        running -= 1
+        if !waiters.isEmpty { waiters.removeFirst().resume() }
+    }
+
     private func key(_ url: URL, _ side: CGFloat) -> NSString {
         "\(url.path)@\(Int(side))" as NSString
     }
@@ -33,6 +52,12 @@ final class ThumbnailProvider {
     func thumbnail(for item: FileItem, side: CGFloat) async -> NSImage? {
         guard item.supportsThumbnail else { return nil }
         let k = key(item.url, side)
+        if let hit = cache.object(forKey: k) { return hit }
+
+        await acquire()
+        defer { release() }
+        // Re-check the cache: while we waited for a slot another request for the
+        // same file may have finished.
         if let hit = cache.object(forKey: k) { return hit }
 
         let scale = NSScreen.main?.backingScaleFactor ?? 2

@@ -609,11 +609,18 @@ final class WorkspaceModel {
         // When (re)opening, hand keyboard focus to the terminal. The view is
         // re-inserted by SwiftUI asynchronously, so retry until it's in a window.
         if showTerminal, let t = terminal {
-            for delay in [0.0, 0.08, 0.2] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    if t.view.window != nil { t.focus() }
+            // Retry until the view lands in a window, but STOP once focused —
+            // an unconditional 3-shot stole focus back if the user toggled the
+            // terminal off within 0.2s.
+            func tryFocus(_ remaining: [Double]) {
+                guard showTerminal, terminal === t else { return }
+                if t.view.window != nil { t.focus(); return }
+                guard let next = remaining.first else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + next) {
+                    tryFocus(Array(remaining.dropFirst()))
                 }
             }
+            tryFocus([0.0, 0.08, 0.2])
         }
     }
 
