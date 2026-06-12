@@ -143,12 +143,10 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         // --- Command combinations ---
         if cmd {
             if opt {
-                // ⌘⌥C copies the selection's path; ⌥⇧⌘C the current folder's.
-                if chars == "c" {
-                    shift ? model.copyCurrentFolderPath() : model.copyPathToPasteboard()
-                    return true
-                }
-                if chars == "i" { model.showGetInfo(); return true }   // ⌘⌥I → Get Info
+                // ⌘⌥C / ⌘⌥⇧C — copy path (customisable)
+                if binds(e, .copyFolderPath) { model.copyCurrentFolderPath(); return true }
+                if binds(e, .copyPath)       { model.copyPathToPasteboard();  return true }
+                if binds(e, .getInfo)        { model.showGetInfo();            return true }
                 // Tab selection ⌘⌥1…⌘⌥9
                 if let n = Int(chars), (1...9).contains(n) {
                     workspace.activePaneModel.select(n - 1); return true
@@ -162,54 +160,55 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                     return true
                 }
             }
-            switch chars {
-            case "z":
-                // ⌘Z undo / ⌘⇧Z redo file operations, then refresh every visible
-                // pane — the change may affect folders shown in other panes.
-                let did = shift ? FileUndo.shared.redo() : FileUndo.shared.undo()
+            // Customisable letter shortcuts — matched by keyCode so they work
+            // under any input source (same rationale as the latinLetter map).
+            if binds(e, .undo) || binds(e, .redo) {
+                let did = binds(e, .redo) ? FileUndo.shared.redo() : FileUndo.shared.undo()
                 if did { workspace.panes.prefix(workspace.layout.count).forEach { $0.current.reload() } }
                 else { NSSound.beep() }
                 return true
-            case "t": workspace.activePaneModel.newTab(); return true
-            case "w":
-                // Close the current tab → pane → window (Finder/browser order).
+            }
+            if binds(e, .newTab)             { workspace.activePaneModel.newTab(); return true }
+            if binds(e, .closeTabPaneWindow) {
                 let pane = workspace.activePaneModel
                 if pane.tabs.count > 1 { pane.closeCurrent() }
                 else if workspace.layout.count > 1 { workspace.closeActivePane() }
-                else { NSApp.keyWindow?.performClose(nil) }   // last tab+pane → close window
+                else { NSApp.keyWindow?.performClose(nil) }
                 return true
+            }
+            if binds(e, .commandPalette) { palette?.toggle(); return true }
+            if binds(e, .goToFolder)     { model.goToFolderPrompt(); return true }
+            if binds(e, .newFolder)      { model.makeNewFolder(); return true }
+            if binds(e, .reload)         { model.reload(); return true }
+            if binds(e, .toggleFavorite) { workspace.toggleFavoriteCurrent(); return true }
+            if binds(e, .duplicate)      { model.duplicateSelection(); return true }
+            if binds(e, .toggleInspector){ workspace.inspectorVisible.toggle(); return true }
+            if binds(e, .togglePathBar)  { workspace.pathBarVisible.toggle(); workspace.save(); return true }
+            if binds(e, .toggleHidden)   { model.showHidden.toggle(); return true }
+            if binds(e, .cycleViewBack)  { cycleViewMode(-1); return true }
+            if binds(e, .cycleViewForward) { cycleViewMode(1); return true }
+            if binds(e, .toggleSidebar)  { toggleLeftSidebar(); return true }
+
+            // Non-customisable shortcuts (fixed to their semantic keys).
+            switch chars {
             case "=", "+": bumpScale(1); return true
             case "-": bumpScale(-1); return true
             case "c": model.copySelectionToPasteboard(); return true
             case "x": model.cutSelectionToPasteboard(); return true
             case "v": model.pasteFromPasteboard(); return true
             case "a": model.selectAll(); return true
-            case "i": workspace.inspectorVisible.toggle(); return true
-            case "/": workspace.pathBarVisible.toggle(); workspace.save(); return true
-            case "d": shift ? workspace.toggleFavoriteCurrent() : model.duplicateSelection(); return true
-            case "l": model.goToFolderPrompt(); return true
-            case "p": palette?.toggle(); return true
-            case "k": palette?.toggle(); return true   // ⌘K command palette
+            case "p": palette?.toggle(); return true   // ⌘P fallback palette (fixed)
             case "g": if shift { model.goToFolderPrompt(); return true }
-            case "n": if shift { model.makeNewFolder(); return true }
-            case "r": model.reload(); return true
             default: break
             }
             switch code {
-            case 47:  // ⌘⇧. — toggle hidden files (Finder parity)
-                if shift { model.showHidden.toggle(); return true }
-                return false
             case 123: model.goBack(); refocusContent(); return true     // ⌘← history back
             case 124: model.goForward(); refocusContent(); return true  // ⌘→ history forward
-            case 125: model.openSelected(); return true   // ⌘↓ open
-            case 126: model.goUp(); refocusContent(); return true // ⌘↑ enclosing folder
-            case 51:  model.trashSelection(); return true // ⌘⌫ trash
-            case 33:  // [ — ⌘[ view mode back, ⌘⇧[ toggle LEFT sidebar
-                if shift { toggleLeftSidebar() } else { cycleViewMode(-1) }
-                return true
-            case 30:  // ] — ⌘] view mode forward, ⌘⇧] toggle RIGHT sidebar (inspector)
-                if shift { workspace.inspectorVisible.toggle() } else { cycleViewMode(1) }
-                return true
+            case 125: model.openSelected(); return true                  // ⌘↓ open
+            case 126: model.goUp(); refocusContent(); return true        // ⌘↑ enclosing folder
+            case 51:  model.trashSelection(); return true                // ⌘⌫ trash
+            case 30:  // ⌘⇧] toggle RIGHT sidebar (inspector) — fixed
+                if shift { workspace.inspectorVisible.toggle(); return true }
             default: break
             }
         }
@@ -230,6 +229,17 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             return rows * max(1, model.gridColumns)
         }
         return 10
+    }
+
+    /// Returns true when the event matches the user-configured (or default) binding
+    /// for `action`. Matching is by keyCode + device-independent modifier flags so
+    /// it works under any input source (Korean IME, etc.).
+    private func binds(_ e: NSEvent, _ action: ShortcutAction) -> Bool {
+        let b = ShortcutStore.shared.binding(for: action)
+        let flags = e.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting(.function)
+        return e.keyCode == b.keyCode && flags.rawValue == b.modifiers
     }
 
     /// ⌘[ / ⌘] cycles the active tab's view mode (list / icons / columns / …).

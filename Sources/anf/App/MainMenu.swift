@@ -20,6 +20,10 @@ final class ViewMenuController: NSObject, NSMenuItemValidation {
         workspace?.showWelcome = true
     }
 
+    @objc func showShortcutSettings(_ sender: Any?) {
+        ShortcutSettingsPanel.shared.show()
+    }
+
     @objc func restoreLastSplit(_ sender: Any?) {
         workspace?.restoreLastSplit()
     }
@@ -48,6 +52,11 @@ enum MainMenu {
         appItem.submenu = appMenu
         let about = appMenu.addItem(withTitle: L("About anf", "anf에 관하여"), action: #selector(AboutController.show(_:)), keyEquivalent: "")
         about.target = AboutController.shared
+        appMenu.addItem(.separator())
+        let prefs = appMenu.addItem(withTitle: L("Keyboard Shortcuts…", "단축키 설정…"),
+                                    action: #selector(ViewMenuController.showShortcutSettings(_:)),
+                                    keyEquivalent: ",")
+        prefs.target = ViewMenuController.shared
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: L("Hide anf", "anf 가리기"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthers = appMenu.addItem(withTitle: L("Hide Others", "기타 가리기"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
