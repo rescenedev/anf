@@ -57,6 +57,7 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
     let workspace: WorkspaceModel
     private let toolbarController: WindowToolbarController
     private var splitView: NSSplitView?
+    private var edgeResizer: WindowEdgeResizer?
     /// This window's command palette — built lazily, dies with the window.
     lazy var palette = CommandPaletteController(workspace: workspace)
 
@@ -137,7 +138,8 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
         SidebarDividerResizer.install(in: window, splitView: split.splitView)
-        WindowEdgeResizer.install(in: window)
+        edgeResizer = WindowEdgeResizer.install(in: window)
+        observePathBar()
         WindowRegistry.register(self)
     }
 
@@ -162,6 +164,18 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
             window.setFrame(window.constrainFrameRect(f, to: screen), display: false)
         } else {
             defaultPlacement()
+        }
+    }
+
+    /// Keep the edge-resizer's reserved-bottom height in sync with the path
+    /// bar's visibility. Uses recursive withObservationTracking so the
+    /// resizer re-evaluates whenever pathBarVisible is toggled at runtime.
+    private func observePathBar() {
+        withObservationTracking { [weak self] in
+            guard let self else { return }
+            self.edgeResizer?.reservedBottomHeight = self.workspace.pathBarVisible ? 26 : 0
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.observePathBar() }
         }
     }
 
