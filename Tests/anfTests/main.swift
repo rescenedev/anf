@@ -55,6 +55,7 @@ runSidebarTests()
 runOCRTests()
 runVisualIndexTests()
 runLLMTests()
+runRenameTests()
 
 print("")
 if T.failures.isEmpty {

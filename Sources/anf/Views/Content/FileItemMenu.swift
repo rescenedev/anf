@@ -43,6 +43,10 @@ enum FileItemMenu {
             if item.hasSummarizableText {
                 menu.addItem(.separator())
                 add(L("Summarize (AI)", "AI 요약")) { summarizeFile(item.url, name: item.name) }
+                add(L("Suggest Name (AI)", "AI 이름 제안")) { suggestNames([item.url], title: item.name, model: model) }
+            } else if OCRService.isImage(item.url) {
+                menu.addItem(.separator())
+                add(L("Suggest Name (AI)", "AI 이름 제안")) { suggestNames([item.url], title: item.name, model: model) }
             } else if item.isBrowsableContainer {
                 menu.addItem(.separator())
                 add(L("Summarize Folder (AI)", "이 폴더 요약 (AI)")) {
@@ -116,11 +120,12 @@ enum FileItemMenu {
         add(L("New Folder", "새 폴더")) { model.makeNewFolder() }
         add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(model.currentURL) }
         menu.addItem(.separator())
-        // Right-click the empty area of a folder → summarize the whole folder.
+        // Right-click the empty area of a folder → AI actions for the folder.
         let folder = model.currentURL
         add(L("Summarize Folder (AI)", "이 폴더 요약 (AI)")) {
             summarizeFolder(folder, name: folder.lastPathComponent)
         }
+        add(L("Tidy Screenshots (AI)", "스크린샷 정리 (AI)")) { tidyScreenshots(folder, model: model) }
         menu.addItem(.separator())
         // Vault: time-travel protection for this folder.
         if VaultWatcher.shared.isVault(model.currentURL) {
@@ -166,5 +171,38 @@ enum FileItemMenu {
         SummaryPanel.show(title: name, key: "folder:" + url.path) {
             await SummaryService.summarizeFolder(url: url)
         }
+    }
+
+    /// Open the rename-suggestion panel for one or more files.
+    private static func suggestNames(_ urls: [URL], title: String, model: BrowserModel) {
+        guard ensureLLM(title: title) else { return }
+        RenamePanel.show(title: L("Suggest Name — \(title)", "AI 이름 제안 — \(title)"),
+                         urls: urls) { model.reload() }
+    }
+
+    /// Find screenshots in `folder` and open the batch rename panel for them.
+    private static func tidyScreenshots(_ folder: URL, model: BrowserModel) {
+        guard ensureLLM(title: folder.lastPathComponent) else { return }
+        let shots = ScreenshotTidy.find(in: folder)
+        guard !shots.isEmpty else {
+            let a = NSAlert()
+            a.messageText = L("No screenshots found", "스크린샷을 찾지 못했어요")
+            a.informativeText = L("Nothing here looks like a screenshot.",
+                                  "이 폴더에는 스크린샷으로 보이는 파일이 없어요.")
+            a.runModal()
+            return
+        }
+        RenamePanel.show(title: L("Tidy Screenshots — \(shots.count)", "스크린샷 정리 — \(shots.count)개"),
+                         urls: shots) { model.reload() }
+    }
+
+    /// True if the on-device LLM is ready; otherwise show its hint and return false.
+    private static func ensureLLM(title: String) -> Bool {
+        if LocalLLM.isAvailable { return true }
+        let a = NSAlert()
+        a.messageText = L("On-device AI unavailable", "온디바이스 AI를 쓸 수 없어요")
+        a.informativeText = LocalLLM.unavailableHint(LocalLLM.status)
+        a.runModal()
+        return false
     }
 }
