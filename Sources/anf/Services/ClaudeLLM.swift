@@ -50,7 +50,7 @@ enum ClaudeLLM {
     /// Why the last call failed (HTTP status + Anthropic error message), for UI.
     nonisolated(unsafe) static var lastError: String?
 
-    static func generate(instructions: String, prompt: String, maxTokens: Int, temperature: Double = 0.3) async -> String? {
+    static func generate(instructions: String, prompt: String, maxTokens: Int) async -> String? {
         lastError = nil
         guard let key = apiKey, let url = URL(string: "https://api.anthropic.com/v1/messages") else {
             lastError = L("No Anthropic API key set.", "Anthropic API 키가 없어요."); return nil
@@ -60,10 +60,10 @@ enum ClaudeLLM {
                           "OAuth 토큰 같아요. API 키가 아닙니다 — console.anthropic.com의 키(sk-ant-api03-…)를 쓰세요.")
             return nil
         }
+        // No `temperature`: it's deprecated on the latest Opus/Sonnet and a 400.
         let body: [String: Any] = [
             "model": model,
             "max_tokens": maxTokens,
-            "temperature": temperature,
             "system": instructions,
             "messages": [["role": "user", "content": prompt]],
         ]
