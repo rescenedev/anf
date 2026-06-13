@@ -37,6 +37,20 @@ enum FileItemMenu {
         }
         add(L("Get Info", "정보 가져오기")) { model.showGetInfo() }
 
+        // On-device AI summary (single selection): a summarizable file, or a
+        // folder (overview of its documents). Shown in a floating panel.
+        if model.selection.count <= 1 {
+            if item.hasSummarizableText {
+                menu.addItem(.separator())
+                add(L("Summarize (AI)", "AI 요약")) { summarizeFile(item.url, name: item.name) }
+            } else if item.isBrowsableContainer {
+                menu.addItem(.separator())
+                add(L("Summarize Folder (AI)", "이 폴더 요약 (AI)")) {
+                    summarizeFolder(item.url, name: item.name)
+                }
+            }
+        }
+
         // Vault: protect the clicked folder itself (one folder at a time).
         if item.isBrowsableContainer && model.selection.count <= 1 {
             menu.addItem(.separator())
@@ -102,6 +116,12 @@ enum FileItemMenu {
         add(L("New Folder", "새 폴더")) { model.makeNewFolder() }
         add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(model.currentURL) }
         menu.addItem(.separator())
+        // Right-click the empty area of a folder → summarize the whole folder.
+        let folder = model.currentURL
+        add(L("Summarize Folder (AI)", "이 폴더 요약 (AI)")) {
+            summarizeFolder(folder, name: folder.lastPathComponent)
+        }
+        menu.addItem(.separator())
         // Vault: time-travel protection for this folder.
         if VaultWatcher.shared.isVault(model.currentURL) {
             add(L("Vault Timeline…", "Vault 타임라인…")) { VaultTimelinePanel.show(for: model.currentURL) }
@@ -121,5 +141,30 @@ enum FileItemMenu {
             model.showHidden.toggle()
         }
         return menu
+    }
+
+    /// Open the summary panel for a single file. Shows the unavailable hint
+    /// straight away instead of spinning when Apple Intelligence is off/missing.
+    private static func summarizeFile(_ url: URL, name: String) {
+        if !LocalLLM.isAvailable {
+            let hint = LocalLLM.unavailableHint(LocalLLM.status)
+            SummaryPanel.show(title: name, key: url.path) { hint }
+            return
+        }
+        SummaryPanel.show(title: name, key: url.path) {
+            await SummaryService.summarize(url: url)
+        }
+    }
+
+    /// Open the summary panel for a folder (overview of its documents).
+    private static func summarizeFolder(_ url: URL, name: String) {
+        if !LocalLLM.isAvailable {
+            let hint = LocalLLM.unavailableHint(LocalLLM.status)
+            SummaryPanel.show(title: name, key: "folder:" + url.path) { hint }
+            return
+        }
+        SummaryPanel.show(title: name, key: "folder:" + url.path) {
+            await SummaryService.summarizeFolder(url: url)
+        }
     }
 }

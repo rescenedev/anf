@@ -135,7 +135,7 @@ struct InfoInspector: View {
         VStack(spacing: 0) {
             if let target {
                 if summarizing || summary != nil {
-                    SummaryCard(text: summary, loading: summarizing) {
+                    SummaryCard(text: summary, loading: summarizing, fontSize: workspace.previewTextSize) {
                         withAnimation(.easeInOut(duration: 0.15)) { summary = nil; summarizing = false }
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -207,18 +207,23 @@ struct InfoInspector: View {
         .background(.regularMaterial)
         .overlay(alignment: .bottom) {
             if let target {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     if target.hasSummarizableText {
+                        // Labeled pill (not a tiny icon) — summarize was too hard
+                        // to find as a bare ✨ circle.
                         Button { summarize(target) } label: {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(summarizing ? Color.secondary : Color.accentColor)
-                                .padding(7)
-                                .background(.ultraThinMaterial, in: Circle())
+                            HStack(spacing: 5) {
+                                Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold))
+                                Text(summarizing ? L("Summarizing…", "요약 중…") : L("Summarize", "AI 요약"))
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(Color.accentColor.opacity(summarizing ? 0.5 : 1), in: Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(summarizing)
-                        .help(L("Summarize (on-device AI)", "요약 (온디바이스 AI)"))
+                        .help(L("Summarize on-device (AI)", "온디바이스 AI 요약"))
                     }
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) { showDetails.toggle() }
@@ -263,6 +268,7 @@ struct InfoInspector: View {
 private struct SummaryCard: View {
     let text: String?
     let loading: Bool
+    let fontSize: CGFloat
     let onClose: () -> Void
 
     var body: some View {
@@ -285,11 +291,12 @@ private struct SummaryCard: View {
                 .padding(.vertical, 2)
             } else if let text {
                 ScrollView {
-                    Text(text).font(.system(size: 12.5))
+                    Text(text).font(.system(size: max(fontSize, 14)))
+                        .lineSpacing(3)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 150)
+                .frame(maxHeight: 180)
             }
         }
         .padding(12)
