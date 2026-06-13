@@ -14,6 +14,7 @@ enum KeyAction: String, CaseIterable {
     case copyPath, copyFolderPath
     case transferCopy, transferMove
     case quickLook, rename, trash
+    case openWith
     case openSettings
 }
 
@@ -55,6 +56,7 @@ final class Keymap {
         (.goBack, ["cmd+left"]), (.goForward, ["cmd+right"]),
         (.goUp, ["cmd+up"]), (.openSelected, ["cmd+down"]),
         (.copyPath, ["cmd+opt+c"]), (.copyFolderPath, ["cmd+opt+shift+c"]),
+        (.openWith, ["f4"]),
         (.transferCopy, ["f5", "shift+f5"]), (.transferMove, ["f6", "shift+f6"]),
         (.quickLook, ["space", "shift+space"]),
         (.rename, ["return", "shift+return", "enter", "shift+enter"]),
@@ -112,7 +114,7 @@ final class Keymap {
         // AI provider config (apple / local / claude). Mirror file → UserDefaults
         // so RemoteLLM / ClaudeLLM / LocalLLM all read one source.
         let dict = Self.settingsDict(fileAt: Self.fileURL)
-        for key in ["aiProvider", "aiEndpoint", "aiModel", "aiApiKey"] {
+        for key in ["aiProvider", "aiEndpoint", "aiModel", "aiApiKey", "openWith"] {
             if let s = dict[key] as? String {
                 UserDefaults.standard.set(s, forKey: "anf.\(key)")
             }
@@ -274,6 +276,8 @@ final class Keymap {
         appendKey("aiApiKey", "\"\"")
         appendKey("aiEndpoint", "\"\"")
         appendKey("aiModel", "\"\"")
+        appendKey("openWith", "\"\"")
+        appendKey("favorites", "[]")
         try? out.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -306,7 +310,9 @@ final class Keymap {
             "aiProvider — 'auto' (default): uses Claude when aiApiKey is set, else a local endpoint, else Apple on-device. Force one with 'claude', 'local', or 'apple'.",
             "aiApiKey — Anthropic key (sk-ant-…). The fast path: set aiFeatures:true and paste this — Claude works immediately. (Also read from ANTHROPIC_API_KEY env var.)",
             "aiEndpoint — local OpenAI-compatible URL for 'local', e.g. 'http://localhost:11434/v1' (Ollama) or 'http://localhost:1234/v1' (LM Studio).",
-            "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default."
+            "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default.",
+            "openWith — app for F4 'Open With' (name, path, or bundle id), e.g. 'Typora'.",
+            "favorites — paths to pin in the sidebar, e.g. ['~/Code', '~/Documents/Work']. Each is imported once (great for migrating to a new Mac)."
           ],
           "previewTextSize": 16,
           "aiFeatures": false,
@@ -314,6 +320,8 @@ final class Keymap {
           "aiApiKey": "",
           "aiEndpoint": "",
           "aiModel": "",
+          "openWith": "",
+          "favorites": [],
         """)
         for (i, entry) in defaults.enumerated() {
             let (action, specs) = entry

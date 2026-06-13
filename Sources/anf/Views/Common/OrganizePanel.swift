@@ -22,7 +22,7 @@ final class OrganizePanel: NSObject {
     private init(title: String, folder: URL, urls: [URL], onDone: @escaping () -> Void) {
         let st = OrganizeState(folder: folder, urls: urls, onDone: onDone)
         self.state = st
-        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
+        let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 680, height: 480),
                         styleMask: [.titled, .closable, .resizable, .utilityWindow],
                         backing: .buffered, defer: false)
         w.title = title

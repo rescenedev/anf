@@ -33,7 +33,7 @@ final class SummaryPanel: NSObject {
     private init(title: String, key: String, run: @escaping () async -> String) {
         self.key = key
         self.run = run
-        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
+        let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
                         styleMask: [.titled, .closable, .resizable, .utilityWindow],
                         backing: .buffered, defer: false)
         w.title = L("Summary — \(title)", "요약 — \(title)")

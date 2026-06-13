@@ -28,7 +28,7 @@ final class AskPanel: NSObject {
 
     private init(title: String, key: String, url: URL, isFolder: Bool) {
         self.key = key
-        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
+        let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
                         styleMask: [.titled, .closable, .resizable, .utilityWindow],
                         backing: .buffered, defer: false)
         w.title = L("Ask — \(title)", "질문 — \(title)")

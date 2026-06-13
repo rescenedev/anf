@@ -11,9 +11,33 @@ final class FavoritesStore {
     private(set) var items: [URL]
     private let key = "anf.favorites.v1"
 
+    private let importedKey = "anf.favorites.importedPaths"
+
     init() {
         let paths = UserDefaults.standard.stringArray(forKey: key) ?? []
         items = paths.map { URL(fileURLWithPath: $0) }
+        importFromSettings()
+    }
+
+    /// Import a `"favorites": ["~/Code", "/Volumes/x", …]` list from the ⌘,
+    /// settings file — handy for migrating a long Finder favorites list to a new
+    /// machine. Each path is imported ONCE (tracked in `importedKey`), so a
+    /// favorite you later remove in-app won't keep coming back; adding new paths
+    /// to the JSON imports just those on next launch.
+    private func importFromSettings() {
+        guard let list = Keymap.settingsDict(fileAt: Keymap.fileURL)["favorites"] as? [String] else { return }
+        let fm = FileManager.default
+        var imported = Set(UserDefaults.standard.stringArray(forKey: importedKey) ?? [])
+        var changed = false, importedChanged = false
+        for raw in list {
+            let path = (raw as NSString).expandingTildeInPath
+            guard !imported.contains(path) else { continue }
+            imported.insert(path); importedChanged = true
+            let url = URL(fileURLWithPath: path)
+            if fm.fileExists(atPath: path), !contains(url) { items.append(url); changed = true }
+        }
+        if importedChanged { UserDefaults.standard.set(Array(imported), forKey: importedKey) }
+        if changed { persist() }
     }
 
     func contains(_ url: URL) -> Bool {

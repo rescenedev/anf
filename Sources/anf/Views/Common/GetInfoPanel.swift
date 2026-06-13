@@ -23,9 +23,9 @@ final class GetInfoPanel: NSObject {
 
     private init(item: FileItem) {
         self.item = item
-        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 460),
-                        styleMask: [.titled, .closable, .utilityWindow],
-                        backing: .buffered, defer: false)
+        let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 460),
+                         styleMask: [.titled, .closable, .utilityWindow],
+                         backing: .buffered, defer: false)
         w.title = L("\(item.name) Info", "\(item.name) 정보")
         w.isFloatingPanel = true
         w.hidesOnDeactivate = false

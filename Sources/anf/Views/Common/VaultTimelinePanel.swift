@@ -25,7 +25,7 @@ final class VaultTimelinePanel: NSObject, NSTableViewDataSource, NSTableViewDele
 
     private init(folder: URL) {
         self.folder = folder
-        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
+        let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
                         styleMask: [.titled, .closable, .resizable, .utilityWindow],
                         backing: .buffered, defer: false)
         w.title = L("Vault Timeline — \(folder.lastPathComponent)", "Vault 타임라인 — \(folder.lastPathComponent)")

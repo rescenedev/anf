@@ -142,7 +142,9 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case 121: moveSel(by: pageRows(), extend: shift); return true
             case 115: moveSel(by: -model.items.count, extend: shift); return true
             case 119: moveSel(by: model.items.count, extend: shift); return true
-            case 53:  if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared().orderOut(nil); return true } // esc
+            case 53:  // esc — dismiss the shortcuts overlay, then Quick Look
+                if workspace.showWelcome { workspace.showWelcome = false; return true }
+                if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared().orderOut(nil); return true }
             default: break
             }
             // Type-to-select (Finder typeahead): plain printable keys jump the
@@ -169,6 +171,9 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 }
             }
             switch chars {
+            case "?":
+                // ⌘? toggles the shortcuts overlay (Esc or ⌘? again closes it).
+                workspace.showWelcome.toggle(); return true
             case "z":
                 // ⌘Z undo / ⌘⇧Z redo file operations, then refresh every visible
                 // pane — the change may affect folders shown in other panes.
@@ -227,9 +232,30 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         case .quickLook: toggleQuickLook()
         case .rename: model.beginRename()
         case .trash: model.trashSelection()
+        case .openWith: openWithPresetApp()
         case .openSettings: Keymap.openSettingsFile()
         }
         return true
+    }
+
+    /// F4: open the selection in a preset app (e.g. a Markdown editor), set via
+    /// "openWith" in the ⌘, settings file. Empty → open the settings file with a
+    /// pointer to the key.
+    private func openWithPresetApp() {
+        let app = (UserDefaults.standard.string(forKey: "anf.openWith") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let items = model.selectedItems
+        guard !items.isEmpty else { return }
+        if app.isEmpty {
+            let a = NSAlert()
+            a.messageText = L("No “Open With” app set", "‘다른 앱으로 열기’ 앱이 설정되지 않았어요")
+            a.informativeText = L("Set \"openWith\": \"Typora\" (an app name or path) in Settings (⌘,), then F4 opens the selection with it.",
+                                  "설정(⌘,)에 \"openWith\": \"Typora\"(앱 이름 또는 경로)를 넣으면 F4로 선택 항목을 그 앱으로 엽니다.")
+            a.runModal()
+            Keymap.openSettingsFile()
+            return
+        }
+        FileOperations.openWith(items, app: app)
     }
 
     /// Items per PgUp/PgDn step: one viewport's worth of rows in the current

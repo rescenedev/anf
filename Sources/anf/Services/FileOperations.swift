@@ -18,6 +18,19 @@ enum FileOperations {
         TerminalLauncher.openHere(url)
     }
 
+    /// Open items with a specific app (F4). `app` may be an app name ("Typora"),
+    /// a path ("/Applications/Typora.app"), or a bundle id — `open -a` resolves
+    /// all three.
+    static func openWith(_ items: [FileItem], app: String) {
+        let paths = items.map(\.url.path)
+        guard !paths.isEmpty, !app.isEmpty else { return }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-a", app] + paths
+        do { try p.run() }
+        catch { presentFailures(L("Couldn’t open with \(app)", "\(app)(으)로 열지 못했습니다"), [error.localizedDescription]) }
+    }
+
     /// Move to Trash. Returns (original, trashed-location) pairs — the trashed
     /// URL is what undo needs to put the file back.
     @discardableResult

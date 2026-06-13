@@ -25,7 +25,7 @@ final class RenamePanel: NSObject {
     private init(title: String, urls: [URL], onDone: @escaping () -> Void) {
         let st = RenameState(urls: urls, onDone: onDone)
         self.state = st
-        let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 460),
+        let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 460),
                         styleMask: [.titled, .closable, .resizable, .utilityWindow],
                         backing: .buffered, defer: false)
         w.title = title
