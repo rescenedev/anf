@@ -53,6 +53,7 @@ runDocxStructureTests()
 runHwpxStructureTests()
 runSidebarTests()
 runOCRTests()
+runVisualIndexTests()
 
 print("")
 if T.failures.isEmpty {

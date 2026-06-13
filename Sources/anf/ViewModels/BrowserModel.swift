@@ -245,6 +245,7 @@ final class BrowserModel: Identifiable {
         if url.scheme != "sftp" {          // local-only bookkeeping
             RecentFolders.shared.record(url)
             FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
+            VisualIndex.shared.build(for: url) // background image classification (resumable)
         }
         applyFolderViewMode()
         reload()

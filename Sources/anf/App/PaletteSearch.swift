@@ -129,31 +129,30 @@ enum PaletteSearch {
     /// OCR is heavy, so the scan count is capped tighter than the doc sweep and
     /// the first cold pass is what pays; later queries hit the cache.
     static func imageContent(root: URL, needle: String, cap: Int) -> [URL] {
-        // No fd dependency: gather images with anf's own getattrlistbulk walk.
-        // Classification is cheap (tens of ms) so it covers the WHOLE folder;
-        // OCR is expensive (250ms–1.3s) so only the first `ocrLimit` images get
-        // text-read. Decoupling these is why a 400-photo album finds dogs past
-        // image #60 now. Both are cached, so only the first query pays.
-        let classifyLimit = 500
-        let ocrLimit = 80
-        let files = imageFiles(under: root, limit: classifyLimit)
-        guard !files.isEmpty else { return [] }
+        // VISUAL matches ("강아지"/"음식") come from the persistent VisualIndex —
+        // instant and full-coverage even on a 10k-photo library (on-the-fly
+        // classification couldn't scale). The index builds in the background on
+        // folder entry; results grow as it fills.
+        var matched = VisualIndex.shared.search(query: needle, root: root, cap: cap)
+        if matched.count >= cap { return matched }
 
+        // TEXT-in-image (OCR) stays on-demand + bounded — OCR'ing 10k images
+        // eagerly would take hours, so only the first `ocrLimit` get read here.
+        let ocrLimit = 80
+        let files = imageFiles(under: root, limit: ocrLimit)
+        let seen = NSMutableSet(array: matched.map(\.path))
         let lock = NSLock()
-        var matched: [URL] = []
         DispatchQueue.concurrentPerform(iterations: files.count) { i in
             lock.lock(); let enough = matched.count >= cap; lock.unlock()
             if enough { return }
             let url = files[i]
-            // Visual match (cheap) over every image: "강아지"/"dog"/"음식"…
-            var hit = ImageClassifier.matches(query: needle, labels: ImageLabelCache.shared.labels(for: url))
-            // Text match (expensive OCR) only for the first batch: "환불"…
-            if !hit, i < ocrLimit, let text = OCRTextCache.shared.text(for: url) {
-                hit = text.localizedCaseInsensitiveContains(needle)
+            guard let text = OCRTextCache.shared.text(for: url),
+                  text.localizedCaseInsensitiveContains(needle) else { return }
+            lock.lock()
+            if matched.count < cap, !seen.contains(url.path) {
+                seen.add(url.path); matched.append(url)
             }
-            if hit {
-                lock.lock(); if matched.count < cap { matched.append(url) }; lock.unlock()
-            }
+            lock.unlock()
         }
         return matched
     }

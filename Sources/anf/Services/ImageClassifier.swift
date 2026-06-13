@@ -8,21 +8,21 @@ import Vision
 /// tens of ms), so it runs on every image in the search walk.
 enum ImageClassifier {
 
-    /// Confident category labels for an image (underscores normalized to spaces),
-    /// or [] when nothing is confident. Uses Vision's precision-calibrated filter
-    /// (raw confidence isn't comparable across categories), with a confidence
-    /// fallback so we don't return empty on borderline images.
+    /// Minimum confidence for a label to count. Vision returns ~1300 categories
+    /// per image, MOST at ~0 ("canine: 0.0004" on a photo with no dog) — and the
+    /// hasMinimumRecall/Precision API passes those, so it's useless as a filter.
+    /// A flat confidence floor is what actually separates signal (a real dog
+    /// scores 0.5–0.95) from noise. Search-leaning, so set on the precise side.
+    static let confidenceFloor: Float = 0.3
+
+    /// Confident category labels for an image (underscores → spaces), or [].
     nonisolated static func labels(for url: URL) -> [String] {
-        // Classification needs no resolution; small input keeps it fast.
         guard let cg = OCRService.loadCGImage(url, maxPixel: 1024) else { return [] }
         let request = VNClassifyImageRequest()
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
         do { try handler.perform([request]) } catch { return [] }
-        let obs = request.results ?? []
-
-        var picked = obs.filter { $0.hasMinimumRecall(0.05, forPrecision: 0.7) }
-        if picked.isEmpty { picked = obs.filter { $0.confidence > 0.2 } }
-        return picked
+        return (request.results ?? [])
+            .filter { $0.confidence >= confidenceFloor }
             .sorted { $0.confidence > $1.confidence }
             .prefix(20)
             .map { $0.identifier.replacingOccurrences(of: "_", with: " ").lowercased() }

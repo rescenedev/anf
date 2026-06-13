@@ -58,13 +58,19 @@ func runOCRTests() {
         T.expect(OCRTextCache.shared.text(for: blank) == nil, "text-free image → nil")
     }
 
-    T.group("imageContent search finds text inside an image (no fd needed)") {
+    T.group("imageContent OCR path finds text inside an image (bounded)") {
         let u = dir.appendingPathComponent("receipt.png")
         makeImage("Starbucks Receipt", to: u)
-        // Uses the getattrlistbulk walk, so this works with or without fd.
+        // OCR path is on-the-fly (the visual path is the persistent index).
         let hits = PaletteSearch.imageContent(root: dir, needle: "starbucks", cap: 10)
         T.expect(hits.contains { $0.lastPathComponent == "receipt.png" },
                  "OCR'd image matched by its text content")
+    }
+
+    T.group("confidence floor rejects near-zero noise labels") {
+        // The DSC05651 false-positive bug: canine@0.0004 passed the old filter.
+        T.expect(ImageClassifier.confidenceFloor >= 0.25,
+                 "floor high enough to drop ~0 noise (was hasMinimumRecall, useless)")
     }
 
     T.group("ImageClassifier query matching (Korean aliases + English)") {
