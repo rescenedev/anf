@@ -44,6 +44,13 @@ func runLLMTests() {
         }
     }
 
+    T.group("language detection for summary instruction") {
+        T.expect(LocalLLM.isKorean("금융위원회는 규정을 개정한다"), "Hangul → Korean")
+        T.expect(LocalLLM.isKorean("외국인 통합계좌에 ETF와 ETN 추가"), "Korean with loanwords stays Korean")
+        T.expect(!LocalLLM.isKorean("The quarterly report shows revenue growth"), "English → not Korean")
+        T.expect(!LocalLLM.isKorean("{\"key\": 123, \"name\": \"value\"}"), "json/ascii → not Korean")
+    }
+
     T.group("hasSummarizableText classification") {
         func item(_ name: String) -> FileItem? {
             let u = dir.appendingPathComponent(name)

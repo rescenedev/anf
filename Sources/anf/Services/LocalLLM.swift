@@ -72,16 +72,31 @@ enum LocalLLM {
     /// budget for a summary; the head of a document carries the gist anyway.
     static let inputCharBudget = 12_000
 
-    /// Summarize a document's body. Answers in the document's own language
-    /// (Korean docs → Korean summary). nil when LLM is unavailable / empty input.
+    /// Summarize a document's body, ANSWERING IN THE DOCUMENT'S LANGUAGE. The
+    /// on-device model defaults to the Apple Intelligence UI language (often
+    /// English here), and a meta-instruction like "reply in the document's
+    /// language" gets ignored — but a Korean instruction reliably yields Korean.
+    /// So we detect the language and pick a matching instruction. nil when the
+    /// LLM is unavailable or input is empty.
     static func summarize(_ text: String) async -> String? {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return nil }
         let clipped = body.count > inputCharBudget ? String(body.prefix(inputCharBudget)) : body
-        let instructions = """
-        You summarize documents. Reply in the SAME language as the document.
-        Be concise: 2–4 sentences capturing the purpose and key points. No preamble.
-        """
+        let instructions = isKorean(clipped)
+            ? "다음 문서를 한국어로 2~3문장으로 요약하세요. 핵심 목적과 요점만, 군더더기 없이. 반드시 한국어로만 답하세요."
+            : "Summarize the document in 2–3 sentences — purpose and key points only, no preamble."
         return await generate(instructions: instructions, prompt: clipped, maxTokens: 400)
+    }
+
+    /// Korean if Hangul makes up a meaningful share of the letters. A few Latin
+    /// loanwords (ETF, AI) shouldn't flip a Korean doc to English.
+    static func isKorean(_ text: String) -> Bool {
+        var hangul = 0, latin = 0
+        for s in text.unicodeScalars {
+            if (0xAC00...0xD7A3).contains(s.value) || (0x1100...0x11FF).contains(s.value) { hangul += 1 }
+            else if (0x41...0x5A).contains(s.value) || (0x61...0x7A).contains(s.value) { latin += 1 }
+        }
+        guard hangul + latin > 0 else { return false }
+        return Double(hangul) / Double(hangul + latin) >= 0.2
     }
 }
