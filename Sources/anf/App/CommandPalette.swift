@@ -64,11 +64,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     private var isShown = false
     private weak var anchorWindow: NSWindow?
     private var field: NSTextField!
+    private var magnifier: NSImageView!          // swaps to ✦ in Ask-AI mode
     private var table: NSTableView!
     private var resultsScroll: NSScrollView!     // toggled off in inline-answer mode
     private var answerScroll: NSScrollView!      // the inline AI answer ("/…")
     private var answerText: NSTextView!
     private var inAnswerMode = false
+    private var askMode = false                  // entered by "/", which is then stripped
     private var askTask: Task<Void, Never>?
     private var results: [Target] = []
     private var deepResults: [Target] = []
@@ -118,6 +120,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         field.stringValue = ""
         deepResults = []
         exitAnswerMode()                  // fresh open is always in search mode
+        setAskMode(false)
         loadSSHTargets()
         recompute()
         position(over: host)
@@ -199,6 +202,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         magnifier.contentTintColor = .secondaryLabelColor
         magnifier.symbolConfiguration = .init(pointSize: 16, weight: .regular)
         magnifier.translatesAutoresizingMaskIntoConstraints = false
+        self.magnifier = magnifier
 
         field = NSTextField()
         field.placeholderString = L("Search files & folders…", "파일 · 폴더 검색…")
@@ -388,11 +392,11 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         guard let workspace else { results = []; table?.reloadData(); return }
         let q = query
 
-        // "/" → Ask-AI mode. '/' can't appear in a filename, so this never
-        // shadows a file search. Configured users ask immediately; others see
-        // the feature plus a one-tap link to the setup guide.
-        if q.hasPrefix("/") {
-            let question = String(q.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Ask-AI mode (entered by "/", which is stripped from the field). The
+        // whole query is the question. Configured users ask immediately; others
+        // see the feature plus a one-tap link to the setup guide.
+        if askMode {
+            let question = q.trimmingCharacters(in: .whitespacesAndNewlines)
             let folder = workspace.active.currentURL
             if AIFeatures.enabled && LocalLLM.isAvailable {
                 results = [.ask(question: question, folder: folder)]
@@ -719,10 +723,24 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
     // MARK: - Inline AI answer ("/…")
 
-    /// Answer a "/…" question right inside the palette — no separate window.
+    /// Toggle the Ask-AI look (✦ icon + placeholder) on the search row.
+    private func setAskMode(_ on: Bool) {
+        askMode = on
+        magnifier?.image = NSImage(systemSymbolName: on ? "sparkles" : "magnifyingglass",
+                                   accessibilityDescription: nil)
+        magnifier?.contentTintColor = on ? .controlAccentColor : .secondaryLabelColor
+        field?.placeholderString = on
+            ? L("Ask the AI…", "AI에게 질문…")
+            : L("Search files & folders…", "파일 · 폴더 검색…")
+    }
+
+    /// Answer a "/…" question right inside the palette — no separate window. The
+    /// question is echoed at the top so it's obvious Enter went through.
     private func answerInline(question: String, folder: URL) {
         enterAnswerMode()
-        setAnswer("✦ \(LocalLLM.providerLabel) · " + L("thinking…", "생각 중…"), dim: true)
+        let header = question + "\n\n"
+        setAnswer(header + "✦ \(LocalLLM.providerLabel) · " + L("thinking…", "생각 중…"),
+                  dim: true, questionLen: header.count)
         askTask?.cancel()
         askTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
@@ -730,12 +748,13 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             }.value
             if Task.isCancelled { return }
             if result.text.isEmpty {
-                self?.setAnswer(result.reason ?? L("Nothing to answer here.", "답할 내용이 없어요."), dim: true)
+                self?.setAnswer(header + (result.reason ?? L("Nothing to answer here.", "답할 내용이 없어요.")),
+                                dim: true, questionLen: header.count)
                 return
             }
             let answer = await AskService.answer(question: question, context: result.text)
             if Task.isCancelled { return }
-            self?.setAnswer(answer.text, dim: false)
+            self?.setAnswer(header + answer.text, dim: false, questionLen: header.count)
         }
     }
 
@@ -758,9 +777,19 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         resultsScroll?.isHidden = false
     }
 
-    private func setAnswer(_ text: String, dim: Bool) {
-        answerText?.string = text
-        answerText?.textColor = dim ? .secondaryLabelColor : .labelColor
+    /// Render the answer view. The first `questionLen` chars (the echoed
+    /// question) are drawn bold so it's clear what was asked.
+    private func setAnswer(_ text: String, dim: Bool, questionLen: Int = 0) {
+        let attr = NSMutableAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 15),
+            .foregroundColor: dim ? NSColor.secondaryLabelColor : NSColor.labelColor,
+        ])
+        if questionLen > 0, questionLen <= text.count {
+            attr.addAttributes([.font: NSFont.systemFont(ofSize: 15, weight: .semibold),
+                                .foregroundColor: NSColor.labelColor],
+                               range: NSRange(location: 0, length: questionLen))
+        }
+        answerText?.textStorage?.setAttributedString(attr)
         answerText?.scrollToBeginningOfDocument(nil)
     }
 
@@ -778,12 +807,18 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
     func controlTextDidChange(_ obj: Notification) {
         exitAnswerMode()                  // editing the query leaves an inline answer
+        // Typing "/" enters Ask-AI mode; the slash is stripped so the field just
+        // holds the question (the ✦ icon + placeholder signal the mode).
+        if !askMode, query.hasPrefix("/") {
+            field.stringValue = String(query.dropFirst())
+            setAskMode(true)
+        }
         let hasQuery = !query.isEmpty
         searching = hasQuery
         recompute()                       // local results instantly + placeholder
         debounce?.cancel()
-        // Ask-AI mode ("/…") doesn't search the filesystem.
-        if query.hasPrefix("/") {
+        // Ask-AI mode doesn't search the filesystem.
+        if askMode {
             deepTask?.cancel(); contentTask?.cancel()
             searching = false; contentScanning = false
             return
@@ -810,8 +845,10 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         case #selector(NSResponder.insertNewline(_:)):
             activateSelection(); return true
         case #selector(NSResponder.cancelOperation(_:)):
-            // Esc backs out of an inline answer first, then closes the palette.
-            if inAnswerMode { exitAnswerMode() } else { hide() }
+            // Esc steps out: inline answer → Ask-AI mode → close.
+            if inAnswerMode { exitAnswerMode() }
+            else if askMode { field.stringValue = ""; setAskMode(false); recompute() }
+            else { hide() }
             return true
         default:
             return false
