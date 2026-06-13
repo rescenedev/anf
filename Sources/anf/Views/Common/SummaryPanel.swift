@@ -11,8 +11,9 @@ final class SummaryPanel: NSObject {
     private static var open: [String: SummaryPanel] = [:]
 
     /// Show a summary panel. `title` is the window title (file/folder name),
-    /// `key` dedupes panels, `run` produces the summary off the main actor.
-    static func show(title: String, key: String, run: @escaping () async -> String?) {
+    /// `key` dedupes panels, `run` produces the summary (or a reason) off the
+    /// main actor.
+    static func show(title: String, key: String, run: @escaping () async -> String) {
         if let existing = open[key] {
             existing.window.makeKeyAndOrderFront(nil)
             return
@@ -25,10 +26,10 @@ final class SummaryPanel: NSObject {
 
     private let key: String
     private let window: NSPanel
-    private let run: () async -> String?
+    private let run: () async -> String
     private let state = SummaryPanelState()
 
-    private init(title: String, key: String, run: @escaping () async -> String?) {
+    private init(title: String, key: String, run: @escaping () async -> String) {
         self.key = key
         self.run = run
         let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
@@ -51,7 +52,7 @@ final class SummaryPanel: NSObject {
             guard let self else { return }
             let result = await run()
             state.loading = false
-            state.text = result ?? L("Couldn’t summarize this.", "요약하지 못했습니다.")
+            state.text = result
         }
     }
 }

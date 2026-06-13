@@ -258,7 +258,7 @@ struct InfoInspector: View {
             guard model.selectedItems.first?.url == url else { return }   // selection moved on
             withAnimation {
                 summarizing = false
-                summary = result ?? L("Couldn’t summarize this document.", "이 문서를 요약하지 못했습니다.")
+                summary = result
             }
         }
     }

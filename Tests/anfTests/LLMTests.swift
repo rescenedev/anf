@@ -37,11 +37,24 @@ func runLLMTests() {
             let md = dir.appendingPathComponent("d.md")
             try? "Some content to summarize.".write(to: md, atomically: true, encoding: .utf8)
             let sem = DispatchSemaphore(value: 0)
-            var result: String? = "unset"
+            var result = "unset"
             Task { result = await SummaryService.summarize(url: md); sem.signal() }
             _ = sem.wait(timeout: .now() + 5)
-            T.expect(result == nil, "no model → summarize returns nil, not a crash/hang")
+            // No model → a clear hint string, not a crash/hang or empty result.
+            T.equal(result, LocalLLM.unavailableHint(LocalLLM.status),
+                    "no model → summarize returns the availability hint")
         }
+    }
+
+    T.group("emptyReason explains why extraction failed") {
+        let pdf = dir.appendingPathComponent("scan.pdf")
+        try? Data("%PDF-1.4 not really a pdf".utf8).write(to: pdf)
+        T.expect(!SummaryService.emptyReason(for: pdf).isEmpty, "pdf gets a specific reason")
+        let img = dir.appendingPathComponent("p.png")
+        try? Data("x".utf8).write(to: img)
+        T.expect(SummaryService.emptyReason(for: img).contains("OCR")
+                 || SummaryService.emptyReason(for: img).contains("이름"),
+                 "image points the user to OCR/Suggest Name")
     }
 
     T.group("language detection for summary instruction") {
