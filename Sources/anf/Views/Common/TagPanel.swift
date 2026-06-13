@@ -92,13 +92,16 @@ private final class TagState: ObservableObject {
     func cancel() { task?.cancel() }
 
     func apply() {
-        var changed = false
+        var applied: [URL] = []
         for i in rows.indices where rows[i].enabled && rows[i].phase == .ready {
             TagService.apply(rows[i].tags, to: rows[i].url)
             rows[i].phase = .done
-            changed = true
+            applied.append(rows[i].url)
         }
-        if changed { onDone() }
+        if !applied.isEmpty {
+            FileTags.reindex(applied)   // make Finder/Spotlight pick the tags up now
+            onDone()
+        }
         if !rows.contains(where: { $0.enabled && $0.phase == .ready }) { close() }
     }
 }

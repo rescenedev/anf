@@ -35,6 +35,7 @@ enum FileTags {
         if let i = current.firstIndex(of: tag) { current.remove(at: i) }
         else { current.append(tag) }
         setTags(current, on: url)
+        reindex([url])   // reflect in Finder/Spotlight immediately
     }
 
     // Per-listing tag cache: the list draws per row on every scroll frame, and a
@@ -61,4 +62,22 @@ enum FileTags {
 
     /// The first standard colour among a file's tags (for the row swatch).
     @MainActor static func primaryColor(of url: URL) -> NSColor? { display(of: url).color }
+
+    /// Force Spotlight to re-read the tags so they show up in Finder (its Tags
+    /// sidebar/column and search) without waiting for the next index pass.
+    /// Writing the xattr alone often doesn't trigger reindex; `mdimport` does.
+    /// Fire-and-forget, off the main thread, chunked to keep the arg list sane.
+    nonisolated static func reindex(_ urls: [URL]) {
+        let paths = urls.map(\.path)
+        guard !paths.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            for chunk in stride(from: 0, to: paths.count, by: 200).map({ Array(paths[$0..<min($0 + 200, paths.count)]) }) {
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/mdimport")
+                p.arguments = chunk
+                try? p.run()
+                p.waitUntilExit()
+            }
+        }
+    }
 }
