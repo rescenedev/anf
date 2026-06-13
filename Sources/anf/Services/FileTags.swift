@@ -37,19 +37,28 @@ enum FileTags {
         setTags(current, on: url)
     }
 
-    // Per-listing colour cache: the list draws a swatch per visible row on
-    // every scroll frame, and a getxattr per cell adds up. Cached by path,
-    // cleared on reload (toggleTag reloads, so edits stay fresh).
-    @MainActor private static var colorCache: [String: NSColor?] = [:]
+    // Per-listing tag cache: the list draws per row on every scroll frame, and a
+    // getxattr per cell adds up. Cached by path, cleared on reload (tag edits
+    // reload, so they stay fresh).
+    @MainActor private static var tagCache: [String: (color: NSColor?, named: [String])] = [:]
 
-    @MainActor static func clearColorCache() { colorCache.removeAll(keepingCapacity: true) }
+    @MainActor static func clearColorCache() { tagCache.removeAll(keepingCapacity: true) }
+
+    /// Cached (primary colour, named tags) for a file. Named tags are those
+    /// without a standard colour — topic tags like "invoice", "art".
+    @MainActor static func display(of url: URL) -> (color: NSColor?, named: [String]) {
+        if let hit = tagCache[url.path] { return hit }
+        var color: NSColor?
+        var named: [String] = []
+        for t in tags(of: url) {
+            if let c = Self.color(for: t) { if color == nil { color = c } }
+            else { named.append(t) }
+        }
+        let result = (color, named)
+        tagCache[url.path] = result
+        return result
+    }
 
     /// The first standard colour among a file's tags (for the row swatch).
-    @MainActor static func primaryColor(of url: URL) -> NSColor? {
-        if let hit = colorCache[url.path] { return hit }
-        var found: NSColor?
-        for t in tags(of: url) where color(for: t) != nil { found = color(for: t); break }
-        colorCache[url.path] = found
-        return found
-    }
+    @MainActor static func primaryColor(of url: URL) -> NSColor? { display(of: url).color }
 }
