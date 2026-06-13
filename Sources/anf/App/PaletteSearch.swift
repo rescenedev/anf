@@ -120,4 +120,34 @@ enum PaletteSearch {
         }
         return matched
     }
+
+    // MARK: - Image text search (on-device OCR)
+
+    /// Match images whose RECOGNIZED text contains `needle`. Mirrors docContent:
+    /// fd to enumerate images, Vision OCR (cached by mtime) to read them, and a
+    /// Unicode-canonical Swift match (NFC/NFD-immune, important for Korean OCR).
+    /// OCR is heavy, so the scan count is capped tighter than the doc sweep and
+    /// the first cold pass is what pays; later queries hit the cache.
+    static func imageContent(root: URL, needle: String, cap: Int) -> [URL] {
+        guard let fd = ExternalTools.path("fd") else { return [] }
+        var args = ["--color=never", "--absolute-path", "--type", "f"]
+        for ext in OCRService.imageExtensions { args += ["--extension", ext] }
+        let scanLimit = 60   // OCR cost is real; bound the cold sweep
+        args += ["--max-results", "\(scanLimit)", ".", root.path]
+        let files = ExternalTools.run(fd, args, maxLines: scanLimit, timeout: 2.0)
+        guard !files.isEmpty else { return [] }
+
+        let lock = NSLock()
+        var matched: [URL] = []
+        DispatchQueue.concurrentPerform(iterations: files.count) { i in
+            lock.lock(); let enough = matched.count >= cap; lock.unlock()
+            if enough { return }
+            let url = URL(fileURLWithPath: files[i])
+            guard let text = OCRTextCache.shared.text(for: url) else { return }
+            if text.localizedCaseInsensitiveContains(needle) {
+                lock.lock(); if matched.count < cap { matched.append(url) }; lock.unlock()
+            }
+        }
+        return matched
+    }
 }

@@ -20,6 +20,10 @@ if let copySrc = ProcessInfo.processInfo.environment["ANF_BENCH_COPY"] {
     MainActor.assumeIsolated { runCopyBench(src: copySrc) }
     exit(0)
 }
+if let ocrRoot = ProcessInfo.processInfo.environment["ANF_BENCH_OCR"] {
+    runOCRBench(root: ocrRoot)
+    exit(0)
+}
 
 runFuzzyMatchTests()
 runNormalizedRankTests()
@@ -48,6 +52,7 @@ runKeymapTests()
 runDocxStructureTests()
 runHwpxStructureTests()
 runSidebarTests()
+runOCRTests()
 
 print("")
 if T.failures.isEmpty {
