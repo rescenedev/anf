@@ -584,7 +584,11 @@ final class BrowserModel: Identifiable {
     }
 
     /// Move the (single) selection up/down the visible list.
-    func moveSelection(by delta: Int, extend: Bool = false) {
+    /// `rowJump` marks ↑/↓ in the icon grid (delta == one grid row). When such a
+    /// jump would overshoot the grid — e.g. a single row, or the last partial
+    /// row — we step to the adjacent item instead, so ↑/↓ still flip through
+    /// photos one at a time rather than snapping to the first/last item.
+    func moveSelection(by delta: Int, extend: Bool = false, rowJump: Bool = false) {
         let n = items.count
         guard n > 0 else { return }
         // Current cursor: the tracked one if still in sync with the live selection.
@@ -597,7 +601,12 @@ final class BrowserModel: Identifiable {
         }()
         let current = tracked ?? items.firstIndex { selection.contains($0.id) }
         if tracked == nil { selAnchor = current }
-        let cursor = min(max((current ?? (delta >= 0 ? -1 : n)) + delta, 0), n - 1)
+        var effective = delta
+        if rowJump, !extend, let cur = current, cur + delta < 0 || cur + delta > n - 1 {
+            let step = delta > 0 ? 1 : -1          // no row that way → adjacent item
+            if cur + step >= 0, cur + step <= n - 1 { effective = step }
+        }
+        let cursor = min(max((current ?? (effective >= 0 ? -1 : n)) + effective, 0), n - 1)
 
         if !extend {
             selAnchor = cursor
