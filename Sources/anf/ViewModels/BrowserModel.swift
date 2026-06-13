@@ -31,13 +31,83 @@ final class BrowserModel: Identifiable {
     /// without diffing the array itself.
     private(set) var itemsVersion = 0
 
+    // MARK: - Inline tree (list mode)
+    /// Folders the user expanded inline in list mode. Their children are spliced
+    /// into `items` indented, so selection/keyboard/sort all work unchanged.
+    @ObservationIgnored private var expanded: Set<URL> = []
+    /// Lazily-loaded raw children per expanded folder (sorted per-level on use).
+    @ObservationIgnored private var childCache: [URL: [FileItem]] = [:]
+    @ObservationIgnored private var loadingChildren: Set<URL> = []
+    /// Indent depth per row URL, rebuilt on every flatten (0 = top level).
+    @ObservationIgnored private(set) var rowDepth: [URL: Int] = [:]
+
+    func isExpandable(_ item: FileItem) -> Bool { viewMode == .list && item.isBrowsableContainer }
+    func isExpanded(_ item: FileItem) -> Bool { expanded.contains(item.url) }
+    func depth(of item: FileItem) -> Int { rowDepth[item.url] ?? 0 }
+
+    /// Expand/collapse a folder row inline (list mode).
+    func toggleExpand(_ item: FileItem) {
+        guard isExpandable(item) else { return }
+        if expanded.contains(item.url) {
+            expanded.remove(item.url)
+        } else {
+            expanded.insert(item.url)
+            if childCache[item.url] == nil { loadChildren(item.url) }
+        }
+        recomputeItems()
+    }
+
+    func setExpanded(_ item: FileItem, _ on: Bool) {
+        if on == expanded.contains(item.url) { return }
+        toggleExpand(item)
+    }
+
+    private func loadChildren(_ url: URL) {
+        guard !loadingChildren.contains(url) else { return }
+        loadingChildren.insert(url)
+        let hidden = showHidden
+        Task { [weak self] in
+            guard let self else { return }
+            let kids = await fs.contentsFast(of: url, showHidden: hidden)
+            self.childCache[url] = kids
+            self.loadingChildren.remove(url)
+            if self.expanded.contains(url) { self.recomputeItems() }
+        }
+    }
+
+    /// Splice expanded folders' children into the sorted top level, recording
+    /// each row's depth. Children are sorted per level with the same order.
+    private func flattenTree(_ top: [FileItem]) -> [FileItem] {
+        var out: [FileItem] = []
+        out.reserveCapacity(top.count)
+        var depth: [URL: Int] = [:]
+        func walk(_ list: [FileItem], _ d: Int) {
+            for it in list {
+                depth[it.url] = d
+                out.append(it)
+                guard it.isBrowsableContainer, expanded.contains(it.url) else { continue }
+                if let kids = childCache[it.url] {
+                    walk(fs.filteredSorted(kids, filter: filterText, by: sort), d + 1)
+                } else {
+                    loadChildren(it.url)   // self-heals: recompute when loaded
+                }
+            }
+        }
+        walk(top, 0)
+        rowDepth = depth
+        return out
+    }
+
     // Presentation
     /// True while restoring a folder's remembered view mode, so the didSet
     /// doesn't write the restored value back as a user preference.
     @ObservationIgnored private var applyingFolderViewMode = false
     var viewMode: ViewMode = .list {
         didSet {
-            guard !applyingFolderViewMode, viewMode != oldValue else { return }
+            guard viewMode != oldValue else { return }
+            if viewMode != .list && !expanded.isEmpty { recomputeItems() }  // tree is list-only
+            else if viewMode == .list && !expanded.isEmpty { recomputeItems() }
+            guard !applyingFolderViewMode else { return }
             ViewModePrefs.shared.set(viewMode, for: currentURL)
         }
     }
@@ -135,11 +205,16 @@ final class BrowserModel: Identifiable {
             ListingCache.shared.put(url: url, hidden: hidden, sort: order,
                                     all: snapshot, sorted: computed)
         }
+        // Splice expanded folders' children in (list mode only) AFTER caching the
+        // flat sorted list — the cache stays the plain listing; the tree is view
+        // state.
+        let treeOn = viewMode == .list && !expanded.isEmpty
         if snapshot.count < 2_000 {
-            items = fs.filteredSorted(snapshot, filter: filter, by: order)
+            let sorted = fs.filteredSorted(snapshot, filter: filter, by: order)
+            cache(sorted)
+            items = treeOn ? flattenTree(sorted) : { rowDepth = [:]; return sorted }()
             itemsVersion &+= 1
             selectedItemsCache = nil
-            cache(items)
             return
         }
         let token = itemsToken
@@ -147,10 +222,10 @@ final class BrowserModel: Identifiable {
             let computed = fs.filteredSorted(snapshot, filter: filter, by: order)
             await MainActor.run { [weak self] in
                 guard let self, self.itemsToken == token else { return }
-                self.items = computed
+                cache(computed)
+                self.items = treeOn ? self.flattenTree(computed) : { self.rowDepth = [:]; return computed }()
                 self.itemsVersion &+= 1
                 self.selectedItemsCache = nil
-                cache(computed)
             }
         }
     }
@@ -250,6 +325,7 @@ final class BrowserModel: Identifiable {
             forward.removeAll()
         }
         currentURL = url
+        expanded.removeAll(); childCache.removeAll(); rowDepth.removeAll()  // fresh folder = collapsed
         if url.scheme != "sftp" {          // local-only bookkeeping
             RecentFolders.shared.record(url)
             FileIndex.shared.build(for: url)   // pre-index for instant ⌘K filename search
@@ -402,6 +478,7 @@ final class BrowserModel: Identifiable {
         let hidden = showHidden
         isLoading = true
         FileTags.clearColorCache()   // tags may have changed since last listing
+        childCache.removeAll()       // refetch expanded folders' children on reload
         selection.removeAll()
         if isRemote { reloadRemote(token: token); return }
         // Paint the last known listing instantly (no read, no sort) — the fresh

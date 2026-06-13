@@ -129,10 +129,19 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 if model.viewMode == .icons || model.viewMode == .gallery {
                     moveSel(by: -1, extend: shift); return true
                 }
+                // List: ← collapses the selected folder (or jumps to its parent row).
+                if model.viewMode == .list, let it = model.selectedItems.first {
+                    if model.isExpandable(it) && model.isExpanded(it) { model.toggleExpand(it); return true }
+                }
                 return false
             case 124:
                 if model.viewMode == .icons || model.viewMode == .gallery {
                     moveSel(by: 1, extend: shift); return true
+                }
+                // List: → expands the selected folder.
+                if model.viewMode == .list, let it = model.selectedItems.first,
+                   model.isExpandable(it) && !model.isExpanded(it) {
+                    model.toggleExpand(it); return true
                 }
                 return false
             // PgUp/PgDn move the SELECTION a viewport's worth (Explorer-style —

@@ -56,6 +56,7 @@ runOCRTests()
 runVisualIndexTests()
 runLLMTests()
 runRenameTests()
+runTreeTests()
 
 print("")
 if T.failures.isEmpty {

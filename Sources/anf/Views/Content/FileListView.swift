@@ -212,7 +212,12 @@ struct FileListView: NSViewRepresentable {
                     ?? NameCell()
                 cell.identifier = .nameCell
                 cell.textField?.delegate = self
-                cell.configure(item: item, fontSize: size)
+                let model = self.model
+                cell.configure(item: item, fontSize: size,
+                               depth: model.depth(of: item),
+                               expandable: model.isExpandable(item),
+                               expanded: model.isExpanded(item),
+                               onToggle: { model.toggleExpand(item) })
                 return cell
             }
             let cell = (tableView.makeView(withIdentifier: .textCell, owner: self) as? PlainCell)
@@ -374,43 +379,51 @@ private extension NSUserInterfaceItemIdentifier {
     static let textCell = NSUserInterfaceItemIdentifier("anf.text")
 }
 
-/// Name column cell: icon + editable label.
+/// Name column cell: [disclosure ▸] icon + editable label, indented by tree depth.
 private final class NameCell: NSTableCellView {
+    private let disclosure = NSButton()
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
     private let tagText = NSTextField(labelWithString: "")
     private let tagDot = NSView()
+    private var indent: NSLayoutConstraint!
+    private static let step: CGFloat = 14     // indent per depth level / triangle slot
+    private var onToggle: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        label.translatesAutoresizingMaskIntoConstraints = false
+        for v in [icon, label, tagText, tagDot, disclosure] { v.translatesAutoresizingMaskIntoConstraints = false }
         label.lineBreakMode = .byTruncatingTail
-        label.isEditable = false
-        label.isBordered = false
-        label.drawsBackground = false
-        label.focusRingType = .none
-        tagDot.translatesAutoresizingMaskIntoConstraints = false
-        tagDot.wantsLayer = true
-        tagDot.layer?.cornerRadius = 3.5
-        tagText.translatesAutoresizingMaskIntoConstraints = false
+        label.isEditable = false; label.isBordered = false
+        label.drawsBackground = false; label.focusRingType = .none
+        tagDot.wantsLayer = true; tagDot.layer?.cornerRadius = 3.5
         tagText.lineBreakMode = .byTruncatingTail
-        tagText.isBordered = false
-        tagText.drawsBackground = false
+        tagText.isBordered = false; tagText.drawsBackground = false
         tagText.textColor = .tertiaryLabelColor
         tagText.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        addSubview(icon); addSubview(label); addSubview(tagText); addSubview(tagDot)
+        disclosure.isBordered = false
+        disclosure.bezelStyle = .regularSquare
+        disclosure.imagePosition = .imageOnly
+        disclosure.contentTintColor = .secondaryLabelColor
+        disclosure.target = self
+        disclosure.action = #selector(toggle)
+        disclosure.symbolConfiguration = .init(pointSize: 9, weight: .semibold)
+
+        addSubview(disclosure); addSubview(icon); addSubview(label); addSubview(tagText); addSubview(tagDot)
         textField = label
         imageView = icon
+        indent = disclosure.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2)
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            indent,
+            disclosure.centerYAnchor.constraint(equalTo: centerYAnchor),
+            disclosure.widthAnchor.constraint(equalToConstant: Self.step),
+            icon.leadingAnchor.constraint(equalTo: disclosure.trailingAnchor, constant: 1),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 16),
             icon.heightAnchor.constraint(equalToConstant: 16),
             label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            // name truncates before the tag names, which sit before the colour dot.
             label.trailingAnchor.constraint(lessThanOrEqualTo: tagText.leadingAnchor, constant: -8),
             tagText.centerYAnchor.constraint(equalTo: centerYAnchor),
             tagText.trailingAnchor.constraint(lessThanOrEqualTo: tagDot.leadingAnchor, constant: -6),
@@ -419,20 +432,26 @@ private final class NameCell: NSTableCellView {
             tagDot.widthAnchor.constraint(equalToConstant: 7),
             tagDot.heightAnchor.constraint(equalToConstant: 7),
         ])
-        // The name keeps its natural size; only it truncates, the tags stay put.
         label.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(item: FileItem, fontSize: CGFloat) {
+    @objc private func toggle() { onToggle?() }
+
+    func configure(item: FileItem, fontSize: CGFloat,
+                   depth: Int, expandable: Bool, expanded: Bool, onToggle: (() -> Void)?) {
         icon.image = IconProvider.shared.icon(for: item)
         label.stringValue = item.name
         label.font = .systemFont(ofSize: fontSize)
         label.isEditable = true   // rename starts via editColumn; clicks won't edit
+        self.onToggle = onToggle
+        indent.constant = 2 + CGFloat(depth) * Self.step
+        disclosure.isHidden = !expandable
+        disclosure.image = NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right",
+                                   accessibilityDescription: nil)
         let tags = FileTags.display(of: item.url)
         tagDot.isHidden = tags.color == nil
         tagDot.layer?.backgroundColor = tags.color?.cgColor
-        // Topic (named) tags as small trailing text, so they're actually visible.
         tagText.isHidden = tags.named.isEmpty
         tagText.stringValue = tags.named.joined(separator: "  ")
         tagText.font = .systemFont(ofSize: max(9, fontSize - 2))
