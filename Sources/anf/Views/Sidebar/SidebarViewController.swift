@@ -122,6 +122,23 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             self.sshHosts = hosts
             self.rebuildTree()
         }
+        // Re-scan when anf becomes active: a permission granted while we were in
+        // the background (iCloud Drive / Files & Folders) can newly expose
+        // folders — pick them up without a relaunch (reported: iCloud missing
+        // until restart). favorites() is recomputed inside rebuildTree().
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                Task { [weak self] in
+                    let locs = await Task.detached(priority: .utility) { SidebarBuilder.locations() }.value
+                    guard let self else { return }
+                    self.locations = locs
+                    self.rebuildTree()
+                }
+            }
+        }
     }
 
     /// Observation-driven refresh: any tracked model change rebuilds the tree.
