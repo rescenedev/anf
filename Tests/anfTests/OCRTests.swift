@@ -5,6 +5,8 @@ import AppKit
 /// On-device OCR (Vision): rendered text must round-trip through recognition,
 /// and the cache must serve repeats. Korean + English, since that's the point.
 func runOCRTests() {
+    AIFeatures.enabled = true        // image-content search is gated behind the AI switch
+    defer { AIFeatures.enabled = false }
     let fm = FileManager.default
     let dir = fm.temporaryDirectory.appendingPathComponent("anfocr-\(UUID().uuidString)")
     try? fm.createDirectory(at: dir, withIntermediateDirectories: true)

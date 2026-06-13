@@ -36,6 +36,7 @@ final class VisualIndex: @unchecked Sendable {
     /// Cheap to call on every folder change — already-indexed images (matching
     /// mtime) are skipped, and only one build runs at a time.
     func build(for root: URL) {
+        guard AIFeatures.enabled else { return }   // no background classification when AI is off
         lock.lock()
         if building {
             // Don't drop it — queue it (deduped) so rapid folder-hopping still

@@ -39,7 +39,7 @@ enum FileItemMenu {
 
         // On-device AI summary (single selection): a summarizable file, or a
         // folder (overview of its documents). Shown in a floating panel.
-        if model.selection.count <= 1 {
+        if model.selection.count <= 1 && AIFeatures.enabled {
             if item.hasSummarizableText {
                 menu.addItem(.separator())
                 add(L("Summarize (AI)", "AI 요약")) { FolderAITools.summarizeFile(item.url, name: item.name) }
@@ -126,18 +126,21 @@ enum FileItemMenu {
         add(L("New Folder", "새 폴더")) { model.makeNewFolder() }
         add(L("Open Terminal Here", "여기서 터미널 열기")) { FileOperations.openInTerminal(model.currentURL) }
         menu.addItem(.separator())
-        // Right-click the empty area of a folder → AI actions for the folder.
+        // Right-click the empty area of a folder → folder tools. The plain
+        // file-movers are always here; the on-device-AI actions only when enabled.
         let folder = model.currentURL
-        add(L("Summarize Folder (AI)", "이 폴더 요약 (AI)")) {
-            FolderAITools.summarizeFolder(folder, name: folder.lastPathComponent)
-        }
-        add(L("Ask This Folder… (AI)", "이 폴더에 질문하기… (AI)")) {
-            FolderAITools.ask(url: folder, name: folder.lastPathComponent, isFolder: true)
-        }
         add(L("Tidy Screenshots", "스크린샷 정리")) { FolderAITools.tidyScreenshots(folder: folder, model: model) }
         add(L("Organize by Kind", "종류별 정리")) { FolderAITools.organizeByKind(folder: folder, model: model) }
-        add(L("Organize by Content (AI)", "내용별 정리 (AI)")) { FolderAITools.organizeByContent(folder: folder, model: model) }
-        add(L("Auto-Tag Folder (AI)", "폴더 자동 태그 (AI)")) { FolderAITools.autoTagFolder(folder: folder, model: model) }
+        if AIFeatures.enabled {
+            add(L("Summarize Folder (AI)", "이 폴더 요약 (AI)")) {
+                FolderAITools.summarizeFolder(folder, name: folder.lastPathComponent)
+            }
+            add(L("Ask This Folder… (AI)", "이 폴더에 질문하기… (AI)")) {
+                FolderAITools.ask(url: folder, name: folder.lastPathComponent, isFolder: true)
+            }
+            add(L("Organize by Content (AI)", "내용별 정리 (AI)")) { FolderAITools.organizeByContent(folder: folder, model: model) }
+            add(L("Auto-Tag Folder (AI)", "폴더 자동 태그 (AI)")) { FolderAITools.autoTagFolder(folder: folder, model: model) }
+        }
         menu.addItem(.separator())
         // Vault: time-travel protection for this folder.
         if VaultWatcher.shared.isVault(model.currentURL) {

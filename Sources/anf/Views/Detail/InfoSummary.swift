@@ -208,7 +208,7 @@ struct InfoInspector: View {
         .overlay(alignment: .bottom) {
             if let target {
                 HStack(spacing: 8) {
-                    if target.hasSummarizableText {
+                    if target.hasSummarizableText && AIFeatures.enabled {
                         // Labeled pill (not a tiny icon) — summarize was too hard
                         // to find as a bare ✨ circle.
                         Button { summarize(target) } label: {

@@ -72,7 +72,24 @@ final class ToolsMenuController: NSObject, NSMenuItemValidation {
         FolderAITools.autoTagFolder(folder: m.currentURL, model: m)
     }
 
-    func validateMenuItem(_ item: NSMenuItem) -> Bool { model != nil }
+    @objc func toggleAI(_ sender: Any?) { AIFeatures.enabled.toggle() }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        // The on/off toggle is always available and shows a checkmark.
+        if item.action == #selector(toggleAI(_:)) {
+            item.state = AIFeatures.enabled ? .on : .off
+            return true
+        }
+        guard model != nil else { return false }
+        // The on-device-LLM actions need the feature on; the plain file-moving
+        // tools (organize by kind, tidy screenshots) don't.
+        let needsAI: Set<Selector> = [
+            #selector(organizeByContent(_:)), #selector(autoTagFolder(_:)),
+            #selector(summarizeFolder(_:)), #selector(askFolder(_:)),
+        ]
+        if let a = item.action, needsAI.contains(a) { return AIFeatures.enabled }
+        return true
+    }
 }
 
 /// Minimal native menu bar. Standard editing selectors keep text fields (filter,
@@ -160,6 +177,11 @@ enum MainMenu {
         main.addItem(toolsItem)
         let toolsMenu = NSMenu(title: L("Tools", "도구"))
         toolsItem.submenu = toolsMenu
+        let aiToggle = toolsMenu.addItem(withTitle: L("Enable AI Features", "AI 기능 사용"),
+                                         action: #selector(ToolsMenuController.toggleAI(_:)),
+                                         keyEquivalent: "")
+        aiToggle.target = ToolsMenuController.shared
+        toolsMenu.addItem(.separator())
         let byKind = toolsMenu.addItem(withTitle: L("Organize by Kind", "종류별 정리"),
                                        action: #selector(ToolsMenuController.organizeByKind(_:)),
                                        keyEquivalent: "")

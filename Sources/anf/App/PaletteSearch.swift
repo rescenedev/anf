@@ -129,6 +129,7 @@ enum PaletteSearch {
     /// OCR is heavy, so the scan count is capped tighter than the doc sweep and
     /// the first cold pass is what pays; later queries hit the cache.
     static func imageContent(root: URL, needle: String, cap: Int) -> [URL] {
+        guard AIFeatures.enabled else { return [] }   // image search is an AI feature
         // VISUAL matches ("강아지"/"음식") come from the persistent VisualIndex —
         // instant and full-coverage even on a 10k-photo library (on-the-fly
         // classification couldn't scale). The index builds in the background on

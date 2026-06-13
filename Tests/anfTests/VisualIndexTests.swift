@@ -7,6 +7,8 @@ import AppKit
 /// image, so this exercises the index mechanics: build populates, search is
 /// scoped to the root and matches indexed labels, persistence round-trips.
 func runVisualIndexTests() {
+    AIFeatures.enabled = true        // index/search are gated behind the AI switch
+    defer { AIFeatures.enabled = false }
     let fm = FileManager.default
     let dir = fm.temporaryDirectory.appendingPathComponent("anfvis-\(UUID().uuidString)")
     let other = fm.temporaryDirectory.appendingPathComponent("anfvis-other-\(UUID().uuidString)")

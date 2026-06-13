@@ -37,6 +37,7 @@ struct ImagePreview: View {
         }
         .task(id: url) {
             ocr = nil; scanned = false
+            guard AIFeatures.enabled else { return }   // OCR is an AI feature
             let target = url
             let text = await Task.detached(priority: .userInitiated) {
                 OCRTextCache.shared.text(for: target)
