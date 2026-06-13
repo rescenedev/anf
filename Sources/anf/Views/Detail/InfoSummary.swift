@@ -157,6 +157,10 @@ struct InfoInspector: View {
                         JSONPreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else if target.isPlainTextLike {
                         TextFilePreview(url: target.url, fontSize: workspace.previewTextSize)
+                    } else if OCRService.isImage(target.url) {
+                        // Image: Quick Look preview + on-device OCR text below
+                        // (shares the search cache). Text appears when ready.
+                        ImagePreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else if target.isQuickLookFriendly {
                         QuickLookView(url: target.url)
                     } else {
