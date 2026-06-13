@@ -28,18 +28,47 @@ enum ImageClassifier {
             .map { $0.identifier.replacingOccurrences(of: "_", with: " ").lowercased() }
     }
 
-    /// Does `query` describe any of these classification labels? English queries
-    /// match label substrings directly; common Korean terms map to the English
-    /// Vision taxonomy (개→dog 등). Substring match so "dog" hits
-    /// "labrador retriever"/"domestic dog" too.
+    /// Does `query` describe any of these classification labels? The query is
+    /// TOKENIZED (so "강아지 사진" works, not just "강아지"): split on spaces,
+    /// strip Korean particles, drop filler words ("사진", "찍은"…), then a hit
+    /// is any remaining token that maps to / appears in a label. English tokens
+    /// match label substrings directly; Korean tokens go through the alias map.
     nonisolated static func matches(query: String, labels: [String]) -> Bool {
         guard !labels.isEmpty else { return false }
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return false }
-        var needles = [q]
-        if let mapped = koreanAliases[q] { needles += mapped }
-        return labels.contains { label in needles.contains { label.contains($0) } }
+        for token in contentTokens(query) {
+            var needles = [token]
+            if let mapped = koreanAliases[token] { needles += mapped }
+            if labels.contains(where: { label in needles.contains { label.contains($0) } }) {
+                return true
+            }
+        }
+        return false
     }
+
+    /// Query → content tokens: lowercase, split on whitespace, strip a trailing
+    /// Korean particle from each, and drop filler ("photo", "사진", verbs…) so
+    /// "런던에서 찍은 사진" → ["런던"] and "강아지 사진" → ["강아지"].
+    nonisolated static func contentTokens(_ query: String) -> [String] {
+        query.lowercased()
+            .split { $0 == " " || $0 == "\t" }
+            .map { stripParticle(String($0)) }
+            .filter { !$0.isEmpty && !filler.contains($0) }
+    }
+
+    private nonisolated static func stripParticle(_ w: String) -> String {
+        for p in ["에서", "에게", "으로", "까지", "부터", "보다", "에", "의", "을", "를",
+                  "은", "는", "이", "가", "로", "와", "과", "도", "만"] where w.hasSuffix(p) && w.count > p.count + 1 {
+            return String(w.dropLast(p.count))
+        }
+        return w
+    }
+
+    /// Words that signal "this is an image query" or are grammatical filler —
+    /// not visual content to match on.
+    private nonisolated static let filler: Set<String> = [
+        "사진", "사진들", "이미지", "그림", "것", "거", "찍은", "찍힌", "나온", "있는",
+        "photo", "photos", "picture", "pictures", "image", "images", "of", "the", "a", "with", "in", "at",
+    ]
 
     /// Korean search term → English Vision category substrings. Curated for the
     /// common cases; extend freely. (English queries don't need this — they hit

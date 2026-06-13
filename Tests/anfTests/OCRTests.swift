@@ -77,6 +77,15 @@ func runOCRTests() {
         T.expect(!ImageClassifier.matches(query: "강아지", labels: []), "no labels → no match")
         T.expect(ImageClassifier.matches(query: "음식", labels: ["food", "dish"]), "음식 → food")
         T.expect(ImageClassifier.matches(query: "문서", labels: ["document", "text"]), "문서 → document")
+        // Multi-word queries tokenize (the bug 런던에서-찍은-사진 surfaced).
+        T.expect(ImageClassifier.matches(query: "강아지 사진", labels: labels), "'강아지 사진' tokenizes")
+        T.expect(ImageClassifier.matches(query: "음식 사진", labels: ["food"]), "'음식 사진' → food")
+        T.expect(ImageClassifier.matches(query: "런던에서 찍은 강아지", labels: labels),
+                 "particle-stripped token (강아지) still matches")
+        // Location ('런던') isn't in the visual taxonomy — honestly no match.
+        T.expect(!ImageClassifier.matches(query: "런던에서 찍은 사진", labels: ["building", "sky"]),
+                 "location query can't match visual labels (needs EXIF geo, later)")
+        T.equal(ImageClassifier.contentTokens("런던에서 찍은 사진"), ["런던"], "filler/particles dropped")
     }
 
     T.group("imageFiles walk: bounded, recursive, skips non-images") {
