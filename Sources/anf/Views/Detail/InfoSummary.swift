@@ -125,6 +125,8 @@ private struct SniffedPreview: View {
 struct InfoInspector: View {
     @Bindable var workspace: WorkspaceModel
     @State private var showDetails = false
+    @State private var summary: String?
+    @State private var summarizing = false
 
     private var model: BrowserModel { workspace.active }
     private var target: FileItem? { model.selectedItems.first }
@@ -132,6 +134,13 @@ struct InfoInspector: View {
     var body: some View {
         VStack(spacing: 0) {
             if let target {
+                if summarizing || summary != nil {
+                    SummaryCard(text: summary, loading: summarizing) {
+                        withAnimation(.easeInOut(duration: 0.15)) { summary = nil; summarizing = false }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    Divider()
+                }
                 // `.id` includes the placeholder flag: when the iCloud download
                 // lands the item flips to local and the preview re-renders with
                 // the actual content instead of the generic icon.
@@ -197,23 +206,94 @@ struct InfoInspector: View {
         .frame(minWidth: 260, idealWidth: 300)
         .background(.regularMaterial)
         .overlay(alignment: .bottom) {
-            if target != nil {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { showDetails.toggle() }
-                } label: {
-                    Image(systemName: showDetails ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(7)
-                        .background(.ultraThinMaterial, in: Circle())
+            if let target {
+                HStack(spacing: 10) {
+                    if target.hasSummarizableText {
+                        Button { summarize(target) } label: {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(summarizing ? Color.secondary : Color.accentColor)
+                                .padding(7)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(summarizing)
+                        .help(L("Summarize (on-device AI)", "요약 (온디바이스 AI)"))
+                    }
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { showDetails.toggle() }
+                    } label: {
+                        Image(systemName: showDetails ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(7)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(showDetails ? L("Hide Info", "정보 가리기") : L("Show Info", "정보 보기"))
                 }
-                .buttonStyle(.plain)
                 .padding(.bottom, 10)
-                .help(showDetails ? L("Hide Info", "정보 가리기") : L("Show Info", "정보 보기"))
             }
         }
         .onChange(of: target?.id, initial: true) {
+            summary = nil; summarizing = false       // reset per selection
             if let target { model.downloadFromCloud(target) }
         }
+    }
+
+    private func summarize(_ target: FileItem) {
+        guard LocalLLM.isAvailable else {
+            withAnimation { summary = LocalLLM.unavailableHint(LocalLLM.status) }
+            return
+        }
+        let url = target.url
+        withAnimation { summarizing = true; summary = nil }
+        Task {
+            let result = await SummaryService.summarize(url: url)
+            guard model.selectedItems.first?.url == url else { return }   // selection moved on
+            withAnimation {
+                summarizing = false
+                summary = result ?? L("Couldn’t summarize this document.", "이 문서를 요약하지 못했습니다.")
+            }
+        }
+    }
+}
+
+/// The on-device-AI summary card shown atop the inspector.
+private struct SummaryCard: View {
+    let text: String?
+    let loading: Bool
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: "sparkles").font(.system(size: 11))
+                Text(L("Summary", "요약")).font(.system(size: 11, weight: .semibold))
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                }.buttonStyle(.plain).foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.secondary)
+            if loading {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text(L("Summarizing on-device…", "온디바이스로 요약 중…"))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
+            } else if let text {
+                ScrollView {
+                    Text(text).font(.system(size: 12.5))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 150)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.06))
     }
 }

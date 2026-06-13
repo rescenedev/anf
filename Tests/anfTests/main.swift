@@ -54,6 +54,7 @@ runHwpxStructureTests()
 runSidebarTests()
 runOCRTests()
 runVisualIndexTests()
+runLLMTests()
 
 print("")
 if T.failures.isEmpty {
