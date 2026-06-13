@@ -72,6 +72,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     private var inAnswerMode = false
     private var askMode = false                  // entered by "/", which is then stripped
     private var askTask: Task<Void, Never>?
+    private var thinkTimer: Timer?               // animates the "thinking ···" line
     private var results: [Target] = []
     private var deepResults: [Target] = []
     private var deepTask: Task<Void, Never>?
@@ -735,12 +736,12 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
     }
 
     /// Answer a "/…" question right inside the palette — no separate window. The
-    /// question is echoed at the top so it's obvious Enter went through.
+    /// question is echoed at the top so it's obvious Enter went through, with an
+    /// animated "thinking ···" line (Claude over a big folder can take a while).
     private func answerInline(question: String, folder: URL) {
         enterAnswerMode()
         let header = question + "\n\n"
-        setAnswer(header + "✦ \(LocalLLM.providerLabel) · " + L("thinking…", "생각 중…"),
-                  dim: true, questionLen: header.count)
+        startThinking(header: header)
         askTask?.cancel()
         askTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
@@ -748,15 +749,35 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             }.value
             if Task.isCancelled { return }
             if result.text.isEmpty {
+                self?.stopThinking()
                 self?.setAnswer(header + (result.reason ?? L("Nothing to answer here.", "답할 내용이 없어요.")),
                                 dim: true, questionLen: header.count)
                 return
             }
             let answer = await AskService.answer(question: question, context: result.text)
             if Task.isCancelled { return }
+            self?.stopThinking()
             self?.setAnswer(header + answer.text, dim: false, questionLen: header.count)
         }
     }
+
+    /// Animate "✦ <backend> · 생각 중 ···" so it's clearly working, not stuck.
+    private func startThinking(header: String) {
+        thinkTimer?.invalidate()
+        let provider = LocalLLM.providerLabel
+        var step = 0
+        func render() {
+            let dots = String(repeating: "·", count: 1 + step % 3)
+            setAnswer(header + "✦ \(provider) · " + L("Thinking", "생각 중") + " \(dots)",
+                      dim: true, questionLen: header.count)
+        }
+        render()
+        thinkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+            step += 1; render()
+        }
+    }
+
+    private func stopThinking() { thinkTimer?.invalidate(); thinkTimer = nil }
 
     private func enterAnswerMode() {
         inAnswerMode = true
@@ -773,6 +794,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         guard inAnswerMode else { return }
         inAnswerMode = false
         askTask?.cancel()
+        stopThinking()
         answerScroll?.isHidden = true
         resultsScroll?.isHidden = false
     }
