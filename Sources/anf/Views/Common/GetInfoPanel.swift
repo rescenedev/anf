@@ -15,6 +15,9 @@ final class GetInfoPanel: NSObject {
         let panel = GetInfoPanel(item: item)
         open[item.url.path] = panel
         panel.window.makeKeyAndOrderFront(nil)
+        // Make the window itself first responder so Esc reaches EscPanel instead
+        // of being swallowed by a selectable label / tag button.
+        panel.window.makeFirstResponder(nil)
     }
 
     private let item: FileItem

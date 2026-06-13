@@ -278,22 +278,30 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
 
         // Inline AI answer ("/…"): a selectable text view over the same area,
         // shown instead of the table while answering — no separate window.
-        let aText = NSTextView()
+        // Canonical scrollable-NSTextView setup (autoresizing, NOT autolayout on
+        // the text view) so it grows to fit content instead of collapsing to one
+        // line.
+        let aScroll = NSScrollView()
+        aScroll.drawsBackground = false
+        aScroll.hasVerticalScroller = true
+        aScroll.autohidesScrollers = true
+        aScroll.isHidden = true
+        aScroll.translatesAutoresizingMaskIntoConstraints = false
+        let aText = NSTextView(frame: NSRect(x: 0, y: 0, width: panelWidth - 16, height: tableHeight))
         aText.isEditable = false
         aText.isSelectable = true
         aText.drawsBackground = false
         aText.textContainerInset = NSSize(width: 14, height: 12)
         aText.font = .systemFont(ofSize: 15)
         aText.textColor = .labelColor
-        let aScroll = NSScrollView()
+        aText.minSize = NSSize(width: 0, height: 0)
+        aText.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        aText.isVerticallyResizable = true
+        aText.isHorizontallyResizable = false
+        aText.autoresizingMask = [.width]
+        aText.textContainer?.widthTracksTextView = true
+        aText.textContainer?.containerSize = NSSize(width: panelWidth - 16, height: .greatestFiniteMagnitude)
         aScroll.documentView = aText
-        aScroll.drawsBackground = false
-        aScroll.hasVerticalScroller = true
-        aScroll.autohidesScrollers = true
-        aScroll.isHidden = true
-        aScroll.translatesAutoresizingMaskIntoConstraints = false
-        aText.translatesAutoresizingMaskIntoConstraints = false
-        aText.widthAnchor.constraint(equalTo: aScroll.widthAnchor).isActive = true
         blur.addSubview(aScroll)
         NSLayoutConstraint.activate([
             aScroll.leadingAnchor.constraint(equalTo: blur.leadingAnchor, constant: 8),

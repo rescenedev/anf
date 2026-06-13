@@ -151,9 +151,10 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
             case 121: moveSel(by: pageRows(), extend: shift); return true
             case 115: moveSel(by: -model.items.count, extend: shift); return true
             case 119: moveSel(by: model.items.count, extend: shift); return true
-            case 53:  // esc — dismiss the shortcuts overlay, then Quick Look
+            case 53:  // esc — shortcuts overlay → Quick Look → close the inspector
                 if workspace.showWelcome { workspace.showWelcome = false; return true }
                 if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared().orderOut(nil); return true }
+                if workspace.inspectorVisible { workspace.inspectorVisible = false; return true }
             default: break
             }
             // Type-to-select (Finder typeahead): plain printable keys jump the
