@@ -106,6 +106,17 @@ final class Keymap {
             UserDefaults.standard.set(Double(size), forKey: "anf.previewTextSize")
             NotificationCenter.default.post(name: Self.previewTextSizeChanged, object: size)
         }
+        if let ai = Self.aiFeatures(fileAt: Self.fileURL) {
+            AIFeatures.enabled = ai
+        }
+    }
+
+    /// "aiFeatures": true/false in the settings file, or nil when absent.
+    nonisolated static func aiFeatures(fileAt url: URL) -> Bool? {
+        guard let data = try? Data(contentsOf: url),
+              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        return dict["aiFeatures"] as? Bool
     }
 
     static let previewTextSizeChanged = Notification.Name("anf.settings.previewTextSize")
@@ -229,18 +240,24 @@ final class Keymap {
         guard let s = try? String(contentsOf: url, encoding: .utf8),
               let data = s.data(using: .utf8),
               let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              dict["previewTextSize"] == nil,
-              let brace = s.range(of: "}", options: .backwards) else { return }
+              let brace0 = s.range(of: "}", options: .backwards) else { return }
+        var out = s
+        func appendKey(_ key: String, _ value: String) {
+            guard let data = out.data(using: .utf8),
+                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  dict[key] == nil,
+                  let brace = out.range(of: "}", options: .backwards) else { return }
+            let head = out[..<brace.lowerBound]
+            guard let lastIdx = head.lastIndex(where: { !" \n\t".contains($0) }) else { return }
+            let comma = (head[lastIdx] == "{" || head[lastIdx] == ",") ? "" : ","
+            out.replaceSubrange(head.index(after: lastIdx)..<brace.lowerBound,
+                                with: "\(comma)\n  \"\(key)\": \(value)\n")
+        }
+        _ = brace0
         let stored = UserDefaults.standard.double(forKey: "anf.previewTextSize")
         let size = stored >= 9 && stored <= 28 ? Int(stored) : 16
-        // Splice right after the last meaningful character (consuming the
-        // whitespace run before the brace) so the result stays tidy.
-        let head = s[..<brace.lowerBound]
-        guard let lastIdx = head.lastIndex(where: { !" \n\t".contains($0) }) else { return }
-        let comma = (head[lastIdx] == "{" || head[lastIdx] == ",") ? "" : ","
-        var out = s
-        out.replaceSubrange(head.index(after: lastIdx)..<brace.lowerBound,
-                            with: "\(comma)\n  \"previewTextSize\": \(size)\n")
+        appendKey("previewTextSize", "\(size)")
+        appendKey("aiFeatures", AIFeatures.enabled ? "true" : "false")
         try? out.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -268,9 +285,11 @@ final class Keymap {
             "escape delete up down left right home end pageup pagedown ` [ ] / \\\\ = - . , ; '",
             "An action may have several chords (JSON array). Rebinding an action frees its old keys;",
             "binding a key another action used steals it. Menu items keep showing the factory shortcut.",
-            "previewTextSize — inspector text previews (markdown/json/code/document), 9-28. ⌘+/⌘− also adjusts it live."
+            "previewTextSize — inspector text previews (markdown/json/code/document), 9-28. ⌘+/⌘− also adjusts it live.",
+            "aiFeatures — on-device AI (summarize, ask, suggest name, auto-tag, organize-by-content, image search). true/false. Also toggleable in the Tools menu."
           ],
           "previewTextSize": 16,
+          "aiFeatures": false,
         """)
         for (i, entry) in defaults.enumerated() {
             let (action, specs) = entry

@@ -45,6 +45,12 @@ struct FileItem: Identifiable, Hashable, Sendable {
     /// isPlainTextLike, which also matches .json as plain text.
     var isJSON: Bool { ext == "json" || contentType?.conforms(to: .json) == true }
 
+    /// Has a text body the on-device LLM can summarize (documents, markdown,
+    /// json, source/plain text). Drives the inspector's summarize button.
+    var hasSummarizableText: Bool {
+        isExtractableDocument || isPDF || isMarkdown || isJSON || isPlainTextLike
+    }
+
     /// Types Quick Look renders something genuinely useful for. Anything else
     /// that reaches the inspector's fallback gets content-sniffed: text shows in
     /// the text preview, binary shows an instant placeholder — QL never grinds

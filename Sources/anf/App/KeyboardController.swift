@@ -30,9 +30,23 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
 
     override init() {
         super.init()
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .otherMouseDown]) { [weak self] event in
             guard let self, self.workspace != nil else { return event }
+            if event.type == .otherMouseDown {
+                return self.handleMouse(event) ? nil : event
+            }
             return self.handle(event) ? nil : event
+        }
+    }
+
+    /// Mouse side buttons: button 3 → Back, button 4 → Forward (the de-facto
+    /// browser/Finder mapping). Other buttons pass through untouched.
+    private func handleMouse(_ e: NSEvent) -> Bool {
+        guard !isEditingText, !isTerminalFocused else { return false }
+        switch e.buttonNumber {
+        case 3: model.goBack(); refocusContent(); return true
+        case 4: model.goForward(); refocusContent(); return true
+        default: return false
         }
     }
 
@@ -103,10 +117,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         if !cmd && !opt {
             switch code {
             case 48: workspace.cyclePane(shift ? -1 : 1); return true // Tab → switch pane
-            case 125:   // ↓ — icon/gallery grids jump a whole row
-                moveSel(by: gridStep, extend: shift); return true
+            case 125:   // ↓ — icon grid jumps a whole row (falls back to next
+                        // item when there's no row below: single/last row)
+                moveSel(by: gridStep, extend: shift, rowJump: model.viewMode == .icons); return true
             case 126:   // ↑
-                moveSel(by: -gridStep, extend: shift); return true
+                moveSel(by: -gridStep, extend: shift, rowJump: model.viewMode == .icons); return true
             // ←/→ move the selection in icon/gallery grids (no native arrow
             // handling there). In list/columns they fall through to the native
             // view. Folder history stays on ⌘←/⌘→.
@@ -294,8 +309,8 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
 
     /// Wraps moveSelection and refreshes the QL panel when it is open, so the
     /// preview tracks the cursor as the user navigates.
-    private func moveSel(by delta: Int, extend: Bool = false) {
-        model.moveSelection(by: delta, extend: extend)
+    private func moveSel(by delta: Int, extend: Bool = false, rowJump: Bool = false) {
+        model.moveSelection(by: delta, extend: extend, rowJump: rowJump)
         refreshQLPanelIfVisible()
     }
 

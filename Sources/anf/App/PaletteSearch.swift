@@ -120,4 +120,64 @@ enum PaletteSearch {
         }
         return matched
     }
+
+    // MARK: - Image text search (on-device OCR)
+
+    /// Match images whose RECOGNIZED text contains `needle`. Mirrors docContent:
+    /// fd to enumerate images, Vision OCR (cached by mtime) to read them, and a
+    /// Unicode-canonical Swift match (NFC/NFD-immune, important for Korean OCR).
+    /// OCR is heavy, so the scan count is capped tighter than the doc sweep and
+    /// the first cold pass is what pays; later queries hit the cache.
+    static func imageContent(root: URL, needle: String, cap: Int) -> [URL] {
+        guard AIFeatures.enabled else { return [] }   // image search is an AI feature
+        // VISUAL matches ("강아지"/"음식") come from the persistent VisualIndex —
+        // instant and full-coverage even on a 10k-photo library (on-the-fly
+        // classification couldn't scale). The index builds in the background on
+        // folder entry; results grow as it fills.
+        var matched = VisualIndex.shared.search(query: needle, root: root, cap: cap)
+        if matched.count >= cap { return matched }
+
+        // TEXT-in-image (OCR) stays on-demand + bounded — OCR'ing 10k images
+        // eagerly would take hours, so only the first `ocrLimit` get read here.
+        let ocrLimit = 80
+        let files = imageFiles(under: root, limit: ocrLimit)
+        let seen = NSMutableSet(array: matched.map(\.path))
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: files.count) { i in
+            lock.lock(); let enough = matched.count >= cap; lock.unlock()
+            if enough { return }
+            let url = files[i]
+            guard let text = OCRTextCache.shared.text(for: url),
+                  text.localizedCaseInsensitiveContains(needle) else { return }
+            lock.lock()
+            if matched.count < cap, !seen.contains(url.path) {
+                seen.add(url.path); matched.append(url)
+            }
+            lock.unlock()
+        }
+        return matched
+    }
+
+    /// Breadth-first getattrlistbulk walk collecting up to `limit` image files
+    /// under `root`. Depth-bounded and count-bounded so a huge tree can't make
+    /// the cold OCR sweep wander; BFS so near files (the likely targets) win.
+    static func imageFiles(under root: URL, limit: Int, maxDepth: Int = 6) -> [URL] {
+        var out: [URL] = []
+        var queue: [(path: String, depth: Int)] = [(root.path, 0)]
+        var head = 0
+        while head < queue.count, out.count < limit {
+            let (dir, depth) = queue[head]; head += 1
+            guard let entries = FastDirRead.list(path: dir) else { continue }
+            for e in entries where !e.isHidden {
+                let full = dir + "/" + e.name
+                if e.isDir {
+                    if depth < maxDepth { queue.append((full, depth + 1)) }
+                } else if OCRService.imageExtensions.contains((e.name as NSString).pathExtension.lowercased()) {
+                    out.append(URL(fileURLWithPath: full))
+                    if out.count >= limit { break }
+                }
+            }
+        }
+        return out
+    }
 }

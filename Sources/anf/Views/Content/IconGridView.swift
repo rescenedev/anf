@@ -112,8 +112,15 @@ struct IconGridView: NSViewRepresentable {
                 cv.deselectItems(at: cv.selectionIndexPaths)
                 cv.selectItems(at: want, scrollPosition: [])
             }
-            if scroll, let first = want.min(by: { $0.item < $1.item }) {
-                cv.scrollToItems(at: [first], scrollPosition: .nearestHorizontalEdge)
+            if scroll {
+                // Follow the moving cursor (the growing edge of a shift-select),
+                // not the topmost item — otherwise shift+↓ / shift+PgDn never
+                // scroll because the top stays put. Fall back to the topmost.
+                let target = model.selectionCursorIndex.map { IndexPath(item: $0, section: 0) }
+                    ?? want.min(by: { $0.item < $1.item })
+                if let target {
+                    cv.scrollToItems(at: [target], scrollPosition: .nearestHorizontalEdge)
+                }
             }
         }
 

@@ -164,7 +164,12 @@ struct FileListView: NSViewRepresentable {
                 syncState.applying {
                     table.selectRowIndexes(want, byExtendingSelection: false)
                 }
-                if scroll, let first = want.first { table.scrollRowToVisible(first) }
+                // Follow the moving cursor (the growing edge of a shift-select),
+                // not the topmost row — otherwise shift+↓ / shift+PgDn never
+                // scroll because the top stays put. Fall back to the topmost.
+                if scroll, let target = model.selectionCursorIndex ?? want.first {
+                    table.scrollRowToVisible(target)
+                }
             }
         }
 
@@ -373,6 +378,7 @@ private extension NSUserInterfaceItemIdentifier {
 private final class NameCell: NSTableCellView {
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    private let tagText = NSTextField(labelWithString: "")
     private let tagDot = NSView()
 
     override init(frame frameRect: NSRect) {
@@ -387,7 +393,14 @@ private final class NameCell: NSTableCellView {
         tagDot.translatesAutoresizingMaskIntoConstraints = false
         tagDot.wantsLayer = true
         tagDot.layer?.cornerRadius = 3.5
-        addSubview(icon); addSubview(label); addSubview(tagDot)
+        tagText.translatesAutoresizingMaskIntoConstraints = false
+        tagText.lineBreakMode = .byTruncatingTail
+        tagText.isBordered = false
+        tagText.drawsBackground = false
+        tagText.textColor = .tertiaryLabelColor
+        tagText.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        addSubview(icon); addSubview(label); addSubview(tagText); addSubview(tagDot)
         textField = label
         imageView = icon
         NSLayoutConstraint.activate([
@@ -397,13 +410,17 @@ private final class NameCell: NSTableCellView {
             icon.heightAnchor.constraint(equalToConstant: 16),
             label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            // A tag swatch sits after the name; the name truncates before it.
-            label.trailingAnchor.constraint(lessThanOrEqualTo: tagDot.leadingAnchor, constant: -6),
+            // name truncates before the tag names, which sit before the colour dot.
+            label.trailingAnchor.constraint(lessThanOrEqualTo: tagText.leadingAnchor, constant: -8),
+            tagText.centerYAnchor.constraint(equalTo: centerYAnchor),
+            tagText.trailingAnchor.constraint(lessThanOrEqualTo: tagDot.leadingAnchor, constant: -6),
             tagDot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             tagDot.centerYAnchor.constraint(equalTo: centerYAnchor),
             tagDot.widthAnchor.constraint(equalToConstant: 7),
             tagDot.heightAnchor.constraint(equalToConstant: 7),
         ])
+        // The name keeps its natural size; only it truncates, the tags stay put.
+        label.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -412,9 +429,13 @@ private final class NameCell: NSTableCellView {
         label.stringValue = item.name
         label.font = .systemFont(ofSize: fontSize)
         label.isEditable = true   // rename starts via editColumn; clicks won't edit
-        let tagColor = FileTags.primaryColor(of: item.url)
-        tagDot.isHidden = tagColor == nil
-        tagDot.layer?.backgroundColor = tagColor?.cgColor
+        let tags = FileTags.display(of: item.url)
+        tagDot.isHidden = tags.color == nil
+        tagDot.layer?.backgroundColor = tags.color?.cgColor
+        // Topic (named) tags as small trailing text, so they're actually visible.
+        tagText.isHidden = tags.named.isEmpty
+        tagText.stringValue = tags.named.joined(separator: "  ")
+        tagText.font = .systemFont(ofSize: max(9, fontSize - 2))
     }
 }
 

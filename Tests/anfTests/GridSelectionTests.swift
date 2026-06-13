@@ -70,6 +70,28 @@ func runGridSelectionTests() {
                     "cursor clamps to the last item; missing cells are skipped")
         }
 
+        T.group("icon grid: ↑/↓ flip to next photo when there's no row that way") {
+            // Single row (all 12 fit across): ↓/↑ must step one item, not snap
+            // to the first/last (issue report 2026-06-13).
+            model.gridColumns = 12
+            model.selection = [model.items[0].id]
+            model.moveSelection(by: 12, extend: false, rowJump: true)   // ↓ in a 1-row grid
+            T.equal(names(), ["f02.txt"], "↓ on a single row moves to the next photo")
+            model.moveSelection(by: -12, extend: false, rowJump: true)  // ↑
+            T.equal(names(), ["f01.txt"], "↑ on a single row moves to the previous photo")
+
+            // Last (partial) row: ↓ has no row below → steps to the next item.
+            model.gridColumns = 4
+            model.selection = [model.items[9].id]                       // f10, bottom row
+            model.moveSelection(by: 4, extend: false, rowJump: true)
+            T.equal(names(), ["f11.txt"], "↓ on the last row advances to the next item")
+
+            // A real row below still jumps a whole row.
+            model.selection = [model.items[0].id]                       // f01
+            model.moveSelection(by: 4, extend: false, rowJump: true)
+            T.equal(names(), ["f05.txt"], "↓ still jumps a full row when one exists")
+        }
+
         T.group("list mode: contiguous reading-order range") {
             model.viewMode = .list
             model.selection = [model.items[2].id]            // "click" f03

@@ -35,6 +35,63 @@ final class ViewMenuController: NSObject, NSMenuItemValidation {
     }
 }
 
+/// Target for the Tools menu — on-device AI folder actions, reachable from the
+/// menu bar even when a packed list view leaves no empty space to right-click.
+@MainActor
+final class ToolsMenuController: NSObject, NSMenuItemValidation {
+    static let shared = ToolsMenuController()
+    private var model: BrowserModel? { WindowRegistry.current?.active }
+
+    @objc func tidyScreenshots(_ sender: Any?) {
+        guard let m = model else { return }
+        FolderAITools.tidyScreenshots(folder: m.currentURL, model: m)
+    }
+
+    @objc func organizeByKind(_ sender: Any?) {
+        guard let m = model else { return }
+        FolderAITools.organizeByKind(folder: m.currentURL, model: m)
+    }
+
+    @objc func organizeByContent(_ sender: Any?) {
+        guard let m = model else { return }
+        FolderAITools.organizeByContent(folder: m.currentURL, model: m)
+    }
+
+    @objc func summarizeFolder(_ sender: Any?) {
+        guard let m = model else { return }
+        FolderAITools.summarizeFolder(m.currentURL, name: m.currentURL.lastPathComponent)
+    }
+
+    @objc func askFolder(_ sender: Any?) {
+        guard let m = model else { return }
+        FolderAITools.ask(url: m.currentURL, name: m.currentURL.lastPathComponent, isFolder: true)
+    }
+
+    @objc func autoTagFolder(_ sender: Any?) {
+        guard let m = model else { return }
+        FolderAITools.autoTagFolder(folder: m.currentURL, model: m)
+    }
+
+    @objc func toggleAI(_ sender: Any?) { AIFeatures.enabled.toggle() }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        // The on/off toggle is always available and shows a checkmark.
+        if item.action == #selector(toggleAI(_:)) {
+            item.state = AIFeatures.enabled ? .on : .off
+            return true
+        }
+        guard model != nil else { return false }
+        // The on-device-LLM actions need the feature on; the plain file-moving
+        // tools (organize by kind, tidy screenshots) don't.
+        let needsAI: Set<Selector> = [
+            #selector(organizeByContent(_:)), #selector(autoTagFolder(_:)),
+            #selector(summarizeFolder(_:)), #selector(askFolder(_:)),
+        ]
+        if let a = item.action, needsAI.contains(a) { return AIFeatures.enabled }
+        return true
+    }
+}
+
 /// Minimal native menu bar. Standard editing selectors keep text fields (filter,
 /// rename) fully functional; the App/Window menus give Quit, Hide and zoom.
 /// Target for the ⌘, settings menu item (menus need an object target).
@@ -113,6 +170,43 @@ enum MainMenu {
                                        action: #selector(ViewMenuController.showWelcome(_:)),
                                        keyEquivalent: "")
         welcome.target = ViewMenuController.shared
+
+        // Tools menu — on-device AI folder actions (also in the right-click menu,
+        // but the menu bar works when the list view has no empty space to click).
+        let toolsItem = NSMenuItem()
+        main.addItem(toolsItem)
+        let toolsMenu = NSMenu(title: L("Tools", "도구"))
+        toolsItem.submenu = toolsMenu
+        let aiToggle = toolsMenu.addItem(withTitle: L("Enable AI Features", "AI 기능 사용"),
+                                         action: #selector(ToolsMenuController.toggleAI(_:)),
+                                         keyEquivalent: "")
+        aiToggle.target = ToolsMenuController.shared
+        toolsMenu.addItem(.separator())
+        let byKind = toolsMenu.addItem(withTitle: L("Organize by Kind", "종류별 정리"),
+                                       action: #selector(ToolsMenuController.organizeByKind(_:)),
+                                       keyEquivalent: "")
+        byKind.target = ToolsMenuController.shared
+        let byContent = toolsMenu.addItem(withTitle: L("Organize by Content (AI)", "내용별 정리 (AI)"),
+                                          action: #selector(ToolsMenuController.organizeByContent(_:)),
+                                          keyEquivalent: "")
+        byContent.target = ToolsMenuController.shared
+        let autoTag = toolsMenu.addItem(withTitle: L("Auto-Tag Folder (AI)", "폴더 자동 태그 (AI)"),
+                                        action: #selector(ToolsMenuController.autoTagFolder(_:)),
+                                        keyEquivalent: "")
+        autoTag.target = ToolsMenuController.shared
+        let tidy = toolsMenu.addItem(withTitle: L("Tidy Screenshots", "스크린샷 정리"),
+                                     action: #selector(ToolsMenuController.tidyScreenshots(_:)),
+                                     keyEquivalent: "")
+        tidy.target = ToolsMenuController.shared
+        toolsMenu.addItem(.separator())
+        let sumFolder = toolsMenu.addItem(withTitle: L("Summarize Folder (AI)", "이 폴더 요약 (AI)"),
+                                          action: #selector(ToolsMenuController.summarizeFolder(_:)),
+                                          keyEquivalent: "")
+        sumFolder.target = ToolsMenuController.shared
+        let askFolder = toolsMenu.addItem(withTitle: L("Ask This Folder… (AI)", "이 폴더에 질문하기… (AI)"),
+                                          action: #selector(ToolsMenuController.askFolder(_:)),
+                                          keyEquivalent: "")
+        askFolder.target = ToolsMenuController.shared
 
         // Window menu
         let windowItem = NSMenuItem()

@@ -98,11 +98,11 @@ final class FileIndex {
 
     private func startWatching(_ rootPath: String) {
         stopWatching()
-        var ctx = FSEventStreamContext(version: 0,
-                                       info: Unmanaged.passUnretained(self).toOpaque(),
-                                       retain: nil, release: nil, copyDescription: nil)
-        // UseCFTypes is REQUIRED: without it eventPaths is a C char** array and
-        // bit-casting it to NSArray crashes when a change fires.
+        // CRITICAL: FSEventStreamCreate opens the watched path. On a hung mount
+        // (an asleep SMB/NFS NAS) that open() blocks for the network timeout —
+        // tens of seconds — so it must NOT run on the main thread, or the whole
+        // UI beachballs. Create the stream on a background queue and hand it back.
+        let info = Unmanaged.passUnretained(self).toOpaque()
         let flags = UInt32(kFSEventStreamCreateFlagNoDefer
                            | kFSEventStreamCreateFlagWatchRoot
                            | kFSEventStreamCreateFlagUseCFTypes)
@@ -112,13 +112,28 @@ final class FileIndex {
             let cpaths = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
             Task { @MainActor in me.onChange(cpaths) }
         }
-        guard let s = FSEventStreamCreate(kCFAllocatorDefault, cb, &ctx,
-                                          [rootPath] as CFArray,
-                                          FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-                                          1.0, flags) else { return }
-        FSEventStreamSetDispatchQueue(s, DispatchQueue.global(qos: .utility))
-        FSEventStreamStart(s)
-        stream = s
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var ctx = FSEventStreamContext(version: 0, info: info,
+                                           retain: nil, release: nil, copyDescription: nil)
+            guard let s = FSEventStreamCreate(kCFAllocatorDefault, cb, &ctx,
+                                              [rootPath] as CFArray,
+                                              FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                                              1.0, flags) else { return }
+            FSEventStreamSetDispatchQueue(s, DispatchQueue.global(qos: .utility))
+            FSEventStreamStart(s)
+            Task { @MainActor in
+                guard let self else {
+                    FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s); return
+                }
+                // A newer watch may have started while we were blocked — keep the
+                // newest, tear this one down.
+                if self.stream != nil {
+                    FSEventStreamStop(s); FSEventStreamInvalidate(s); FSEventStreamRelease(s)
+                } else {
+                    self.stream = s
+                }
+            }
+        }
     }
 
     private func stopWatching() {

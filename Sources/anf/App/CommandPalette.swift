@@ -592,8 +592,12 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                 let textHits = PaletteSearch.rgContent(root: root, needle: q, cap: 40)
                     ?? PaletteSearch.mdfindContent(root: root, needle: q, cap: 40)
                 let docHits = PaletteSearch.docContent(root: root, needle: q, cap: 25)
+                // On-device OCR + image classification: text inside screenshots
+                // and visual content ("강아지", "음식"). Higher cap — a photo
+                // album can legitimately have many matches.
+                let imageHits = PaletteSearch.imageContent(root: root, needle: q, cap: 40)
                 var seen = Set<String>()
-                return (textHits + docHits)
+                return (textHits + docHits + imageHits)
                     .filter { seen.insert($0.standardizedFileURL.path).inserted }
                     .map { Self.target(for: $0, content: true) }
             }.value
