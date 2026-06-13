@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — anf</title>
+<meta name="description" content="anf (all new finder) privacy policy">
+<link rel="stylesheet" href="../styles.css?v=19">
+<link rel="alternate" hreflang="ko" href="https://rescenedev.github.io/anf/privacy.html">
+<link rel="alternate" hreflang="en" href="https://rescenedev.github.io/anf/en/privacy.html">
+<!-- Cloudflare Web Analytics — cookieless site analytics (NOT app telemetry; the app sends nothing). Disclosed in §5 below. -->
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "1b598242e0c44f28912150f7a983687c"}'></script>
+<style>
+  .legal { max-width: 760px; margin: 0 auto; padding: 80px 22px 120px; }
+  .legal h1 { font-size: 38px; letter-spacing: -.02em; margin-bottom: 10px; }
+  .legal .date { color: var(--txt-faint); font-size: 13.5px; margin-bottom: 44px; }
+  .legal h2 { font-size: 21px; margin: 40px 0 12px; }
+  .legal p, .legal li { color: var(--txt-dim); font-size: 15px; line-height: 1.7; }
+  .legal ul { padding-left: 20px; margin-top: 8px; }
+  .legal li { margin-bottom: 6px; }
+  .legal code {
+    padding: 1px 6px; background: rgba(255,255,255,.06); border: 1px solid var(--line);
+    border-radius: 6px; font-size: .88em; color: var(--accent-2);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .legal a { color: var(--accent); }
+  .legal a:hover { text-decoration: underline; }
+  .legal .tldr {
+    background: var(--tile); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 24px; margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">anf</a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a class="nav-lang" href="../privacy.html">한국어</a>
+      <a href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="legal">
+  <h1>Privacy Policy</h1>
+  <p class="date">Effective: June 12, 2026 (web-analytics notice added June 14, 2026)</p>
+
+  <div class="tldr">
+    <p><strong>In short:</strong> <strong>The anf app</strong> collects nothing —
+    no accounts, no telemetry, no analytics. All of your data stays on your Mac.
+    (This <strong>website</strong> uses cookieless, anonymous visit stats only —
+    see <a href="#site">§5</a>.)</p>
+  </div>
+
+  <h2>1. What we collect</h2>
+  <p>Nothing. anf does not collect, transmit or sell your personal data. There is
+  no account to create, and it gathers no telemetry, usage statistics, crash
+  reports or advertising identifiers whatsoever.</p>
+
+  <h2>2. Network activity</h2>
+  <p>anf makes exactly one network request on its own:</p>
+  <ul>
+    <li><strong>Update check</strong> — once a day it queries the GitHub Releases
+      API (<code>api.github.com</code>) for the latest version. The request carries
+      no user data; as with any web request, GitHub can see your IP address (their
+      <a href="https://docs.github.com/site-policy/privacy-policies" target="_blank" rel="noopener">privacy policy</a>
+      applies). Offline, it is silently skipped.</li>
+    <li><strong>SSH / SFTP</strong> — only to hosts you add and connect to yourself,
+      only when you connect. Authentication is key/agent based; anf
+      <strong>never prompts for or stores passwords</strong>.</li>
+  </ul>
+
+  <h2>3. Data stored on your device</h2>
+  <p>The following stays on your Mac and is never sent anywhere:</p>
+  <ul>
+    <li>Search index (a list of file paths) — <code>~/Library/Caches/anf/</code></li>
+    <li>Settings (layout, pins, Workspaces, recent folders, …) — macOS UserDefaults</li>
+    <li>SSH connection-multiplexing sockets — <code>~/.anf/</code></li>
+    <li>Diagnostic log — <strong>off by default</strong>. Only when you launch with
+      <code>ANF_TRACE=1</code> is anything written to <code>/tmp/anf-trace.log</code>.</li>
+  </ul>
+  <p>Uninstalling can remove all of the above
+  (<code>brew uninstall --zap --cask anf</code>).</p>
+
+  <h2>4. Third parties</h2>
+  <p>Since nothing is collected, nothing is shared with third parties.</p>
+
+  <h2 id="site">5. About this website (separate from the app)</h2>
+  <p>Sections 1–4 above are about <strong>the anf app</strong>, which contains no
+  analytics of any kind. This <strong>promotional website</strong>
+  (<code>rescenedev.github.io/anf</code>) uses <strong>Cloudflare Web Analytics</strong>
+  for visit statistics:</p>
+  <ul>
+    <li><strong>It uses no cookies</strong> — nothing is stored on your device, and
+      it does not identify you or track you across sites.</li>
+    <li>Only anonymous aggregates are recorded — page views, approximate location
+      (country), referrer and browser type.</li>
+    <li>It is not Google Analytics, and no data is sold or shared for advertising
+      or profiling.</li>
+  </ul>
+  <p>This is unrelated to downloading or using the app; if you never visit the
+  website, none of these stats occur.</p>
+
+  <h2>6. Changes</h2>
+  <p>If this policy changes, we publish the change here and in the
+  <a href="https://github.com/rescenedev/anf" target="_blank" rel="noopener">GitHub repository</a>.</p>
+
+  <h2>7. Contact</h2>
+  <p>Privacy questions: <a href="mailto:tellme@duck.com?subject=anf%20privacy">tellme@duck.com</a></p>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>anf — all new finder · Made with <span class="heart">♥</span> Claude</span>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="mailto:tellme@duck.com">tellme@duck.com</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
