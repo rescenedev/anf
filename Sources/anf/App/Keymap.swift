@@ -270,10 +270,10 @@ final class Keymap {
         let size = stored >= 9 && stored <= 28 ? Int(stored) : 16
         appendKey("previewTextSize", "\(size)")
         appendKey("aiFeatures", AIFeatures.enabled ? "true" : "false")
-        appendKey("aiProvider", "\"apple\"")
+        appendKey("aiProvider", "\"auto\"")
+        appendKey("aiApiKey", "\"\"")
         appendKey("aiEndpoint", "\"\"")
         appendKey("aiModel", "\"\"")
-        appendKey("aiApiKey", "\"\"")
         try? out.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -303,17 +303,17 @@ final class Keymap {
             "binding a key another action used steals it. Menu items keep showing the factory shortcut.",
             "previewTextSize — inspector text previews (markdown/json/code/document), 9-28. ⌘+/⌘− also adjusts it live.",
             "aiFeatures — on-device AI (summarize, ask, suggest name, auto-tag, organize-by-content, image search). true/false. Also toggleable in the Tools menu.",
-            "aiProvider — which model backend: 'apple' (on-device, default), 'local' (Ollama/LM Studio via aiEndpoint), or 'claude' (Anthropic API — sends content to the cloud).",
-            "aiEndpoint — local OpenAI-compatible URL, e.g. 'http://localhost:11434/v1' (Ollama) or 'http://localhost:1234/v1' (LM Studio).",
-            "aiModel — model name for local/claude, e.g. 'llama3.2' or 'claude-opus-4-8'.",
-            "aiApiKey — API key for 'claude' (sk-ant-…); usually empty for local."
+            "aiProvider — 'auto' (default): uses Claude when aiApiKey is set, else a local endpoint, else Apple on-device. Force one with 'claude', 'local', or 'apple'.",
+            "aiApiKey — Anthropic key (sk-ant-…). The fast path: set aiFeatures:true and paste this — Claude works immediately. (Also read from ANTHROPIC_API_KEY env var.)",
+            "aiEndpoint — local OpenAI-compatible URL for 'local', e.g. 'http://localhost:11434/v1' (Ollama) or 'http://localhost:1234/v1' (LM Studio).",
+            "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default."
           ],
           "previewTextSize": 16,
           "aiFeatures": false,
-          "aiProvider": "apple",
+          "aiProvider": "auto",
+          "aiApiKey": "",
           "aiEndpoint": "",
           "aiModel": "",
-          "aiApiKey": "",
         """)
         for (i, entry) in defaults.enumerated() {
             let (action, specs) = entry

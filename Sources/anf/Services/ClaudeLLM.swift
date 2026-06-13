@@ -17,7 +17,12 @@ enum ClaudeLLM {
     static var apiKey: String? {
         let s = (UserDefaults.standard.string(forKey: apiKeyKey) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return s.isEmpty ? nil : s
+        if !s.isEmpty { return s }
+        // Fall back to the standard env var so Claude "just works" when anf is
+        // launched from a shell that has it (no key in the settings file).
+        let env = (ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return env.isEmpty ? nil : env
     }
     static var model: String {
         let s = (UserDefaults.standard.string(forKey: modelKey) ?? "")

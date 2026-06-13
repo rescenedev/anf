@@ -32,7 +32,8 @@ enum LocalLLM {
         case "local", "ollama", "openai": return RemoteLLM.isConfigured ? .local : .apple
         case "apple", "ondevice", "on-device": return .apple
         default:
-            // No explicit choice — use whatever's configured (Claude, then local).
+            // "auto" (the default): Claude is the headline path — just enable AI
+            // and drop in an Anthropic key. Then a local endpoint, then Apple.
             if ClaudeLLM.isConfigured { return .claude }
             if RemoteLLM.isConfigured { return .local }
             return .apple
@@ -160,15 +161,26 @@ enum LocalLLM {
         return nil
     }
 
-    /// Char budget for a single LLM call. CJK is ~1 token/char vs ~0.25 for
-    /// English, so the model's small context needs a much tighter cap for
-    /// Korean/Japanese/Chinese text. generate() still shrinks-and-retries past
-    /// this, but a right-sized first try usually succeeds outright.
-    static func inputBudget(forCJK cjk: Bool) -> Int { cjk ? 3_500 : 9_000 }
+    /// Char budget for a single LLM call, sized to the active backend. Claude has
+    /// a 1M-token window so we send the whole document; the tiny on-device model
+    /// needs a tight cap (CJK is ~1 token/char vs ~0.25 for English); a local
+    /// server sits in between. generate() still shrinks-and-retries past this.
+    static func inputBudget(forCJK cjk: Bool) -> Int {
+        switch provider {
+        case .claude: return 200_000
+        case .local:  return cjk ? 6_000 : 16_000
+        case .apple:  return cjk ? 3_500 : 9_000
+        }
+    }
 
-    /// Back-compat budget used by callers that excerpt before calling (folder
-    /// sweep). Conservative so mixed content still fits after assembly.
-    static let inputCharBudget = 9_000
+    /// Budget for callers that assemble an excerpt before calling (folder sweep).
+    static var inputCharBudget: Int {
+        switch provider {
+        case .claude: return 200_000
+        case .local:  return 14_000
+        case .apple:  return 9_000
+        }
+    }
 
     /// Summarize a document's body, ANSWERING IN THE DOCUMENT'S LANGUAGE. The
     /// on-device model defaults to the Apple Intelligence UI language (often

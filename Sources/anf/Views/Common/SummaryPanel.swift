@@ -28,6 +28,7 @@ final class SummaryPanel: NSObject {
     private let window: NSPanel
     private let run: () async -> String
     private let state = SummaryPanelState()
+    private var task: Task<Void, Never>?
 
     private init(title: String, key: String, run: @escaping () async -> String) {
         self.key = key
@@ -48,9 +49,10 @@ final class SummaryPanel: NSObject {
     }
 
     private func start() {
-        Task { [weak self] in
+        task = Task { [weak self] in
             guard let self else { return }
             let result = await run()
+            if Task.isCancelled { return }
             state.loading = false
             state.text = result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? L("No response from the model. If it's a local reasoning model, raise its output length, or try another model.",
@@ -62,6 +64,7 @@ final class SummaryPanel: NSObject {
 
 extension SummaryPanel: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
+        task?.cancel()          // closing aborts a slow request instead of orphaning it
         SummaryPanel.open.removeValue(forKey: key)
     }
 }

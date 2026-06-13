@@ -45,9 +45,10 @@ enum RemoteLLM {
     static func request(instructions: String, prompt: String, maxTokens: Int, temperature: Double = 0.3) async -> (text: String?, reasoning: String?) {
         guard let base = endpoint, let url = chatURL(base) else { return (nil, nil) }
         // Reasoning models (LM Studio splits thinking into `reasoning_content`)
-        // spend the completion budget THINKING — too small a cap and the real
-        // answer is truncated to "". Local inference is free, so give headroom.
-        let cap = max(maxTokens, 2048)
+        // spend the completion budget THINKING — too small a cap truncates the
+        // real answer to "". 1024 leaves room for thinking + a short answer
+        // without making generation drag on a big local model.
+        let cap = max(maxTokens, 1024)
         let body: [String: Any] = [
             "model": model,
             "messages": [
