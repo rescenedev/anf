@@ -27,7 +27,21 @@ enum ClaudeLLM {
     static var model: String {
         let s = (UserDefaults.standard.string(forKey: modelKey) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return s.isEmpty ? defaultModel : s
+        return s.isEmpty ? defaultModel : normalize(s)
+    }
+
+    /// Forgive common shorthands so a settings typo ("opus-4.8", "opus") still
+    /// resolves to a valid Anthropic model id instead of a 404.
+    static func normalize(_ m: String) -> String {
+        let k = m.lowercased().replacingOccurrences(of: " ", with: "")
+        if k.hasPrefix("claude-") { return m }          // already a full id
+        let aliases: [String: String] = [
+            "opus": "claude-opus-4-8", "opus-4.8": "claude-opus-4-8", "opus4.8": "claude-opus-4-8",
+            "opus-4-8": "claude-opus-4-8",
+            "sonnet": "claude-sonnet-4-6", "sonnet-4.6": "claude-sonnet-4-6", "sonnet4.6": "claude-sonnet-4-6",
+            "haiku": "claude-haiku-4-5", "haiku-4.5": "claude-haiku-4-5", "haiku4.5": "claude-haiku-4-5",
+        ]
+        return aliases[k] ?? m
     }
 
     /// Configured = an API key is set.

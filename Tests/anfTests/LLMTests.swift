@@ -51,6 +51,10 @@ func runLLMTests() {
         T.equal(RemoteLLM.chatURL("http://x/v1/chat/completions")?.absoluteString,
                 "http://x/v1/chat/completions", "full path left as-is")
         T.equal(ClaudeLLM.defaultModel, "claude-opus-4-8", "Claude default is Opus 4.8")
+        T.equal(ClaudeLLM.normalize("opus-4.8"), "claude-opus-4-8", "shorthand alias resolves")
+        T.equal(ClaudeLLM.normalize("opus"), "claude-opus-4-8", "bare 'opus' resolves")
+        T.equal(ClaudeLLM.normalize("claude-sonnet-4-6"), "claude-sonnet-4-6", "full id left as-is")
+        T.equal(ClaudeLLM.normalize("my-custom-model"), "my-custom-model", "unknown left as-is")
     }
 
     T.group("RemoteLLM.stripThink removes inline reasoning") {
