@@ -162,7 +162,7 @@ private struct RenamePanelView: View {
             Divider()
 
             ScrollView {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach($state.rows) { $row in
                         RowView(row: $row)
                         Divider()

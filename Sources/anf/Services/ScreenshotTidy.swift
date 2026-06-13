@@ -15,9 +15,12 @@ enum ScreenshotTidy {
 
     static func isScreenshot(_ url: URL) -> Bool {
         guard OCRService.isImage(url) else { return false }
-        if let flag = screenCaptureFlag(url) { return flag }
+        // Cheap check first: a default capture name is a screenshot outright, so
+        // we never pay for a Spotlight query on the common case.
         let lower = url.lastPathComponent.lowercased()
-        return namePrefixes.contains { lower.hasPrefix($0) }
+        if namePrefixes.contains(where: { lower.hasPrefix($0) }) { return true }
+        // Renamed/custom captures: consult the Spotlight flag (slower).
+        return screenCaptureFlag(url) ?? false
     }
 
     /// Spotlight's screen-capture flag, or nil if unavailable/unindexed.
