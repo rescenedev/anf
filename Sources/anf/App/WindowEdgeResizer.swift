@@ -27,6 +27,10 @@ final class WindowEdgeResizer: NSView {
     var cornerMargin: CGFloat = 32
     var topEdgeMargin: CGFloat = 6
     var topCornerMargin: CGFloat = 24
+    /// Height of UI reserved at the bottom of the window (e.g. the path/status
+    /// bar). Clicks inside this strip pass through to the underlying views;
+    /// bottom and corner-bottom resize zones are shifted up by this amount.
+    var reservedBottomHeight: CGFloat = 0
 
     private var dragEdges: Edges = []
     private var startFrame: NSRect = .zero
@@ -148,18 +152,27 @@ final class WindowEdgeResizer: NSView {
         let b = bounds
         let em = edgeMargin + slack, cm = cornerMargin + slack
         let tem = topEdgeMargin + slack, tcm = topCornerMargin + slack
+        let rb = reservedBottomHeight
         guard b.insetBy(dx: -1, dy: -1).contains(p) else { return [] }
         // Bottom corners generous; top corners tight (titlebar move area).
-        if p.x <= b.minX + cm && p.y <= b.minY + cm { return [.left, .bottom] }
-        if p.x >= b.maxX - cm && p.y <= b.minY + cm { return [.right, .bottom] }
+        // Bottom and corner-bottom zones are shifted above the reserved strip
+        // (e.g. the path bar) so clicks there pass through to SwiftUI buttons.
+        if p.y >= b.minY + rb {
+            if p.x <= b.minX + cm && p.y <= b.minY + rb + cm { return [.left, .bottom] }
+            if p.x >= b.maxX - cm && p.y <= b.minY + rb + cm { return [.right, .bottom] }
+        }
         if p.x <= b.minX + tcm && p.y >= b.maxY - tcm { return [.left, .top] }
         if p.x >= b.maxX - tcm && p.y >= b.maxY - tcm { return [.right, .top] }
         if p.x <= b.minX + em { return .left }
         if p.x >= b.maxX - em { return .right }
-        if p.y <= b.minY + em { return .bottom }
+        if p.y >= b.minY + rb && p.y <= b.minY + rb + em { return .bottom }
         if p.y >= b.maxY - tem { return .top }
         return []
     }
+
+    /// Returns true when `point` lies inside an active edge-resize zone.
+    /// Exported for regression tests (verifies the reserved-bottom gap).
+    func inEdgeZone(at point: NSPoint) -> Bool { !edges(at: point).isEmpty }
 
     private func cursor(for e: Edges) -> NSCursor {
         if #available(macOS 15.0, *) {

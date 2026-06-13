@@ -48,6 +48,7 @@ runKeymapTests()
 runDocxStructureTests()
 runHwpxStructureTests()
 runSidebarTests()
+MainActor.assumeIsolated { runPathBarNavTests() }
 
 print("")
 if T.failures.isEmpty {
