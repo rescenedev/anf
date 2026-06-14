@@ -110,12 +110,15 @@ final class BrowserModel: Identifiable {
     /// to the bottom). Works no matter which folder up the chain was collapsed.
     private func repairOrphanedSelection() {
         guard !selection.isEmpty, selectedItems.isEmpty, let lost = selection.first else { return }
+        // Match by standardized PATH (URL == is too strict — trailing slash /
+        // encoding differ between a folder row and a child's parent URL).
         var u = lost.deletingLastPathComponent()
         while u.path.count > 1 {
-            if let row = items.first(where: { $0.url == u }) {
-                selection = [row.id]
-                selCursor = items.firstIndex { $0.id == row.id }
-                selAnchor = selCursor
+            let target = u.standardizedFileURL.path
+            if let i = items.firstIndex(where: { $0.url.standardizedFileURL.path == target }) {
+                selection = [items[i].id]
+                selCursor = i
+                selAnchor = i
                 return
             }
             u = u.deletingLastPathComponent()
