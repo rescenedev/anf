@@ -117,11 +117,14 @@ final class Keymap {
         // AI provider config (apple / local / claude). Mirror file → UserDefaults
         // so RemoteLLM / ClaudeLLM / LocalLLM all read one source.
         let dict = Self.settingsDict(fileAt: Self.fileURL)
-        for key in ["aiProvider", "aiEndpoint", "aiModel", "aiApiKey", "openWithApp"] {
+        // NOTE: aiApiKey is deliberately NOT mirrored — the key lives only in the
+        // macOS Keychain. Migrate any leftover plaintext key out of the file/defaults.
+        for key in ["aiProvider", "aiEndpoint", "aiModel", "openWithApp"] {
             if let s = dict[key] as? String {
                 UserDefaults.standard.set(s, forKey: "anf.\(key)")
             }
         }
+        AISecret.migrate(settingsFile: Self.fileURL)
     }
 
     nonisolated static func settingsDict(fileAt url: URL) -> [String: Any] {
@@ -256,7 +259,7 @@ final class Keymap {
     nonisolated static func migrateMissingSettings(at url: URL) {
         guard let s = try? String(contentsOf: url, encoding: .utf8),
               let data = s.data(using: .utf8),
-              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              (try? JSONSerialization.jsonObject(with: data)) is [String: Any],
               let brace0 = s.range(of: "}", options: .backwards) else { return }
         var out = s
         func appendKey(_ key: String, _ value: String) {
@@ -276,7 +279,6 @@ final class Keymap {
         appendKey("previewTextSize", "\(size)")
         appendKey("aiFeatures", AIFeatures.enabled ? "true" : "false")
         appendKey("aiProvider", "\"auto\"")
-        appendKey("aiApiKey", "\"\"")
         appendKey("aiEndpoint", "\"\"")
         appendKey("aiModel", "\"\"")
         appendKey("openWithApp", "\"\"")
@@ -311,8 +313,8 @@ final class Keymap {
             "binding a key another action used steals it. Menu items keep showing the factory shortcut.",
             "previewTextSize — inspector text previews (markdown/json/code/document), 9-28. ⌘+/⌘− also adjusts it live.",
             "aiFeatures — on-device AI (summarize, ask, suggest name, auto-tag, organize-by-content, image search). true/false. Also toggleable in the Tools menu.",
-            "aiProvider — 'auto' (default): uses Claude when aiApiKey is set, else a local endpoint, else Apple on-device. Force one with 'claude', 'local', or 'apple'.",
-            "aiApiKey — Anthropic key (sk-ant-…). The fast path: set aiFeatures:true and paste this — Claude works immediately. (Also read from ANTHROPIC_API_KEY env var.)",
+            "aiProvider — 'auto' (default): uses Claude when an API key is set, else a local endpoint, else Apple on-device. Force one with 'claude', 'local', or 'apple'.",
+            "Anthropic API key — set it in the AI menu (AI → Set Anthropic API Key…). It is stored in the macOS Keychain, NEVER in this file. (ANTHROPIC_API_KEY env var also works.)",
             "aiEndpoint — local OpenAI-compatible URL for 'local', e.g. 'http://localhost:11434/v1' (Ollama) or 'http://localhost:1234/v1' (LM Studio).",
             "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default.",
             "openWithApp — app for the 'Open With' action (name, path, or bundle id), e.g. 'Typora'. The shortcut is the 'openWith' keybinding below (default F4).",
@@ -323,7 +325,6 @@ final class Keymap {
           "previewTextSize": 16,
           "aiFeatures": false,
           "aiProvider": "auto",
-          "aiApiKey": "",
           "aiEndpoint": "",
           "aiModel": "",
           "openWithApp": "",

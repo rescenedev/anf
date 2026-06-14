@@ -9,17 +9,15 @@ import Foundation
 ///     "aiApiKey": "sk-ant-…",
 ///     "aiModel": "claude-opus-4-8"   // optional; this is the default
 enum ClaudeLLM {
-    private static let apiKeyKey = "anf.aiApiKey"
     private static let modelKey = "anf.aiModel"
 
     static let defaultModel = "claude-opus-4-8"
 
     static var apiKey: String? {
-        let s = (UserDefaults.standard.string(forKey: apiKeyKey) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !s.isEmpty { return s }
+        // Stored in the macOS Keychain (set via the AI menu), never on disk.
+        if let k = AISecret.key { return k }
         // Fall back to the standard env var so Claude "just works" when anf is
-        // launched from a shell that has it (no key in the settings file).
+        // launched from a shell that has it.
         let env = (ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return env.isEmpty ? nil : env

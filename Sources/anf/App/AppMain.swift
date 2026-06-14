@@ -104,7 +104,10 @@ public func anfMain() {
     let controller = AppController()
     app.delegate = controller
     app.setActivationPolicy(.regular)
-    MainMenu.install()
+    MainActor.assumeIsolated {
+        MainMenu.install()
+        _ = Keymap.shared   // load settings now → migrates any plaintext API key into the Keychain at launch
+    }
     // Keep the delegate alive for the app's lifetime.
     objc_setAssociatedObject(app, "anf.controller", controller, .OBJC_ASSOCIATION_RETAIN)
     app.run()

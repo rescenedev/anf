@@ -23,6 +23,26 @@ enum TextPrompt {
         return value.isEmpty ? nil : value
     }
 
+    /// Secure (masked) single-field prompt — for secrets like the API key. The
+    /// typed value is never echoed and never logged. Returns nil if cancelled.
+    static func runSecure(title: String, message: String, placeholder: String, action: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: action)
+        alert.addButton(withTitle: L("Cancel", "취소"))
+
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.placeholderString = placeholder
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return nil }
+        let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
     /// Two-field prompt (used for batch rename find/replace). Returns (find, replace).
     static func runPair(title: String, message: String,
                         label1: String, label2: String, action: String) -> (String, String)? {

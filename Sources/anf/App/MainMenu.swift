@@ -114,6 +114,57 @@ final class ToolsMenuController: NSObject, NSMenuItemValidation {
     }
 }
 
+/// Target for the AI menu — feature toggle, API-key management, provider choice.
+/// The key is stored in the macOS Keychain (`AISecret`/`Keychain`), never on disk.
+@MainActor
+final class AIMenuController: NSObject, NSMenuItemValidation {
+    static let shared = AIMenuController()
+
+    @objc func toggleAI(_ sender: Any?) { AIFeatures.enabled.toggle() }
+
+    @objc func setAPIKey(_ sender: Any?) {
+        let replacing = AISecret.hasKey
+        let msg = replacing
+            ? L("Replace the key stored in your macOS Keychain. Get one at console.anthropic.com (sk-ant-api03-…).",
+                "macOS 키체인에 저장된 키를 교체합니다. console.anthropic.com에서 발급 (sk-ant-api03-…).")
+            : L("Pasted keys are saved to the macOS Keychain — never to a file. Get one at console.anthropic.com (sk-ant-api03-…).",
+                "붙여넣은 키는 파일이 아니라 macOS 키체인에 저장됩니다. console.anthropic.com에서 발급 (sk-ant-api03-…).")
+        guard let key = TextPrompt.runSecure(
+            title: L("Anthropic API Key", "Anthropic API 키"),
+            message: msg, placeholder: "sk-ant-api03-…",
+            action: L("Save to Keychain", "키체인에 저장")) else { return }
+        if AISecret.setKey(key) {
+            if !AIFeatures.enabled { AIFeatures.enabled = true }   // make it usable right away
+            confirm(L("API key saved to your Keychain.", "API 키를 키체인에 저장했어요."))
+        } else {
+            confirm(L("Couldn’t save to the Keychain.", "키체인에 저장하지 못했어요."), warning: true)
+        }
+    }
+
+    @objc func removeAPIKey(_ sender: Any?) {
+        AISecret.setKey(nil)
+        confirm(L("API key removed from your Keychain.", "키체인에서 API 키를 삭제했어요."))
+    }
+
+    @objc func aiProviderSettings(_ sender: Any?) { Keymap.openSettingsFile() }
+
+    private func confirm(_ text: String, warning: Bool = false) {
+        let a = NSAlert()
+        a.messageText = text
+        a.alertStyle = warning ? .warning : .informational
+        a.addButton(withTitle: L("OK", "확인"))
+        a.runModal()
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        switch item.action {
+        case #selector(toggleAI(_:)): item.state = AIFeatures.enabled ? .on : .off; return true
+        case #selector(removeAPIKey(_:)): return AISecret.hasKey
+        default: return true
+        }
+    }
+}
+
 /// Minimal native menu bar. Standard editing selectors keep text fields (filter,
 /// rename) fully functional; the App/Window menus give Quit, Hide and zoom.
 /// Target for the ⌘, settings menu item (menus need an object target).
@@ -123,7 +174,7 @@ final class SettingsMenuTarget: NSObject {
 }
 
 enum MainMenu {
-    static func install() {
+    @MainActor static func install() {
         let main = NSMenu()
 
         // App menu
@@ -193,21 +244,33 @@ enum MainMenu {
                                        keyEquivalent: "")
         welcome.target = ViewMenuController.shared
 
+        // AI menu — feature toggle, API-key management (stored in the Keychain),
+        // and provider selection. The on-device folder actions live in Tools.
+        let aiItem = NSMenuItem()
+        main.addItem(aiItem)
+        let aiMenu = NSMenu(title: L("AI", "AI"))
+        aiItem.submenu = aiMenu
+        let aiToggle = aiMenu.addItem(withTitle: L("Enable AI Features", "AI 기능 사용"),
+                                      action: #selector(AIMenuController.toggleAI(_:)), keyEquivalent: "")
+        aiToggle.target = AIMenuController.shared
+        aiMenu.addItem(.separator())
+        let setKey = aiMenu.addItem(withTitle: L("Set Anthropic API Key…", "Anthropic API 키 설정…"),
+                                    action: #selector(AIMenuController.setAPIKey(_:)), keyEquivalent: "")
+        setKey.target = AIMenuController.shared
+        let removeKey = aiMenu.addItem(withTitle: L("Remove API Key", "API 키 삭제"),
+                                       action: #selector(AIMenuController.removeAPIKey(_:)), keyEquivalent: "")
+        removeKey.target = AIMenuController.shared
+        aiMenu.addItem(.separator())
+        let aiProvider = aiMenu.addItem(withTitle: L("AI Provider… (Apple / Local / Claude)", "AI 모델 연결… (Apple / 로컬 / Claude)"),
+                                        action: #selector(AIMenuController.aiProviderSettings(_:)), keyEquivalent: "")
+        aiProvider.target = AIMenuController.shared
+
         // Tools menu — on-device AI folder actions (also in the right-click menu,
         // but the menu bar works when the list view has no empty space to click).
         let toolsItem = NSMenuItem()
         main.addItem(toolsItem)
         let toolsMenu = NSMenu(title: L("Tools", "도구"))
         toolsItem.submenu = toolsMenu
-        let aiToggle = toolsMenu.addItem(withTitle: L("Enable AI Features", "AI 기능 사용"),
-                                         action: #selector(ToolsMenuController.toggleAI(_:)),
-                                         keyEquivalent: "")
-        aiToggle.target = ToolsMenuController.shared
-        let aiProvider = toolsMenu.addItem(withTitle: L("AI Provider… (Apple / Local / Claude)", "AI 모델 연결… (Apple / 로컬 / Claude)"),
-                                           action: #selector(ToolsMenuController.aiProviderSettings(_:)),
-                                           keyEquivalent: "")
-        aiProvider.target = ToolsMenuController.shared
-        toolsMenu.addItem(.separator())
         let byKind = toolsMenu.addItem(withTitle: L("Organize by Kind", "종류별 정리"),
                                        action: #selector(ToolsMenuController.organizeByKind(_:)),
                                        keyEquivalent: "")

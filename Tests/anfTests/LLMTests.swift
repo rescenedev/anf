@@ -24,11 +24,16 @@ func runLLMTests() {
 
     T.group("LLM provider routing") {
         let d = UserDefaults.standard
-        let keys = ["anf.aiProvider", "anf.aiEndpoint", "anf.aiModel", "anf.aiApiKey"]
+        let keys = ["anf.aiProvider", "anf.aiEndpoint", "anf.aiModel"]
         let saved = keys.map { d.string(forKey: $0) }
-        defer { for (k, v) in zip(keys, saved) { d.set(v, forKey: k) } }
+        let savedOverride = AISecret.testOverride
+        defer {
+            for (k, v) in zip(keys, saved) { d.set(v, forKey: k) }
+            AISecret.testOverride = savedOverride
+        }
 
         keys.forEach { d.removeObject(forKey: $0) }
+        AISecret.testOverride = .some(nil)        // isolate from the real Keychain key
         T.equal(LocalLLM.provider, .apple, "no config → Apple on-device")
 
         d.set("http://localhost:11434/v1", forKey: "anf.aiEndpoint")
@@ -37,10 +42,19 @@ func runLLMTests() {
         T.expect(RemoteLLM.isConfigured, "endpoint set → RemoteLLM configured")
 
         d.set("claude", forKey: "anf.aiProvider")
-        d.set("sk-ant-test", forKey: "anf.aiApiKey")
+        AISecret.testOverride = .some("sk-ant-test")   // key present (mocked Keychain)
         T.equal(LocalLLM.provider, .claude, "key + claude → claude")
         T.equal(LocalLLM.status, .claudeCloud, "claude provider → cloud status")
         T.expect(LocalLLM.isAvailable, "configured cloud provider is available")
+    }
+
+    T.group("AISecret scrubs plaintext keys from settings JSON") {
+        let json = "{\n  \"aiProvider\": \"claude\",\n  \"aiApiKey\": \"sk-ant-secret123\",\n  \"aiModel\": \"\"\n}"
+        T.equal(AISecret.jsonStringValue(of: "aiApiKey", in: json), "sk-ant-secret123", "reads the key value")
+        let scrubbed = AISecret.scrub(key: "aiApiKey", in: json)
+        T.equal(AISecret.jsonStringValue(of: "aiApiKey", in: scrubbed), "", "scrub empties the value")
+        T.expect(!scrubbed.contains("sk-ant-secret123"), "secret gone after scrub")
+        T.expect(scrubbed.contains("\"aiProvider\": \"claude\""), "other keys untouched")
     }
 
     T.group("RemoteLLM.chatURL normalizes endpoints") {
@@ -112,6 +126,21 @@ func runLLMTests() {
         T.expect(LocalLLM.hasCJK("これは日本語の文書です"), "Japanese → CJK")
         T.expect(LocalLLM.hasCJK("금융위원회 보고서"), "Korean → CJK")
         T.expect(!LocalLLM.hasCJK("The quarterly report shows growth"), "English → not CJK")
+        // Budget only varies by CJK on the on-device/local backends — Claude's 1M
+        // window is flat — so pin the provider to Apple (no key, forced provider)
+        // for this check. Otherwise a real Keychain key routes to .claude.
+        let d = UserDefaults.standard
+        let savedOverride = AISecret.testOverride
+        let savedProvider = d.string(forKey: "anf.aiProvider")
+        let savedEndpoint = d.string(forKey: "anf.aiEndpoint")
+        defer {
+            AISecret.testOverride = savedOverride
+            d.set(savedProvider, forKey: "anf.aiProvider")
+            d.set(savedEndpoint, forKey: "anf.aiEndpoint")
+        }
+        AISecret.testOverride = .some(nil)
+        d.removeObject(forKey: "anf.aiEndpoint")
+        d.set("apple", forKey: "anf.aiProvider")
         T.expect(LocalLLM.inputBudget(forCJK: true) < LocalLLM.inputBudget(forCJK: false),
                  "CJK budget is tighter than Latin")
     }

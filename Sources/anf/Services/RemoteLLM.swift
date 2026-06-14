@@ -14,7 +14,6 @@ import Foundation
 enum RemoteLLM {
     private static let endpointKey = "anf.aiEndpoint"
     private static let modelKey = "anf.aiModel"
-    private static let apiKeyKey = "anf.aiApiKey"
 
     static var endpoint: String? {
         let s = (UserDefaults.standard.string(forKey: endpointKey) ?? "")
@@ -26,11 +25,9 @@ enum RemoteLLM {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return s.isEmpty ? "local-model" : s
     }
-    static var apiKey: String? {
-        let s = (UserDefaults.standard.string(forKey: apiKeyKey) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return s.isEmpty ? nil : s
-    }
+    /// Optional bearer token for the local endpoint — shares the Keychain-stored
+    /// key (most localhost servers ignore it).
+    static var apiKey: String? { AISecret.key }
 
     /// Configured = an endpoint URL is set.
     static var isConfigured: Bool { endpoint != nil }
