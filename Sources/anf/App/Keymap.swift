@@ -111,6 +111,9 @@ final class Keymap {
         if let ai = Self.aiFeatures(fileAt: Self.fileURL) {
             AIFeatures.enabled = ai
         }
+        if let loc = Self.settingsDict(fileAt: Self.fileURL)["locationSearch"] as? Bool {
+            UserDefaults.standard.set(loc, forKey: "anf.locationSearch")
+        }
         // AI provider config (apple / local / claude). Mirror file → UserDefaults
         // so RemoteLLM / ClaudeLLM / LocalLLM all read one source.
         let dict = Self.settingsDict(fileAt: Self.fileURL)
@@ -314,7 +317,8 @@ final class Keymap {
             "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default.",
             "openWith — app for F4 'Open With' (name, path, or bundle id), e.g. 'Typora'.",
             "favorites / pinned — paths to pin in the sidebar, e.g. ['~/Code', '~/Documents/Work']. Each imported once (great for migrating to a new Mac).",
-            "workspaces — saved window arrangements (use Tools → Copy Pins & Workspaces to generate this)."
+            "workspaces — saved window arrangements (use Tools → Copy Pins & Workspaces to generate this).",
+            "locationSearch — find photos by place in ⌘K (e.g. 'find photos in Paris'). Reads EXIF GPS locally but geocodes the place name online, so it's off by default. true/false."
           ],
           "previewTextSize": 16,
           "aiFeatures": false,
@@ -323,6 +327,7 @@ final class Keymap {
           "aiEndpoint": "",
           "aiModel": "",
           "openWith": "",
+          "locationSearch": false,
           "favorites": [],
           "workspaces": [],
         """)

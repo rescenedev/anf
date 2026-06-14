@@ -684,8 +684,18 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                     .filter { seen.insert($0.standardizedFileURL.path).inserted }
                     .map { Self.target(for: $0, content: true) }
             }.value
+            // Location search (opt-in): photos taken near the named place, via
+            // local EXIF GPS + one geocode of the query.
+            var allTargets = targets
+            if GeoSearch.enabled {
+                let geo = await GeoSearch.imagesNear(place: q, root: root, cap: 40)
+                var seen = Set(allTargets.map { $0.url.standardizedFileURL.path })
+                for u in geo where seen.insert(u.standardizedFileURL.path).inserted {
+                    allTargets.append(Self.target(for: u, content: true))
+                }
+            }
             guard let self, self.query == q else { return }
-            self.contentTargets = targets
+            self.contentTargets = allTargets
             self.searching = false
             self.contentScanning = false
             self.mergeDeep()
@@ -712,8 +722,19 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         let t = results[row]
         if t.aiSetup { openAISetupHelp(); hide(); return }
         if let question = t.askQuestion {
+            if question.isEmpty { return }           // nothing typed after "/"
+            // "찾아줘 / find / 검색" → it's a SEARCH, not a question. Drop out of
+            // Ask mode and run the normal file/content/image search on the subject.
+            if Self.isSearchIntent(question) {
+                let needle = Self.searchNeedle(question)
+                setAskMode(false); exitAnswerMode()
+                field.stringValue = needle
+                searching = !needle.isEmpty
+                recompute()
+                if !needle.isEmpty { startDeepSearch() }
+                return
+            }
             if AIFeatures.enabled && LocalLLM.isAvailable {
-                if question.isEmpty { return }       // nothing typed after "/"
                 answerInline(question: question, folder: t.url)   // stays in the palette
             } else {
                 openAISetupHelp(); hide()
@@ -821,6 +842,26 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         }
         answerText?.textStorage?.setAttributedString(attr)
         answerText?.scrollToBeginningOfDocument(nil)
+    }
+
+    /// Verbs that mark a "find files" request rather than a question.
+    private static let searchVerbs: Set<String> = [
+        "찾아줘", "찾아", "찾기", "찾는", "검색", "검색해줘", "보여줘", "어디", "어딨어", "어딨",
+        "find", "search", "show", "locate", "where",
+    ]
+
+    static func isSearchIntent(_ q: String) -> Bool {
+        let lower = q.lowercased()
+        return searchVerbs.contains { lower.contains($0) }
+    }
+
+    /// The subject of a search request — drop the search verbs and filler so
+    /// "강아지 사진 찾아줘" → "강아지", which the normal name/content/image search
+    /// (and geo) can match.
+    static func searchNeedle(_ q: String) -> String {
+        let tokens = ImageClassifier.contentTokens(q).filter { !searchVerbs.contains($0.lowercased()) }
+        let needle = tokens.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return needle.isEmpty ? q : needle
     }
 
     /// Open the AI setup guide (GitHub Pages), locale-aware.
