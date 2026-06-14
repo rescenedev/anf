@@ -152,10 +152,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 if model.viewMode == .icons || model.viewMode == .gallery {
                     moveSel(by: 1, extend: shift); return true
                 }
-                // List: → expands the selected folder.
-                if model.viewMode == .list, let it = model.selectedItems.first,
-                   model.isExpandable(it) && !model.isExpanded(it) {
-                    model.toggleExpand(it); return true
+                // List: → expands the selected folder, or steps to the next row
+                // when there's nothing left to open here — so mashing → opens
+                // every folder and walks the whole tree.
+                if model.viewMode == .list && !shift {
+                    return model.expandOrAdvance()
                 }
                 return false
             // PgUp/PgDn move the SELECTION a viewport's worth (Explorer-style —

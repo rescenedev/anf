@@ -58,5 +58,28 @@ func runTreeTests() {
             T.equal(model.items.count, 3, "back to the flat listing")
             T.expect(!model.isExpanded(subItem), "folder no longer expanded")
         }
+
+        T.group("→ expands then walks into the tree (open-everything key)") {
+            // sub is collapsed again here (previous group collapsed it).
+            model.select(subItem)
+            T.expect(!model.isExpanded(subItem), "precondition: sub is collapsed")
+            // 1) → on a collapsed folder expands it in place; cursor stays put
+            // (children load async, so we don't dive until they're present).
+            model.expandOrAdvance()
+            T.expect(model.isExpanded(subItem), "→ expands the collapsed folder")
+            T.equal(model.selectedItems.map(\.name), ["sub"], "cursor stays on the folder after expand")
+            pump { model.items.contains { $0.name == "s1.txt" } }
+            // 2) → again steps into the first child (folder's children spliced below it).
+            model.expandOrAdvance()
+            T.equal(model.selectedItems.first?.name, "s1.txt", "→ on an expanded folder dives into its first child")
+            // 3) → on a leaf advances to the next row in reading order.
+            guard let before = model.selectedItems.first.flatMap({ model.index(of: $0.id) }) else {
+                T.expect(false, "no cursor before advance"); return
+            }
+            model.expandOrAdvance()
+            let after = model.selectedItems.first.flatMap { model.index(of: $0.id) }
+            T.equal(after, before + 1, "→ on a leaf advances to the next row")
+            T.equal(model.selectedItems.first?.name, "s2.txt", "lands on the next child")
+        }
     }
 }

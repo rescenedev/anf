@@ -21,12 +21,17 @@ final class WindowEdgeResizer: NSView {
         static let top = Edges(rawValue: 1 << 3)
     }
 
-    // Moderate side/bottom grab bands. The top stays tight so grabbing the
-    // titlebar is always a MOVE, never a resize (that fight causes trembling).
+    // Moderate side grab bands. The top stays tight so grabbing the titlebar is
+    // always a MOVE, never a resize (that fight causes trembling). The bottom is
+    // kept tight too: the path bar sits flush at the bottom and its breadcrumb
+    // buttons are vertically centred ~3–23pt up, so a fat bottom band would steal
+    // their hover/clicks (resize cursor + consumed mouseDown). 6pt grabs only the
+    // extreme edge, leaving the crumbs clickable.
     var edgeMargin: CGFloat = 16
     var cornerMargin: CGFloat = 32
     var topEdgeMargin: CGFloat = 6
     var topCornerMargin: CGFloat = 24
+    var bottomEdgeMargin: CGFloat = 6
 
     private var dragEdges: Edges = []
     private var startFrame: NSRect = .zero
@@ -148,15 +153,17 @@ final class WindowEdgeResizer: NSView {
         let b = bounds
         let em = edgeMargin + slack, cm = cornerMargin + slack
         let tem = topEdgeMargin + slack, tcm = topCornerMargin + slack
+        let bem = bottomEdgeMargin + slack
         guard b.insetBy(dx: -1, dy: -1).contains(p) else { return [] }
-        // Bottom corners generous; top corners tight (titlebar move area).
-        if p.x <= b.minX + cm && p.y <= b.minY + cm { return [.left, .bottom] }
-        if p.x >= b.maxX - cm && p.y <= b.minY + cm { return [.right, .bottom] }
+        // Bottom corners: horizontally generous but confined to the thin bottom
+        // band so the path bar stays clickable. Top corners tight (titlebar move).
+        if p.x <= b.minX + cm && p.y <= b.minY + bem { return [.left, .bottom] }
+        if p.x >= b.maxX - cm && p.y <= b.minY + bem { return [.right, .bottom] }
         if p.x <= b.minX + tcm && p.y >= b.maxY - tcm { return [.left, .top] }
         if p.x >= b.maxX - tcm && p.y >= b.maxY - tcm { return [.right, .top] }
         if p.x <= b.minX + em { return .left }
         if p.x >= b.maxX - em { return .right }
-        if p.y <= b.minY + em { return .bottom }
+        if p.y <= b.minY + bem { return .bottom }
         if p.y >= b.maxY - tem { return .top }
         return []
     }

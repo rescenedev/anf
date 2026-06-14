@@ -4,6 +4,9 @@ import SwiftUI
 /// folder is emphasised. A trailing status segment shows counts/selection.
 struct PathBarView: View {
     let model: BrowserModel
+    /// Called before navigating so clicking a crumb also focuses the owning pane
+    /// (the pane-focus gesture is intentionally kept off the path bar).
+    var onFocus: (() -> Void)? = nil
 
     var body: some View {
         let comps = model.pathComponents
@@ -15,6 +18,7 @@ struct PathBarView: View {
                         .foregroundStyle(.tertiary)
                 }
                 Button {
+                    onFocus?()
                     model.navigate(to: url)
                 } label: {
                     HStack(spacing: 4) {

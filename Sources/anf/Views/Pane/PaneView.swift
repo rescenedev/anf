@@ -12,11 +12,26 @@ struct PaneView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TabStripView(workspace: workspace, index: index)
-            Divider()
-            ContentArea(model: pane.current)
+            // The focus gestures live on this inner stack only — NOT the path bar.
+            // A pane-wide `DragGesture(minimumDistance: 0)` fires on mouse-down and
+            // swallows the path bar's breadcrumb button taps, so clicking a crumb
+            // never navigated. Keeping it off the path bar restores those clicks;
+            // PathBarView focuses the pane itself via `onFocus`.
+            VStack(spacing: 0) {
+                TabStripView(workspace: workspace, index: index)
+                Divider()
+                ContentArea(model: pane.current)
+            }
+            // Focus this pane on any interaction without blocking child gestures. A
+            // zero-distance drag fires on mouse-down, so it also catches clicks on
+            // the empty file-list area (an NSTableView swallows plain taps there).
+            .simultaneousGesture(TapGesture().onEnded { workspace.focusPane(index) })
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onEnded { _ in workspace.focusPane(index) }
+            )
             if workspace.pathBarVisible {
-                PathBarView(model: pane.current)
+                PathBarView(model: pane.current, onFocus: { workspace.focusPane(index) })
             }
         }
         .overlay(alignment: .top) {
@@ -27,14 +42,6 @@ struct PaneView: View {
         .background(
             multiPane && isActive
                 ? Color.accentColor.opacity(0.04) : Color.clear
-        )
-        // Focus this pane on any interaction without blocking child gestures. A
-        // zero-distance drag fires on mouse-down, so it also catches clicks on the
-        // empty area of the file list (an NSTableView swallows plain taps there).
-        .simultaneousGesture(TapGesture().onEnded { workspace.focusPane(index) })
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onEnded { _ in workspace.focusPane(index) }
         )
     }
 }

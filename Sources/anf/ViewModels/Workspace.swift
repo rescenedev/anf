@@ -420,7 +420,6 @@ final class WorkspaceModel {
     private func restore() {
         guard let data = UserDefaults.standard.data(forKey: Self.stateKey),
               let state = try? JSONDecoder().decode(State.self, from: data) else { return }
-        let fm = FileManager.default
 
         // Restore the full window arrangement: pane layout (1/2/rows/4) along
         // with per-pane tabs and their view modes below.
@@ -438,10 +437,10 @@ final class WorkspaceModel {
         }
 
         for (i, paneState) in state.panes.enumerated() where i < layout.count && i < panes.count {
-            let validTabs = paneState.tabs.filter {
-                var isDir: ObjCBool = false
-                return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue
-            }
+            // `PathProbe` (not `fm.fileExists`): a folder on a now-unreachable
+            // network share blocks the main thread for the mount's full timeout,
+            // beachballing relaunch when the last folder lived on that share.
+            let validTabs = paneState.tabs.filter { PathProbe.isDirectory($0.path) }
             guard !validTabs.isEmpty else { continue }
             let pane = panes[i]
             let models = validTabs.map { ts -> BrowserModel in
@@ -475,15 +474,11 @@ final class WorkspaceModel {
 
     /// Restore a saved arrangement: layout, split ratios and each pane's tabs.
     func applySnapshot(_ snap: ViewSnapshot) {
-        let fm = FileManager.default
         if let l = PaneLayout(rawValue: snap.layout) { layout = l }
         splitRatioH = Self.clampSplitRatio(CGFloat(snap.splitRatioH))
         splitRatioV = Self.clampSplitRatio(CGFloat(snap.splitRatioV))
         for (i, paneState) in snap.panes.enumerated() where i < panes.count {
-            let validTabs = paneState.tabs.filter {
-                var isDir: ObjCBool = false
-                return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue
-            }
+            let validTabs = paneState.tabs.filter { PathProbe.isDirectory($0.path) }
             guard !validTabs.isEmpty else { continue }
             let models = validTabs.map { ts -> BrowserModel in
                 let m = BrowserModel(start: URL(fileURLWithPath: ts.path))

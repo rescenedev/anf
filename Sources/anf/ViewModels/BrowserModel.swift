@@ -95,6 +95,34 @@ final class BrowserModel: Identifiable {
         reflattenTree()
     }
 
+    /// → in list mode: open the selected folder if it's collapsed, otherwise step
+    /// the cursor to the next row. Mashing → therefore expands every folder it
+    /// lands on and walks the whole tree top-to-bottom — "open everything" on one
+    /// key. Returns false (let the native view handle →) only when not applicable.
+    @discardableResult
+    func expandOrAdvance() -> Bool {
+        guard viewMode == .list, let it = selectedItems.first,
+              let idx = index(of: it.id) else { return false }
+        // Collapsed folder → expand it in place. Children load asynchronously, so
+        // the cursor stays put; the next → press (children present by then) dives in.
+        if isExpandable(it) && !isExpanded(it) {
+            toggleExpand(it)
+            return true
+        }
+        // Expanded but children not spliced in yet → wait here so we don't skip
+        // over them to a sibling on the race; the next press lands on the child.
+        if isExpandable(it) && isExpanded(it) && childCache[it.url] == nil {
+            return true
+        }
+        // Expanded folder (children present) or a leaf → advance to the next row.
+        // For an expanded folder the next row IS its first child (flattenTree
+        // splices children right after the parent), so this dives in.
+        let next = idx + 1
+        guard next < items.count else { return true }   // bottom: keep the cursor put
+        select(items[next])
+        return true
+    }
+
     /// Rebuild `items` from the cached sorted top + expansions, without sorting.
     private func reflattenTree() {
         if sortedTop.isEmpty { recomputeItems(); return }
@@ -382,19 +410,28 @@ final class BrowserModel: Identifiable {
         return urls
     }
 
-    /// "23.4 GB available" for the current folder's volume, recomputed when the
-    /// volume changes (not per render). Empty for remote folders.
-    @ObservationIgnored private var freeSpaceCache: (volume: String, label: String)?
-    var freeSpaceLabel: String {
-        guard !isRemote else { return "" }
-        let key = (try? currentURL.resourceValues(forKeys: [.volumeIdentifierKey]))
-            .flatMap { ($0.volumeIdentifier as? NSObject)?.description } ?? currentURL.path
-        if let c = freeSpaceCache, c.volume == key { return c.label }
-        let bytes = (try? currentURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
-            .volumeAvailableCapacityForImportantUsage
-        let label = bytes.map { L("\(Format.bytes($0)) available", "\(Format.bytes($0)) 사용 가능") } ?? ""
-        freeSpaceCache = (key, label)
-        return label
+    /// "23.4 GB available" for the current folder's volume. Computed off the main
+    /// thread and stored here: the volume `resourceValues` call blocks the caller
+    /// for the mount's full timeout on a stale network share, so reading it during
+    /// the path-bar render (every frame) would beachball. Empty for remote folders.
+    private(set) var freeSpaceLabel: String = ""
+
+    /// Recompute `freeSpaceLabel` for `currentURL` off the main thread, then publish
+    /// it back. Stale-mount-safe: the blocking `resourceValues` runs detached, so
+    /// it can hang harmlessly without freezing the UI. Called from `reload()`.
+    private func refreshFreeSpace() {
+        guard !isRemote else { freeSpaceLabel = ""; return }
+        let url = currentURL
+        Task.detached(priority: .utility) {
+            let bytes = (try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+                .volumeAvailableCapacityForImportantUsage
+            await MainActor.run { [weak self] in
+                guard let self, self.currentURL == url else { return }
+                self.freeSpaceLabel = bytes.map {
+                    L("\(Format.bytes($0)) available", "\(Format.bytes($0)) 사용 가능")
+                } ?? ""
+            }
+        }
     }
 
     // MARK: - Navigation
@@ -562,6 +599,7 @@ final class BrowserModel: Identifiable {
         FileTags.clearColorCache()   // tags may have changed since last listing
         childCache.removeAll()       // refetch expanded folders' children on reload
         selection.removeAll()
+        refreshFreeSpace()
         if isRemote { reloadRemote(token: token); return }
         // Paint the last known listing instantly (no read, no sort) — the fresh
         // bulk read below lands ~100ms later and diff-replaces any change.

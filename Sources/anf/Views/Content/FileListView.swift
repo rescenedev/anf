@@ -123,13 +123,16 @@ struct FileListView: NSViewRepresentable {
                 reloadVisibleRows(table)
                 return
             case .reload:
-                table.reloadData()
+                // `applying`: removing rows makes NSTableView fire
+                // tableViewSelectionDidChange, which would clobber the model's
+                // selection (e.g. the folder we just re-selected on a tree
+                // collapse) back to the table's empty set.
+                syncState.applying { table.reloadData() }
                 return
             case .incremental:
                 break
             }
             let diff = newIDs.difference(from: lastIDs)
-            table.beginUpdates()
             var removals = IndexSet()
             var insertions = IndexSet()
             for change in diff {
@@ -138,9 +141,12 @@ struct FileListView: NSViewRepresentable {
                 case .insert(let offset, _, _): insertions.insert(offset)
                 }
             }
-            table.removeRows(at: removals, withAnimation: .effectFade)
-            table.insertRows(at: insertions, withAnimation: .effectFade)
-            table.endUpdates()
+            syncState.applying {
+                table.beginUpdates()
+                table.removeRows(at: removals, withAnimation: .effectFade)
+                table.insertRows(at: insertions, withAnimation: .effectFade)
+                table.endUpdates()
+            }
             // Rows that stayed put may still carry fresh metadata — and their
             // indices (so their zebra stripes) may have shifted.
             reloadVisibleRows(table)
