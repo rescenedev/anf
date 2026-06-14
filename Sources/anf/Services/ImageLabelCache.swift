@@ -14,11 +14,17 @@ final class ImageLabelCache: @unchecked Sendable {
 
     func labels(for url: URL) -> [String] {
         let path = url.path
-        let mtime = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate]
-            as? Date ?? .distantPast
 
         cond.lock()
         while inFlight.contains(path) { cond.wait() }
+        // Read mtime while holding the lock so the cache key is consistent with
+        // what was current at the moment of the lookup. Reading it before locking
+        // created a TOCTOU window: a file modified between the stat and lock
+        // acquisition would compare against a stale mtime and return stale labels
+        // (ILC-001). The stat itself is fast; the classification (below) stays
+        // outside the lock where it belongs.
+        let mtime = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate]
+            as? Date ?? .distantPast
         if let hit = map[path], hit.mtime == mtime {
             lru.removeAll { $0 == path }; lru.append(path)
             let labels = hit.labels
@@ -31,7 +37,13 @@ final class ImageLabelCache: @unchecked Sendable {
         let computed = ImageClassifier.labels(for: url)
 
         cond.lock()
-        map[path] = (mtime, computed)
+        // Re-stat before storing so the cached mtime reflects the file state at
+        // the END of classification, not the start. If the file changed during
+        // classification the stored mtime will be T2, and the next lookup (which
+        // will also read T2) will miss the stale entry and reclassify correctly.
+        let storedMtime = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate]
+            as? Date ?? mtime
+        map[path] = (storedMtime, computed)
         lru.removeAll { $0 == path }; lru.append(path)
         while lru.count > cap { map.removeValue(forKey: lru.removeFirst()) }
         inFlight.remove(path)
