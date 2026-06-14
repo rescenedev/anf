@@ -36,7 +36,11 @@ final class FileUndo {
     @discardableResult
     func undo() -> Bool {
         guard let op = undoStack.popLast() else { return false }
-        if let inverse = perform(inverseOf: op) { redoStack.append(inverse) }
+        var dirs = affectedDirs(op)
+        if let inverse = perform(inverseOf: op) { redoStack.append(inverse); dirs.formUnion(affectedDirs(inverse)) }
+        // Refresh EVERY tab/pane showing a touched folder, not just the visible
+        // active one (N-010 — same staleness N-002 fixed for forward ops).
+        BrowserModel.broadcastDirsChanged(dirs)
         return true
     }
 
@@ -44,8 +48,20 @@ final class FileUndo {
     @discardableResult
     func redo() -> Bool {
         guard let op = redoStack.popLast() else { return false }
-        if let inverse = perform(inverseOf: op) { undoStack.append(inverse) }
+        var dirs = affectedDirs(op)
+        if let inverse = perform(inverseOf: op) { undoStack.append(inverse); dirs.formUnion(affectedDirs(inverse)) }
+        BrowserModel.broadcastDirsChanged(dirs)
         return true
+    }
+
+    /// Parent directories touched by an op — the folders whose listings change.
+    private func affectedDirs(_ op: Op) -> Set<String> {
+        func parent(_ u: URL) -> String { u.deletingLastPathComponent().standardizedFileURL.path }
+        switch op {
+        case .move(let pairs):    return Set(pairs.flatMap { [parent($0.from), parent($0.to)] })
+        case .created(let urls):  return Set(urls.map(parent))
+        case .trash(let pairs):   return Set(pairs.flatMap { [parent($0.original), parent($0.trashed)] })
+        }
     }
 
     /// Execute the inverse of `op`; returns the op that would revert *that*
@@ -77,6 +93,14 @@ final class FileUndo {
                     var t: NSURL?
                     try fm.trashItem(at: url, resultingItemURL: &t)
                     if let t = t as URL? { trashedPairs.append((url, t)) }
+                } catch let e as NSError
+                            where e.domain == NSCocoaErrorDomain && e.code == NSFeatureUnsupportedError {
+                    // Volume has no Trash (network share). Do NOT permanently delete on
+                    // an undo without consent — the copy may have been edited since, and
+                    // undo must never silently destroy data (N-011 허점). Refuse and
+                    // report; the user can remove it manually.
+                    failures.append(L("\(url.lastPathComponent): can’t undo on a volume without a Trash — delete it manually",
+                                      "\(url.lastPathComponent): 휴지통이 없는 볼륨이라 되돌릴 수 없어요 — 직접 삭제하세요"))
                 } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
             }
             FileOperations.presentFailures(L("Couldn’t undo", "되돌리지 못했습니다"), failures)

@@ -78,12 +78,16 @@ enum ExternalTools {
     /// fully before waiting to avoid pipe-buffer deadlock on large output.
     @discardableResult
     static func run(_ exe: String, _ args: [String],
-                    cwd: URL? = nil, stdin: String? = nil,
+                    cwd: URL? = nil, stdin: String? = nil, env: [String: String]? = nil,
                     maxLines: Int = 500, timeout: TimeInterval? = nil) -> [String] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: exe)
         process.arguments = args
         if let cwd { process.currentDirectoryURL = cwd }
+        if let env {
+            // Merge onto the inherited environment (keep PATH etc.); caller's keys win.
+            process.environment = ProcessInfo.processInfo.environment.merging(env) { _, new in new }
+        }
 
         let outPipe = Pipe()
         process.standardOutput = outPipe

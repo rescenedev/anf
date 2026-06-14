@@ -36,12 +36,16 @@ enum FileOperations {
     @discardableResult
     static func moveToTrash(_ items: [FileItem]) -> [(original: URL, trashed: URL)] {
         var pairs: [(original: URL, trashed: URL)] = []
+        var noTrash: [FileItem] = []     // volume has no Trash (e.g. SMB/network shares)
         var failures: [String] = []
         for item in items {
             do {
                 var trashedURL: NSURL?
                 try FileManager.default.trashItem(at: item.url, resultingItemURL: &trashedURL)
                 if let t = trashedURL as URL? { pairs.append((item.url, t)) }
+            } catch let error as NSError
+                        where error.domain == NSCocoaErrorDomain && error.code == NSFeatureUnsupportedError {
+                noTrash.append(item)
             } catch {
                 failures.append("\(item.name): \(error.localizedDescription)")
             }
@@ -49,8 +53,35 @@ enum FileOperations {
         if !pairs.isEmpty {
             FileUndo.shared.record(.trash(pairs))
         }
+        // The volume can't trash these (no .Trashes — typical on network shares).
+        // Offer immediate permanent deletion, Finder-style. NOT undoable.
+        if !noTrash.isEmpty, confirmPermanentDelete(noTrash) {
+            for item in noTrash {
+                do { try FileManager.default.removeItem(at: item.url) }
+                catch { failures.append("\(item.name): \(error.localizedDescription)") }
+            }
+        }
         presentFailures(L("Couldn’t move to Trash", "휴지통으로 이동하지 못했습니다"), failures)
         return pairs
+    }
+
+    /// Confirm permanent deletion of items the volume can't trash. Returns true if
+    /// the user agrees. Headless (tests) declines — never silently destroys data.
+    private static func confirmPermanentDelete(_ items: [FileItem]) -> Bool {
+        guard NSApplication.shared.isRunning else { return false }
+        let names = items.prefix(5).map(\.name).joined(separator: "\n")
+            + (items.count > 5 ? L("\nand \(items.count - 5) more", "\n외 \(items.count - 5)건") : "")
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = items.count == 1
+            ? L("Delete “\(items[0].name)” immediately?", "“\(items[0].name)”을(를) 즉시 삭제할까요?")
+            : L("Delete \(items.count) items immediately?", "\(items.count)개 항목을 즉시 삭제할까요?")
+        alert.informativeText = L(
+            "This volume has no Trash. The items will be deleted immediately and can’t be undone.\n\n\(names)",
+            "이 볼륨에는 휴지통이 없습니다. 항목이 즉시 삭제되며 되돌릴 수 없습니다.\n\n\(names)")
+        alert.addButton(withTitle: L("Delete Immediately", "즉시 삭제"))
+        alert.addButton(withTitle: L("Cancel", "취소"))
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Create a new uniquely-named folder inside `parent`. Returns its URL.
@@ -67,14 +98,17 @@ enum FileOperations {
         }
     }
 
+    /// `recordUndo: false` lets a batch (RenamePanel / batchRename) coalesce all
+    /// renames into ONE undo op instead of flooding the 50-deep stack with a record
+    /// per file (RN-001) — the caller records `.move(pairs)` once.
     @discardableResult
-    static func rename(_ item: FileItem, to newName: String) -> URL? {
+    static func rename(_ item: FileItem, to newName: String, recordUndo: Bool = true) -> URL? {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != item.name else { return nil }
         let dest = item.url.deletingLastPathComponent().appendingPathComponent(trimmed)
         do {
             try FileManager.default.moveItem(at: item.url, to: dest)
-            FileUndo.shared.record(.move([(from: item.url, to: dest)]))
+            if recordUndo { FileUndo.shared.record(.move([(from: item.url, to: dest)])) }
             return dest
         } catch {
             presentFailures(L("Couldn’t rename", "이름을 바꾸지 못했습니다"), ["\(item.name): \(error.localizedDescription)"])

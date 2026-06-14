@@ -140,57 +140,45 @@ final class FileTransfer {
                 }
 
                 var done: [(URL, URL)] = []
-                if move {
-                    // Same-volume moves are metadata renames — serial is instant.
-                    var lastPushed = ContinuousClock.now
-                    for (i, pair) in work.enumerated() {
-                        if flag.isSet { break }
-                        do {
-                            try fm.moveItem(at: pair.src, to: pair.dest)
-                            done.append((pair.src, pair.dest))
-                        } catch {
-                            failures.append("\(pair.src.lastPathComponent): \(error.localizedDescription)")
-                        }
-                        let now = ContinuousClock.now
-                        if now - lastPushed > .milliseconds(80) || i == work.count - 1 {
-                            lastPushed = now
-                            let f = Double(i + 1) / Double(work.count)
-                            await MainActor.run { self?.fraction = min(f, 1) }
-                        }
+                // Concurrency by volume: a same-volume move is an instant metadata
+                // rename → serial. A local APFS copy clones cheaply → every core. But
+                // a NETWORK copy/move (real bytes over one SMB connection) thrashes if
+                // we open dozens of streams → cap at 4. Cross-volume move = real
+                // copy+delete (moveItem does it internally), so it's capped too — and
+                // now actually parallel instead of serial (N-006).
+                let destDir = plan[0].dest.deletingLastPathComponent()
+                let sameVolume = Self.volumeID(of: plan[0].src) == Self.volumeID(of: destDir)
+                let destLocal = Self.isLocalVolume(destDir)
+                let cap = (move && sameVolume) ? 1 : (destLocal ? ProcessInfo.processInfo.activeProcessorCount : 4)
+                let lock = NSLock()
+                var completed = 0
+                var lastPushed = ContinuousClock.now
+                Self.boundedForEach(work.count, maxConcurrent: cap) { i in
+                    if flag.isSet { return }
+                    let (src, dest) = work[i]
+                    var okPair: (URL, URL)?
+                    var failure: String?
+                    do {
+                        if move { try FileManager.default.moveItem(at: src, to: dest) }
+                        else    { try FileManager.default.copyItem(at: src, to: dest) }
+                        okPair = (src, dest)
+                    } catch {
+                        failure = "\(src.lastPathComponent): \(error.localizedDescription)"
                     }
-                } else {
-                    // Copies clone per file on APFS (metadata-bound), so wide
-                    // parallelism pays: 26k-item tree ~14s serial → ~uses every
-                    // core. Shared state behind one lock; UI pushes throttled.
-                    let lock = NSLock()
-                    var completed = 0
-                    var lastPushed = ContinuousClock.now
-                    DispatchQueue.concurrentPerform(iterations: work.count) { i in
-                        if flag.isSet { return }
-                        let (src, dest) = work[i]
-                        var copiedPair: (URL, URL)?
-                        var failure: String?
-                        do {
-                            try FileManager.default.copyItem(at: src, to: dest)
-                            copiedPair = (src, dest)
-                        } catch {
-                            failure = "\(src.lastPathComponent): \(error.localizedDescription)"
-                        }
-                        lock.lock()
-                        if let copiedPair { done.append(copiedPair) }
-                        if let failure { failures.append(failure) }
-                        completed += 1
-                        let n = completed
-                        let now = ContinuousClock.now
-                        let push = now - lastPushed > .milliseconds(80) || n == work.count
-                        if push { lastPushed = now }
-                        lock.unlock()
-                        if push {
-                            let f = Double(n) / Double(work.count)
-                            DispatchQueue.main.async { [weak self] in
-                                guard let self else { return }
-                                MainActor.assumeIsolated { self.fraction = min(f, 1) }
-                            }
+                    lock.lock()
+                    if let okPair { done.append(okPair) }
+                    if let failure { failures.append(failure) }
+                    completed += 1
+                    let n = completed
+                    let now = ContinuousClock.now
+                    let push = now - lastPushed > .milliseconds(80) || n == work.count
+                    if push { lastPushed = now }
+                    lock.unlock()
+                    if push {
+                        let f = Double(n) / Double(work.count)
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self else { return }
+                            MainActor.assumeIsolated { self.fraction = min(f, 1) }
                         }
                     }
                 }
@@ -240,10 +228,52 @@ final class FileTransfer {
         }
     }
 
-    /// Volume identifier for cross-volume move detection (nil on failure).
+    /// Volume identifier for cross-volume move detection (nil on failure). Uses the
+    /// device number (`st_dev`) — `URLResourceValues.volumeIdentifier` is an opaque
+    /// object, never an `Int`, so the old `as? Int` cast was always nil (and made
+    /// every move look same-volume → N-006 never parallelized). Walks up to the
+    /// nearest existing ancestor so a not-yet-created destination still resolves.
     nonisolated static func volumeID(of url: URL) -> Int? {
-        (try? url.resourceValues(forKeys: [.volumeIdentifierKey]))?
-            .volumeIdentifier as? Int
+        var dir = url
+        while true {
+            var s = stat()
+            if stat(dir.path, &s) == 0 { return Int(s.st_dev) }
+            let parent = dir.deletingLastPathComponent()
+            if parent.path == dir.path { return nil }   // reached "/" without a hit
+            dir = parent
+        }
+    }
+
+    /// Whether `url`'s volume is local (vs a network share). Defaults to local when
+    /// unknown. Off-main only — `resourceValues` blocks on a stale mount.
+    nonisolated static func isLocalVolume(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.volumeIsLocalKey]))?.volumeIsLocal ?? true
+    }
+
+    /// Run `body(0..<count)` with at most `maxConcurrent` running at once. Full-core
+    /// → `concurrentPerform`; capped → a semaphore-bounded dispatch (so a network
+    /// copy/move doesn't open dozens of byte streams over one SMB connection).
+    /// Blocks the caller until done — call OFF the main thread.
+    nonisolated static func boundedForEach(_ count: Int, maxConcurrent: Int,
+                                           _ body: @escaping (Int) -> Void) {
+        let cap = Swift.max(1, maxConcurrent)
+        if count <= 1 || cap == 1 {
+            for i in 0..<count { body(i) }
+            return
+        }
+        if cap >= ProcessInfo.processInfo.activeProcessorCount {
+            DispatchQueue.concurrentPerform(iterations: count, execute: body)
+            return
+        }
+        let sem = DispatchSemaphore(value: cap)
+        let group = DispatchGroup()
+        let q = DispatchQueue.global(qos: .userInitiated)
+        for i in 0..<count {
+            sem.wait()
+            group.enter()
+            q.async { body(i); sem.signal(); group.leave() }
+        }
+        group.wait()
     }
 
     /// Recursive size of `urls` (files + directory contents).

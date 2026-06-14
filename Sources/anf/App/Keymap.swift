@@ -314,7 +314,7 @@ final class Keymap {
             "previewTextSize — inspector text previews (markdown/json/code/document), 9-28. ⌘+/⌘− also adjusts it live.",
             "aiFeatures — on-device AI (summarize, ask, suggest name, auto-tag, organize-by-content, image search). true/false. Also toggleable in the Tools menu.",
             "aiProvider — 'auto' (default): uses Claude when an API key is set, else a local endpoint, else Apple on-device. Force one with 'claude', 'local', or 'apple'.",
-            "Anthropic API key — set it in the AI menu (AI → Set Anthropic API Key…). It is stored in the macOS Keychain, NEVER in this file. (ANTHROPIC_API_KEY env var also works.)",
+            "Anthropic API key — set it in the AI menu (AI → Set Anthropic API Key…). It is stored in the macOS Keychain, NEVER in this file. (The ANTHROPIC_API_KEY env var is used only when aiProvider is set to 'claude', so a stray env key never sends to the cloud on its own.)",
             "aiEndpoint — local OpenAI-compatible URL for 'local', e.g. 'http://localhost:11434/v1' (Ollama) or 'http://localhost:1234/v1' (LM Studio).",
             "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default.",
             "openWithApp — app for the 'Open With' action (name, path, or bundle id), e.g. 'Typora'. The shortcut is the 'openWith' keybinding below (default F4).",

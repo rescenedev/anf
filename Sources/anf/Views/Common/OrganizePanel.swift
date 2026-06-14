@@ -104,6 +104,7 @@ private final class OrganizeState: ObservableObject {
             let result = await Task.detached(priority: .userInitiated) {
                 ContentOrganizer.move(groups: groups, into: folder)
             }.value
+            FolderAITools.recordOrganizeUndo(result.pairs)   // make the bulk move ⌘Z-able
             for i in rows.indices where rows[i].enabled && rows[i].phase == .ready {
                 rows[i].phase = .done
             }

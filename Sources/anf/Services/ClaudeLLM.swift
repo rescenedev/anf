@@ -14,10 +14,15 @@ enum ClaudeLLM {
     static let defaultModel = "claude-opus-4-8"
 
     static var apiKey: String? {
-        // Stored in the macOS Keychain (set via the AI menu), never on disk.
+        // Explicit in-app key (macOS Keychain, set via the AI menu) = consent to
+        // use the cloud. Always honored.
         if let k = AISecret.key { return k }
-        // Fall back to the standard env var so Claude "just works" when anf is
-        // launched from a shell that has it.
+        // The shell's ANTHROPIC_API_KEY is honored ONLY when the user explicitly
+        // selected the Claude (cloud) provider. Otherwise a stray env var (set for
+        // some other tool) would silently route 'auto' AI to Anthropic's cloud —
+        // sending file content without consent (AI-002).
+        let provider = (UserDefaults.standard.string(forKey: "anf.aiProvider") ?? "").lowercased()
+        guard provider == "claude" || provider == "anthropic" else { return nil }
         let env = (ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return env.isEmpty ? nil : env

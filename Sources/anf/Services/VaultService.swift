@@ -20,20 +20,21 @@ struct VaultSnapshot: Identifiable, Hashable, Sendable {
 enum VaultService {
     static let snapshotPrefix = "anf-vault-snapshot-"
 
-    /// Smart defaults injected into every new vault's .gitignore so the object
-    /// store never swallows system cruft or dependency trees.
+    /// Injected into every new vault's .gitignore. Deliberately ONLY OS metadata
+    /// and incomplete downloads — NOT user content. Excluding things like *.log,
+    /// *.tmp or node_modules/ would silently leave real user files unprotected,
+    /// breaking the Vault promise (V-003). A vault therefore protects EVERYTHING,
+    /// large binaries included — git-based versioning means a folder with big files
+    /// grows a big repo; that's the cost of total recoverability, not silently
+    /// dropped. (There is no size-based auto-bypass — none should exist, per V-003.)
     static let defaultIgnore = """
-    # macOS system junk
+    # macOS system metadata (not user content)
     .DS_Store
     .AppleDouble
     .LSOverride
     ._*
 
-    # common build / temp caches
-    node_modules/
-    .sass-cache/
-    *.log
-    *.tmp
+    # incomplete downloads (not a finished file yet)
     *.crdownload
     """
 
@@ -44,13 +45,19 @@ enum VaultService {
     static let isolatedDir = ".anf_vault"
 
     private static func hasUserGit(_ url: URL) -> Bool {
-        // A `.git` exists that we did NOT create (no isolated marker beside it).
+        // A vault we created in isolated mode is ours, not the user's.
+        if FileManager.default.fileExists(
+            atPath: url.appendingPathComponent("\(isolatedDir)/.anf_owned").path) { return false }
+        // A `.git` right here is a real dev project.
         var isDir: ObjCBool = false
-        let dotGit = url.appendingPathComponent(".git")
-        guard FileManager.default.fileExists(atPath: dotGit.path, isDirectory: &isDir),
-              isDir.boolValue else { return false }
-        return !FileManager.default.fileExists(
-            atPath: url.appendingPathComponent("\(isolatedDir)/.anf_owned").path)
+        if FileManager.default.fileExists(atPath: url.appendingPathComponent(".git").path, isDirectory: &isDir),
+           isDir.boolValue { return true }
+        // …or this folder is NESTED inside a git work tree (parent repo). The old
+        // top-level-only check missed that, so vaulting a subfolder of a user repo
+        // would collide with their history (V-005). rev-parse detects it. Off-main.
+        let out = ExternalTools.run(git, ["-C", url.path, "rev-parse", "--is-inside-work-tree"],
+                                    maxLines: 5, timeout: 10)
+        return out.contains("true")
     }
 
     /// Where this folder's vault store lives: the directory root for plain
@@ -134,21 +141,49 @@ enum VaultService {
     /// Stop protecting a folder: remove our store (and the marker / ignore line).
     /// The user's files — and their own `.git` — are untouched.
     static func disableVault(at folder: URL) {
-        let fm = FileManager.default
-        if isVaultIsolated(folder) {
-            try? fm.removeItem(at: folder.appendingPathComponent(isolatedDir))
-        } else {
-            try? fm.removeItem(at: folder.appendingPathComponent(".git"))
-            try? fm.removeItem(at: folder.appendingPathComponent(".anf_owned"))
+        // Under gitLock so we never delete the store while a snapshot/restore is
+        // mid-commit on it (V-004 completeness — disable() cancels the debounce, but
+        // an already-in-flight snapshot could still be running).
+        gitLock.sync {
+            let fm = FileManager.default
+            if isVaultIsolated(folder) {
+                try? fm.removeItem(at: folder.appendingPathComponent(isolatedDir))
+            } else {
+                try? fm.removeItem(at: folder.appendingPathComponent(".git"))
+                try? fm.removeItem(at: folder.appendingPathComponent(".anf_owned"))
+            }
         }
     }
 
     // MARK: - Snapshots
 
+    /// Serializes ALL git index mutations (snapshot/restore) across every vault:
+    /// two `git add`+`commit` racing on one repo corrupts the index / hits
+    /// index.lock. VaultWatcher fires snapshots from concurrent detached tasks, so
+    /// this is required (V-004). Snapshots are infrequent → one global lock is fine.
+    private static let gitLock = DispatchQueue(label: "anf.vault.git")
+
+    /// True if the work tree has changes not yet in any snapshot — i.e. files a
+    /// failed snapshot would leave with no recovery point. Lets callers tell a
+    /// "nothing to commit" snapshot (safe) from a real failure (V-002-A).
+    /// If git can't confirm a healthy repo we can't prove the tree is clean, so
+    /// report `true` (unsafe) — callers must not destroy data on an unverifiable
+    /// repo. (`run` returns empty stdout, never nil, on failure, so detect failure
+    /// via the exit code of rev-parse — V-002-B.)
+    static func hasUncommittedChanges(at folder: URL) -> Bool {
+        guard runStatus(["rev-parse", "--git-dir"], folder: folder) == 0 else { return true }
+        return !(run(["status", "--porcelain"], folder: folder) ?? []).isEmpty
+    }
+
     /// Stage everything and commit, but ONLY if there are changes (an empty
     /// commit would bloat the log). Returns true if a snapshot was taken.
     @discardableResult
     static func snapshot(at folder: URL, label: String = "") -> Bool {
+        gitLock.sync { snapshotLocked(at: folder, label: label) }
+    }
+
+    /// Snapshot body without taking `gitLock` — for callers already holding it.
+    private static func snapshotLocked(at folder: URL, label: String) -> Bool {
         _ = run(["add", "--all"], folder: folder)
         // `git diff --cached --quiet` exits 1 when there's something staged.
         if runStatus(["diff", "--cached", "--quiet"], folder: folder) == 0 {
@@ -183,8 +218,32 @@ enum VaultService {
     /// it exists). Returns true on success.
     @discardableResult
     static func restore(_ relativePath: String, from snapshot: VaultSnapshot, at folder: URL) -> Bool {
-        // `git checkout <hash> -- <path>` writes the file back to the work tree.
-        runStatus(["checkout", snapshot.id, "--", relativePath], folder: folder) == 0
+        // Preserve the CURRENT state first: `git checkout` overwrites in place, so
+        // restoring an old snapshot over a file edited since would silently clobber
+        // those edits. Snapshotting now keeps the pre-restore version in the vault
+        // timeline, so it's always recoverable (no data loss).
+        // Whole sequence under gitLock so a background snapshot can't race the
+        // checkout on the index (V-004); use snapshotLocked to avoid re-entrancy.
+        return gitLock.sync {
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent(relativePath).path) {
+                let snapped = snapshotLocked(at: folder, label: L("Before restoring \(relativePath)",
+                                                                  "\(relativePath) 복원 전 자동 저장"))
+                // If the pre-restore snapshot DIDN'T take and the file still has
+                // uncommitted changes, checkout would clobber them with no recovery —
+                // refuse instead of risking data loss (V-001-A). A clean file is
+                // already safe in HEAD, so proceed.
+                if !snapped {
+                    // Can't confirm a healthy repo → can't prove the file is safely
+                    // captured → refuse rather than clobber (V-001-A/V-002-B). `run`
+                    // returns empty stdout (not nil) on failure, so gate on rev-parse.
+                    guard runStatus(["rev-parse", "--git-dir"], folder: folder) == 0 else { return false }
+                    let dirty = !(run(["status", "--porcelain", "--", relativePath], folder: folder) ?? []).isEmpty
+                    if dirty { return false }
+                }
+            }
+            // `git checkout <hash> -- <path>` writes the file back to the work tree.
+            return runStatus(["checkout", snapshot.id, "--", relativePath], folder: folder) == 0
+        }
     }
 
     // MARK: - Maintenance

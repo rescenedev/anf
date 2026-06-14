@@ -65,6 +65,7 @@ enum FolderAITools {
             let result = await Task.detached(priority: .userInitiated) {
                 ScreenshotOrganizer.move(plan, into: folder)
             }.value
+            recordOrganizeUndo(result.pairs)
             model.reload()
             if result.failed > 0 {
                 alert(L("Moved \(result.moved), \(result.failed) failed",
@@ -130,6 +131,7 @@ enum FolderAITools {
             let result = await Task.detached(priority: .userInitiated) {
                 FolderOrganizer.move(plan, into: folder)
             }.value
+            recordOrganizeUndo(result.pairs)
             model.reload()
             if result.failed > 0 {
                 alert(L("Moved \(result.moved), \(result.failed) failed",
@@ -179,5 +181,18 @@ enum FolderAITools {
         a.messageText = title
         if !info.isEmpty { a.informativeText = info }
         a.runModal()
+    }
+
+    /// Make an organizer's bulk move undoable (⌘Z) and refresh other tabs showing
+    /// the touched folders. Without this, organize-by-kind/content and tidy moved
+    /// files with NO undo record (reported CRITICAL).
+    @MainActor
+    static func recordOrganizeUndo(_ pairs: [(from: URL, to: URL)]) {
+        guard !pairs.isEmpty else { return }
+        FileUndo.shared.record(.move(pairs))
+        BrowserModel.broadcastDirsChanged(Set(pairs.flatMap {
+            [$0.from.deletingLastPathComponent().standardizedFileURL.path,
+             $0.to.deletingLastPathComponent().standardizedFileURL.path]
+        }))
     }
 }

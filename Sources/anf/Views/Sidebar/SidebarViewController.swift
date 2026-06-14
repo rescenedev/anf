@@ -44,6 +44,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     private var outline: NSOutlineView!
     private var locations: [SidebarItem] = []
     private var sshHosts: [SSHHost] = []
+    private var didBecomeActiveObserver: NSObjectProtocol?   // removed in deinit (G-004)
 
     init(workspace: WorkspaceModel) {
         self.workspace = workspace
@@ -128,7 +129,10 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         // the background (iCloud Drive / Files & Folders) can newly expose
         // folders — pick them up without a relaunch (reported: iCloud missing
         // until restart). favorites() is recomputed inside rebuildTree().
-        NotificationCenter.default.addObserver(
+        // Keep the token so deinit can unregister: a block-based observer is RETAINED
+        // by NotificationCenter and fires on every app activation forever otherwise —
+        // each closed window leaves a stale block doing a background scan (G-004).
+        didBecomeActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -141,6 +145,10 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
                 }
             }
         }
+    }
+
+    deinit {
+        if let didBecomeActiveObserver { NotificationCenter.default.removeObserver(didBecomeActiveObserver) }
     }
 
     /// Observation-driven refresh: any tracked model change rebuilds the tree.

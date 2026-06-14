@@ -200,11 +200,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 // ⌘? toggles the shortcuts overlay (Esc or ⌘? again closes it).
                 workspace.showWelcome.toggle(); return true
             case "z":
-                // ⌘Z undo / ⌘⇧Z redo file operations, then refresh every visible
-                // pane — the change may affect folders shown in other panes.
+                // ⌘Z undo / ⌘⇧Z redo file operations. FileUndo broadcasts the
+                // touched dirs, so every tab/pane showing them refreshes (not just
+                // the visible active one — N-010).
                 let did = shift ? FileUndo.shared.redo() : FileUndo.shared.undo()
-                if did { workspace.panes.prefix(workspace.layout.count).forEach { $0.current.reload() } }
-                else { NSSound.beep() }
+                if !did { NSSound.beep() }
                 return true
             case "=", "+": bumpScale(1); return true
             case "-": bumpScale(-1); return true

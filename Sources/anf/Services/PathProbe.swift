@@ -20,6 +20,18 @@ enum PathProbe {
         } ?? false
     }
 
+    /// True only if `path` can actually be OPENED as a directory within `timeout`.
+    /// Unlike `isDirectory` (a `stat`, which the kernel serves from cache for a
+    /// disconnected mount's *root*), `opendir` contacts the server — so this is the
+    /// reliable "is the volume actually reachable" test, even at the mount root.
+    static func canListDirectory(_ path: String, timeout: TimeInterval = 1.5) -> Bool {
+        run(timeout: timeout) {
+            guard let dir = opendir(path) else { return false }
+            closedir(dir)
+            return true
+        } ?? false
+    }
+
     /// Run `work` on a background queue, returning its result, or `nil` if it
     /// didn't finish within `timeout`. On timeout the worker thread is abandoned
     /// (not cancelled) — it unblocks on its own when the mount finally times out,

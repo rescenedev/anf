@@ -67,6 +67,13 @@ struct IconGridView: NSViewRepresentable {
 
         init(model: BrowserModel) { self.model = model }
 
+        deinit {
+            // Selector-based observers auto-clear on macOS 11+, but remove explicitly
+            // so the frameDidChange registration can never outlive this coordinator
+            // (G-003). Safe on any thread.
+            NotificationCenter.default.removeObserver(self)
+        }
+
         var items: [FileItem] { model.items }
 
         static func itemSize(icon: Double) -> NSSize {
@@ -161,7 +168,12 @@ struct IconGridView: NSViewRepresentable {
                   let path = indexPath(forFlat: row) else { return }
             cv.scrollToItems(at: [path], scrollPosition: .nearestHorizontalEdge)
             DispatchQueue.main.async { [weak self, weak cv] in
-                guard let self, let cv,
+                guard let self, let cv else { return }
+                // Re-resolve by id: a reload may have landed between scheduling and
+                // now, so the captured `row`/`path` could be out of range or point at
+                // a different file (same guard FileListView.applyEditing uses).
+                guard let row = self.items.firstIndex(where: { $0.id == id }),
+                      let path = self.indexPath(forFlat: row),
                       let item = cv.item(at: path) as? IconItem else { return }
                 let target = self.items[row]
                 item.beginRename(

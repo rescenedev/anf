@@ -9,7 +9,10 @@ struct ColumnView: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 0) {
-                    ForEach(Array(model.pathComponents.enumerated()), id: \.element) { idx, dir in
+                    // id by position, not URL: a column's identity is its depth, so
+                    // a repeated path component (/a/work/work) or any URL collision
+                    // can't merge columns (same fragile class as N-004's path bar).
+                    ForEach(Array(model.pathComponents.enumerated()), id: \.offset) { idx, dir in
                         let childURL = idx + 1 < model.pathComponents.count
                             ? model.pathComponents[idx + 1] : nil
                         ColumnList(model: model, directory: dir, highlightedChild: childURL)

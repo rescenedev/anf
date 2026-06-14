@@ -84,19 +84,21 @@ enum ContentOrganizer {
     }
 
     /// Move classified files into their category folders (off the main thread).
-    static func move(groups: [String: [URL]], into folder: URL) -> (moved: Int, failed: Int) {
+    static func move(groups: [String: [URL]], into folder: URL) -> (moved: Int, failed: Int, pairs: [(from: URL, to: URL)]) {
         let fm = FileManager.default
         var moved = 0, failed = 0
+        var pairs: [(from: URL, to: URL)] = []
         for (category, urls) in groups {
             let dir = folder.appendingPathComponent(category)
             do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) }
             catch { failed += urls.count; continue }
             for src in urls {
                 let name = ScreenshotOrganizer.uniqueName(in: dir, fileName: src.lastPathComponent)
-                do { try fm.moveItem(at: src, to: dir.appendingPathComponent(name)); moved += 1 }
+                let dest = dir.appendingPathComponent(name)
+                do { try fm.moveItem(at: src, to: dest); moved += 1; pairs.append((src, dest)) }
                 catch { failed += 1 }
             }
         }
-        return (moved, failed)
+        return (moved, failed, pairs)
     }
 }

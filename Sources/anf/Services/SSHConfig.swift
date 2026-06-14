@@ -82,7 +82,12 @@ enum SSHConfig {
         let url = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".ssh/config")
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        return parse(text)
+    }
 
+    /// Pure parser (split out so it's unit-testable): collects concrete `Host`
+    /// aliases (wildcards skipped) with their `HostName`, deduped by alias.
+    static func parse(_ text: String) -> [SSHHost] {
         var result: [SSHHost] = []
         var pendingAliases: [String] = []
         var hostName: String?

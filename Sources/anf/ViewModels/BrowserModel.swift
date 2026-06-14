@@ -472,10 +472,15 @@ final class BrowserModel: Identifiable {
         }
         let parts = currentURL.standardizedFileURL.pathComponents
         var urls: [URL] = []
-        var url = URL(fileURLWithPath: "/")
+        // `isDirectory: true` on BOTH builders is deliberate: the no-flag forms stat
+        // the filesystem to decide the trailing slash, which on a network path is a
+        // main-thread round-trip whose result varies with latency — yielding
+        // nondeterministic crumb URLs that churn the path bar's ForEach ids and drop
+        // clicks (N-004). Explicit-directory URLs are stat-free and stable.
+        var url = URL(fileURLWithPath: "/", isDirectory: true)
         urls.append(url)
         for part in parts where part != "/" {
-            url.appendPathComponent(part)
+            url.appendPathComponent(part, isDirectory: true)
             urls.append(url)
         }
         return urls
@@ -509,7 +514,13 @@ final class BrowserModel: Identifiable {
 
     func navigate(to url: URL, recordHistory: Bool = true, returningFrom: URL? = nil) {
         onActivity?()
-        guard url != currentURL else { return }
+        // Compare by normalized path for local URLs so a trailing-slash/encoding
+        // difference (e.g. a path-bar crumb vs the stored currentURL) neither wrongly
+        // no-ops nor forces a redundant reload. Remote/virtual URLs compare exactly.
+        let alreadyHere = url.isFileURL && currentURL.isFileURL
+            ? url.standardizedFileURL.path == currentURL.standardizedFileURL.path
+            : url == currentURL
+        guard !alreadyHere else { return }
         if recordHistory {
             back.append(currentURL)
             forward.removeAll()
@@ -670,6 +681,7 @@ final class BrowserModel: Identifiable {
         isLoading = true
         FileTags.clearColorCache()   // tags may have changed since last listing
         childCache.removeAll()       // refetch expanded folders' children on reload
+        let priorSelection = selection   // restored if this turns out to be a stall
         selection.removeAll()
         refreshFreeSpace()
         if isVirtual { reloadVirtual(token: token); return }
@@ -696,14 +708,19 @@ final class BrowserModel: Identifiable {
             // `fileExists` and `isReadableFile` block on a stale mount and would
             // beachball if run here — to tell them apart.
             if loaded.isEmpty {
+                // `canListDirectory` (opendir), not `isDirectory` (stat): a dropped
+                // mount's ROOT still stats from cache, so stat would miss a stall at
+                // the share root — opendir actually contacts the server.
                 let probe = await Task.detached(priority: .utility) { () -> (reachable: Bool, readable: Bool) in
-                    (PathProbe.isDirectory(url.path), FileManager.default.isReadableFile(atPath: url.path))
+                    (PathProbe.canListDirectory(url.path), FileManager.default.isReadableFile(atPath: url.path))
                 }.value
                 guard token == loadToken else { return }
                 if !probe.reachable {
-                    // Volume unreachable → hold the last listing, flag the stall,
-                    // and retry until it comes back. Don't wipe `allItems`.
+                    // Volume unreachable → hold the last listing + selection, flag the
+                    // stall, and retry until it comes back. Don't wipe `allItems`.
                     networkStalled = true
+                    selection = priorSelection
+                    selectedItemsCache = nil
                     isLoading = false
                     scheduleStallRetry(token: token)
                     return
@@ -723,13 +740,24 @@ final class BrowserModel: Identifiable {
         }
     }
 
-    /// While a network mount is stalled, re-attempt the listing on a fixed backoff
-    /// until it returns or the user navigates away (a new `loadToken` cancels us).
-    private func scheduleStallRetry(token: Int) {
+    /// While a network mount is stalled, poll cheaply for the volume to come back,
+    /// then do a full reload — instead of re-running the ~30s-blocking directory
+    /// read every cycle. Backs off 1.5s → 3 → 6 → … → 30s. A new `loadToken`
+    /// (user navigated) cancels the chain.
+    private func scheduleStallRetry(token: Int, attempt: Int = 0) {
+        let secs = min(1.5 * pow(2, Double(attempt)), 30)
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000))
             guard token == loadToken, networkStalled else { return }
-            reload()
+            let url = currentURL
+            // Cheap reachability poll off-main; only pay for a full reload once the
+            // volume answers again.
+            let back = await Task.detached(priority: .utility) {
+                PathProbe.canListDirectory(url.path)
+            }.value
+            guard token == loadToken, networkStalled else { return }
+            if back { reload() }
+            else { scheduleStallRetry(token: token, attempt: min(attempt + 1, 5)) }
         }
     }
 
@@ -839,18 +867,52 @@ final class BrowserModel: Identifiable {
     func trashSelection() {
         let targets = selectedItems
         guard !targets.isEmpty else { return }
-        FileOperations.moveToTrash(targets)
-        reload()
+        let folder = currentURL
+        // In a Vault, snapshot the current state BEFORE deleting so the files are
+        // recoverable from the timeline even after the Trash is emptied — that's the
+        // whole Vault promise (V-002). Snapshot off-main (git), then trash.
+        guard VaultService.isVault(folder) else {
+            FileOperations.moveToTrash(targets)
+            reload()
+            broadcast(dirs: [folder.standardizedFileURL.path])
+            return
+        }
+        let label = L("Before deleting \(targets.count) item(s)", "\(targets.count)개 삭제 전 자동 저장")
+        Task { @MainActor in
+            let snapped = await Task.detached(priority: .userInitiated) {
+                VaultService.snapshot(at: folder, label: label)
+            }.value
+            // If the snapshot didn't take AND the tree still has uncommitted changes,
+            // the files being deleted may have no recovery point — abort rather than
+            // risk an unrecoverable delete (V-002-A, mirrors V-001-A).
+            if !snapped {
+                let dirty = await Task.detached(priority: .userInitiated) {
+                    VaultService.hasUncommittedChanges(at: folder)
+                }.value
+                if dirty {
+                    FileOperations.presentFailures(
+                        L("Couldn’t protect before deleting", "삭제 전에 보호하지 못했어요"),
+                        [L("The vault couldn’t snapshot the current state, so the delete was cancelled to avoid unrecoverable loss.",
+                           "현재 상태를 스냅샷하지 못해, 복구 불가능한 손실을 막기 위해 삭제를 취소했어요.")])
+                    return
+                }
+            }
+            FileOperations.moveToTrash(targets)
+            reload()
+            broadcast(dirs: [folder.standardizedFileURL.path])
+        }
     }
 
     func duplicateSelection() {
         FileOperations.duplicate(selectedItems)
         reload()
+        broadcast(dirs: [currentURL.standardizedFileURL.path])
     }
 
     func makeNewFolder() {
         if let url = FileOperations.newFolder(in: currentURL) {
             reload()
+            broadcast(dirs: [currentURL.standardizedFileURL.path])
             // select the new folder once the reload lands
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 120_000_000)
@@ -1151,11 +1213,46 @@ final class BrowserModel: Identifiable {
     /// Copy the current selection into another directory (used by Mdir-style
     /// pane-to-pane transfers). `onDone` runs after the (async) transfer lands —
     /// the destination pane reloads there, not before.
+    // MARK: - Cross-tab change broadcast
+    //
+    // anf has no live folder watcher, so a tab/pane that is *not* the one
+    // performing a file op would otherwise go stale (e.g. the source folder after
+    // a drag-move into another pane). After an op, broadcast the affected
+    // directories; the workspace reloads every OTHER tab/pane showing them.
+    static let dirsChangedNote = Notification.Name("anf.dirsChanged")
+
+    private static func notifyDirsChanged(_ dirs: Set<String>, except: UUID) {
+        NotificationCenter.default.post(name: dirsChangedNote, object: nil,
+                                        userInfo: ["dirs": dirs, "except": except])
+    }
+
+    /// Broadcast affected dirs from a NON-model context (undo/redo): no originating
+    /// tab to exclude, so EVERY tab/pane showing one of `dirs` reloads.
+    static func broadcastDirsChanged(_ dirs: Set<String>) {
+        let nonEmpty = dirs.filter { !$0.isEmpty }
+        guard !nonEmpty.isEmpty else { return }
+        NotificationCenter.default.post(name: dirsChangedNote, object: nil, userInfo: ["dirs": nonEmpty])
+    }
+
+    private func broadcast(dirs: Set<String>) {
+        let nonEmpty = dirs.filter { !$0.isEmpty }
+        guard !nonEmpty.isEmpty else { return }
+        Self.notifyDirsChanged(nonEmpty, except: id)
+    }
+
+    private func parentDirs(of urls: [URL]) -> Set<String> {
+        Set(urls.map { $0.deletingLastPathComponent().standardizedFileURL.path })
+    }
+
     func copySelection(into destination: URL, move: Bool, onDone: @escaping () -> Void = {}) {
         let urls = selectedItems.map(\.url)
         guard !urls.isEmpty, destination != currentURL else { return }
         FileTransfer.shared.transfer(urls, into: destination, move: move) { [weak self] in
-            self?.reload()
+            guard let self else { onDone(); return }
+            self.reload()
+            var dirs: Set<String> = [destination.standardizedFileURL.path]
+            if move { dirs.formUnion(self.parentDirs(of: urls)) }
+            self.broadcast(dirs: dirs)
             onDone()
         }
     }
@@ -1185,6 +1282,7 @@ final class BrowserModel: Identifiable {
         guard !trimmed.isEmpty, trimmed != item.name else { return }
         if let dest = FileOperations.rename(item, to: trimmed) {
             reload(); selection = [dest]
+            broadcast(dirs: [currentURL.standardizedFileURL.path])
         }
     }
 
@@ -1204,7 +1302,11 @@ final class BrowserModel: Identifiable {
         let incoming = urls.filter { $0.deletingLastPathComponent().path != destination.path }
         guard !incoming.isEmpty else { return }
         FileTransfer.shared.transfer(incoming, into: destination, move: !copy) { [weak self] in
-            self?.reload()
+            guard let self else { return }
+            self.reload()
+            var dirs: Set<String> = [destination.standardizedFileURL.path]
+            if !copy { dirs.formUnion(self.parentDirs(of: incoming)) }
+            self.broadcast(dirs: dirs)
         }
     }
 
@@ -1217,10 +1319,16 @@ final class BrowserModel: Identifiable {
             message: L("Replace text in each name:", "각 이름에서 찾아 바꿀 텍스트:"),
             label1: L("Find", "찾기"), label2: L("Replace with", "바꾸기"), action: L("Rename", "변경")),
               !find.isEmpty else { return }
+        var renamed: [(from: URL, to: URL)] = []
         for item in targets {
             let newName = item.name.replacingOccurrences(of: find, with: replace)
-            if newName != item.name { _ = FileOperations.rename(item, to: newName) }
+            if newName != item.name,
+               let dest = FileOperations.rename(item, to: newName, recordUndo: false) {
+                renamed.append((from: item.url, to: dest))
+            }
         }
+        // One coalesced undo for the whole batch, not one per file (RN-001).
+        if !renamed.isEmpty { FileUndo.shared.record(.move(renamed)) }
         reload()
     }
 

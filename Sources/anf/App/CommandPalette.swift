@@ -138,6 +138,10 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         deepTask?.cancel()
         contentTask?.cancel()
         stopScanTimer()
+        // Closing mid-answer must also stop the AI work + thinking animation, or the
+        // timer keeps firing and the controller leaks until the next open (G-005).
+        askTask?.cancel()
+        stopThinking()
         searching = false
         contentScanning = false
         if let panel {
@@ -801,8 +805,15 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                       dim: true, questionLen: header.count)
         }
         render()
-        thinkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
-            step += 1; render()
+        // [weak self]: the timer retains its closure, and `render()` captures self
+        // (via setAnswer) — without weak, Timer→closure→self→thinkTimer is a leak
+        // that keeps animating until the next open (G-005).
+        thinkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            step += 1
+            let dots = String(repeating: "·", count: 1 + step % 3)
+            self.setAnswer(header + "✦ \(provider) · " + L("Thinking", "생각 중") + " \(dots)",
+                           dim: true, questionLen: header.count)
         }
     }
 

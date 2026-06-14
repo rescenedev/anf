@@ -341,6 +341,23 @@ final class WorkspaceModel {
             guard let size = note.object as? CGFloat else { return }
             MainActor.assumeIsolated { self?.previewTextSize = size }
         }
+        // A file op (move/trash/rename) in one tab broadcasts the directories it
+        // touched; refresh every OTHER tab/pane showing them — anf has no live FS
+        // watcher, so a source folder open in another tab would otherwise go stale.
+        NotificationCenter.default.addObserver(
+            forName: BrowserModel.dirsChangedNote, object: nil, queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                guard let self,
+                      let dirs = note.userInfo?["dirs"] as? Set<String> else { return }
+                let except = note.userInfo?["except"] as? UUID
+                for pane in self.panes {
+                    for tab in pane.tabs where tab.id != except {
+                        if dirs.contains(tab.currentURL.standardizedFileURL.path) { tab.reload() }
+                    }
+                }
+            }
+        }
         // Index the focused folder's subtree (not all of home) so the first ⌘K is
         // instant and the scope follows the focused pane.
         FileIndex.shared.build(for: active.currentURL)

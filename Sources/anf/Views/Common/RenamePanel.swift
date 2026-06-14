@@ -100,28 +100,29 @@ private final class RenameState: ObservableObject {
     /// Apply every enabled, ready row — collision-safe — then reload.
     func apply() {
         var changed = false
+        var renamed: [(from: URL, to: URL)] = []   // one coalesced undo for the batch (RN-001)
         for i in rows.indices where rows[i].enabled && rows[i].phase == .ready {
             let row = rows[i]
             let dir = row.url.deletingLastPathComponent()
             let wanted = row.proposed.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !wanted.isEmpty, wanted != row.original else { rows[i].phase = .none; continue }
             let finalName = Self.uniqueName(in: dir, fileName: wanted, excluding: row.url)
-            if FileOperations.rename(FileItem(url: row.url) ?? placeholder(row.url), to: finalName) != nil {
+            // If the file vanished mid-flight both factories return nil — skip it as
+            // failed instead of force-unwrapping into a crash (G-006).
+            if let item = FileItem(url: row.url) ?? FileItem(fastURL: row.url),
+               let dest = FileOperations.rename(item, to: finalName, recordUndo: false) {
                 rows[i].phase = .done
                 changed = true
+                renamed.append((from: row.url, to: dest))
             } else {
                 rows[i].phase = .failed
             }
         }
+        // One undo record for the whole batch, not one per file (RN-001).
+        if !renamed.isEmpty { FileUndo.shared.record(.move(renamed)) }
         if changed { onDone() }
         // Close once nothing actionable remains.
         if !rows.contains(where: { $0.enabled && $0.phase == .ready }) { close() }
-    }
-
-    /// FileItem(url:) can fail only if the file vanished mid-flight; rename then
-    /// no-ops on the missing source. This keeps the type non-optional.
-    private func placeholder(_ url: URL) -> FileItem {
-        FileItem(url: url) ?? FileItem(fastURL: url)!
     }
 
     /// A non-colliding name in `dir` (appends " 2", " 3"…), ignoring the source.

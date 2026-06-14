@@ -52,23 +52,25 @@ enum ScreenshotOrganizer {
     }
 
     /// Execute the move (call off the main thread). Returns moved/failed counts.
-    static func move(_ plan: Plan, into folder: URL) -> (moved: Int, failed: Int) {
+    static func move(_ plan: Plan, into folder: URL) -> (moved: Int, failed: Int, pairs: [(from: URL, to: URL)]) {
         let fm = FileManager.default
         let destRoot = destRoot(in: folder)
         var moved = 0, failed = 0
+        var pairs: [(from: URL, to: URL)] = []
         for group in plan.groups {
             let dir = destRoot.appendingPathComponent(group.month)
             do { try fm.createDirectory(at: dir, withIntermediateDirectories: true) }
             catch { failed += group.urls.count; continue }
             for src in group.urls {
                 let name = uniqueName(in: dir, fileName: src.lastPathComponent)
+                let dest = dir.appendingPathComponent(name)
                 do {
-                    try fm.moveItem(at: src, to: dir.appendingPathComponent(name))
-                    moved += 1
+                    try fm.moveItem(at: src, to: dest)
+                    moved += 1; pairs.append((src, dest))
                 } catch { failed += 1 }
             }
         }
-        return (moved, failed)
+        return (moved, failed, pairs)
     }
 
     /// A non-colliding name in `dir` (appends " 2", " 3"…).

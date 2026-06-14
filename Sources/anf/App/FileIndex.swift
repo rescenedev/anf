@@ -24,6 +24,7 @@ final class FileIndex {
     private var task: Task<Void, Never>?
     private var seeded = false
     private var lastScan: [String: Date] = [:]
+    private var networkRoots: Set<String> = []   // roots skipped — fd recursion over SMB is slow (N-009)
     private var stream: FSEventStreamRef?
     private var rescanWork: DispatchWorkItem?
     private var saveWork: DispatchWorkItem?
@@ -33,6 +34,11 @@ final class FileIndex {
     func build(for url: URL) {
         guard ExternalTools.path("fd") != nil else { reset(); return }
         let path = url.standardizedFileURL.path
+        // Don't index network folders — recursive fd over SMB is slow and hammers
+        // the share (N-009). Once a root is known-network we skip immediately; ⌘K
+        // still works via the live fd/Spotlight fallback. (build() fires on every
+        // onActivity, so this guard must be cheap — hence the cached set.)
+        if networkRoots.contains(where: { Self.isUnder(path, $0) || $0 == path }) { return }
 
         if !seeded {
             seeded = true
@@ -78,14 +84,22 @@ final class FileIndex {
         lastScan[rootPath] = Date()
         task?.cancel()
         task = Task { [weak self] in
-            let scanned = await Task.detached(priority: .utility) { () -> (paths: [String], lower: [String]) in
+            // Volume check + scan both OFF-main (resourceValues blocks on a stale
+            // mount). `skip` = network volume → don't index (N-009).
+            let scanned = await Task.detached(priority: .utility) { () -> (skip: Bool, paths: [String], lower: [String]) in
+                guard FileTransfer.isLocalVolume(URL(fileURLWithPath: rootPath)) else { return (true, [], []) }
                 let u = FileIndex.scan(path: rootPath)
                 FileIndex.saveCache(root: rootPath, paths: u.paths)
-                return u
+                return (false, u.paths, u.lower)
             }.value
             guard let self else { return }
             self.task = nil            // in-flight marker for build()'s guard
             guard self.root == rootPath else { return }
+            if scanned.skip {
+                self.networkRoots.insert(rootPath)
+                self.root = nil        // don't claim coverage; ⌘K uses live fallback
+                return
+            }
             self.paths = scanned.paths
             self.lowerPaths = scanned.lower
             self.generation &+= 1

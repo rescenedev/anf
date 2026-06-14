@@ -37,7 +37,7 @@ enum SFTPClient {
     static func home(_ host: String) async -> String {
         await Task.detached(priority: .userInitiated) {
             let out = ExternalTools.run(sftpPath, baseArgs(host),
-                                        stdin: "pwd\n", maxLines: 50, timeout: 20)
+                                        stdin: "pwd\n", env: ["LC_ALL": "C"], maxLines: 50, timeout: 20)
             for line in out {
                 if let r = line.range(of: "Remote working directory: ") {
                     return String(line[r.upperBound...]).trimmingCharacters(in: .whitespaces)
@@ -52,8 +52,14 @@ enum SFTPClient {
     static func list(host: String, path: String) async throws -> [RemoteEntry] {
         try await Task.detached(priority: .userInitiated) {
             let cmd = "ls -la \(shq(path))\n"
+            let maxLines = 100_000
             let out = ExternalTools.run(sftpPath, baseArgs(host),
-                                        stdin: cmd, maxLines: 100_000, timeout: 30)
+                                        stdin: cmd, env: ["LC_ALL": "C"], maxLines: maxLines, timeout: 30)
+            // Don't truncate silently (N-007): if we hit the cap the directory is
+            // huge and the listing is partial — surface it in the trace log.
+            if out.count >= maxLines {
+                Trace.log("SFTP: \(host):\(path) listing hit the \(maxLines)-line cap — directory may be truncated")
+            }
             var entries: [RemoteEntry] = []
             var sawListing = false
             for line in out {
@@ -86,7 +92,7 @@ enum SFTPClient {
             let local = dir.appendingPathComponent(name)
             let cmd = "get \(shq(remotePath)) \(shq(local.path))\n"
             _ = ExternalTools.run(sftpPath, baseArgs(host),
-                                  stdin: cmd, maxLines: 200, timeout: 120)
+                                  stdin: cmd, env: ["LC_ALL": "C"], maxLines: 200, timeout: 120)
             guard FileManager.default.fileExists(atPath: local.path) else {
                 throw SFTPError.message(L("Couldn’t download ‘\(name)’.", "‘\(name)’ 다운로드에 실패했습니다."))
             }
@@ -125,9 +131,28 @@ enum SFTPClient {
         if isSymlink, let arrow = name.range(of: " -> ") {   // strip "link -> target"
             name = String(name[..<arrow.lowerBound])
         }
-        let modified = dateTime.date(from: dateStr) ?? dateYear.date(from: dateStr) ?? .distantPast
+        // `ls -la` omits the year for files newer than ~6 months ("MMM d HH:mm"),
+        // so the time-only formatter parses them into a default (wrong) year.
+        // Stamp the current year — and roll back one if that lands in the future.
+        let modified: Date
+        if let timed = dateTime.date(from: dateStr) {
+            modified = currentYear(timed)
+        } else {
+            modified = dateYear.date(from: dateStr) ?? .distantPast
+        }
         return RemoteEntry(name: name, isDir: type == "d", isSymlink: isSymlink,
                            size: size, modified: modified)
+    }
+
+    /// Apply the current year to a year-less `ls` timestamp; if that puts it in the
+    /// future, it belongs to last year (e.g. a Dec date read in January).
+    private static func currentYear(_ d: Date) -> Date {
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        var c = cal.dateComponents([.month, .day, .hour, .minute], from: d)
+        c.year = cal.component(.year, from: now)
+        guard let stamped = cal.date(from: c) else { return d }
+        return stamped > now ? (cal.date(byAdding: .year, value: -1, to: stamped) ?? stamped) : stamped
     }
 
     private static func shq(_ s: String) -> String {
