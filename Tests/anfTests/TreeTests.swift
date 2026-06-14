@@ -42,8 +42,19 @@ func runTreeTests() {
             T.expect(model.isExpanded(subItem), "folder marked expanded")
         }
 
-        T.group("collapse removes children") {
+        T.group("collapse with a selected child lands selection on the folder") {
+            // re-expand and select a child
             model.toggleExpand(subItem)
+            pump { model.items.contains { $0.name == "s1.txt" } }
+            if let s1 = model.items.first(where: { $0.name == "s1.txt" }) {
+                model.selection = [s1.id]
+            }
+            model.toggleExpand(subItem)   // collapse — child is now hidden
+            T.equal(model.selectedItems.map(\.name), ["sub"],
+                    "orphaned selection lands on the collapsed folder (no vanished cursor)")
+        }
+
+        T.group("collapse removes children") {
             T.expect(!model.items.contains { $0.name == "s1.txt" }, "children gone after collapse")
             T.equal(model.items.count, 3, "back to the flat listing")
             T.expect(!model.isExpanded(subItem), "folder no longer expanded")

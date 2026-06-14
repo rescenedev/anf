@@ -59,17 +59,39 @@ final class BrowserModel: Identifiable {
         return nil
     }
 
+    /// The nearest expanded folder above this row — so ← keeps closing opened
+    /// folders one by one, walking upward.
+    func nearestExpandedAbove(of item: FileItem) -> FileItem? {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return nil }
+        var i = idx - 1
+        while i >= 0 {
+            let it = items[i]
+            if it.isBrowsableContainer, expanded.contains(it.url) { return it }
+            i -= 1
+        }
+        return nil
+    }
+
     /// Expand/collapse a folder row inline (list mode). Re-flattens from the
     /// cached sorted top level — no full re-sort, so it stays snappy.
     func toggleExpand(_ item: FileItem) {
         guard isExpandable(item) else { return }
-        if expanded.contains(item.url) {
+        let collapsing = expanded.contains(item.url)
+        if collapsing {
             expanded.remove(item.url)
         } else {
             expanded.insert(item.url)
             if childCache[item.url] == nil { loadChildren(item.url) }
         }
         reflattenTree()
+        // Collapsing hides the children — if the selection lived under this
+        // folder it's now orphaned (cursor vanishes, ↑ would jump to the bottom).
+        // Land it back on the folder so arrowing continues from here.
+        if collapsing, selectedItems.isEmpty {
+            selection = [item.id]
+            selCursor = items.firstIndex { $0.id == item.id }
+            selAnchor = selCursor
+        }
     }
 
     /// Rebuild `items` from the cached sorted top + expansions, without sorting.

@@ -132,10 +132,18 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 // List: ← collapses the selected folder; on a nested row it jumps
                 // up to the parent folder and collapses it (ForkLift/Finder).
                 if model.viewMode == .list, let it = model.selectedItems.first {
+                    // 1) selected folder is open → close it
                     if model.isExpandable(it) && model.isExpanded(it) { model.toggleExpand(it); return true }
+                    // 2) nested row → go to its folder and close it
                     if let parent = model.parentRow(of: it) {
                         model.selection = [parent.id]
                         if model.isExpanded(parent) { model.toggleExpand(parent) }
+                        return true
+                    }
+                    // 3) top-level → keep closing opened folders, walking upward
+                    if let above = model.nearestExpandedAbove(of: it) {
+                        model.selection = [above.id]
+                        model.toggleExpand(above)
                         return true
                     }
                 }
