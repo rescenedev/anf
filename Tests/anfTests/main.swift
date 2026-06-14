@@ -57,6 +57,7 @@ runVisualIndexTests()
 runLLMTests()
 runRenameTests()
 runTreeTests()
+MainActor.assumeIsolated { runNetworkStallTests() }
 
 print("")
 if T.failures.isEmpty {

@@ -20,6 +20,11 @@ final class BrowserModel: Identifiable {
     /// The current folder exists but isn't readable (TCC / POSIX permissions) —
     /// shown instead of a misleading "empty folder".
     private(set) var accessDenied = false
+    /// The folder's volume became unreachable mid-session (network mount blipped:
+    /// NAS sleep, wifi drop, VPN reconnect). We hold the last listing and auto-retry
+    /// instead of blanking + showing a misleading permission error — that flicker is
+    /// what users read as "the network drive is unstable".
+    private(set) var networkStalled = false
 
     /// Sorted + filtered listing — what the views render. Cached because for big
     /// directories (tens of thousands of entries) re-sorting on every property
@@ -616,11 +621,45 @@ final class BrowserModel: Identifiable {
             // metadata the columns need, so there is no slow second pass.
             let loaded = await fs.contentsFast(of: url, showHidden: hidden)
             guard token == loadToken else { return }
+            // An empty result is ambiguous: genuinely empty, permission-denied, or
+            // the volume just went away (network blip). Probe OFF-MAIN — both
+            // `fileExists` and `isReadableFile` block on a stale mount and would
+            // beachball if run here — to tell them apart.
+            if loaded.isEmpty {
+                let probe = await Task.detached(priority: .utility) { () -> (reachable: Bool, readable: Bool) in
+                    (PathProbe.isDirectory(url.path), FileManager.default.isReadableFile(atPath: url.path))
+                }.value
+                guard token == loadToken else { return }
+                if !probe.reachable {
+                    // Volume unreachable → hold the last listing, flag the stall,
+                    // and retry until it comes back. Don't wipe `allItems`.
+                    networkStalled = true
+                    isLoading = false
+                    scheduleStallRetry(token: token)
+                    return
+                }
+                networkStalled = false
+                allItems = loaded
+                accessDenied = !probe.readable
+                recomputeItems()
+                isLoading = false
+                return
+            }
+            networkStalled = false
             allItems = loaded
-            accessDenied = loaded.isEmpty
-                && !FileManager.default.isReadableFile(atPath: url.path)
+            accessDenied = false
             recomputeItems()
             isLoading = false
+        }
+    }
+
+    /// While a network mount is stalled, re-attempt the listing on a fixed backoff
+    /// until it returns or the user navigates away (a new `loadToken` cancels us).
+    private func scheduleStallRetry(token: Int) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard token == loadToken, networkStalled else { return }
+            reload()
         }
     }
 

@@ -23,7 +23,11 @@ struct ContentArea: View {
             case .gallery: GalleryView(model: model)
             }
 
-            if model.isLoading && model.allItems.isEmpty {
+            if model.networkStalled {
+                // The volume blipped — the (possibly stale) listing stays visible
+                // behind this card, which refreshes itself when the mount returns.
+                NetworkStalledState { model.reload() }
+            } else if model.isLoading && model.allItems.isEmpty {
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large)
                     if model.isRemote {
@@ -91,6 +95,28 @@ private struct RemoteErrorState: View {
             Button(L("Retry", "다시 시도"), action: retry)
         }
         .padding(24)
+    }
+}
+
+/// Shown when a (network) volume went unreachable mid-session. The last listing
+/// stays visible behind it; anf retries on its own, so this is reassurance, not
+/// an error the user has to act on.
+private struct NetworkStalledState: View {
+    let retry: () -> Void
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 40)).foregroundStyle(.tertiary)
+            Text(L("Reconnecting to the network drive…", "네트워크 드라이브에 다시 연결 중…"))
+                .font(.title3).foregroundStyle(.secondary)
+            Text(L("Showing the last view — this refreshes automatically when the drive is back.",
+                   "마지막 화면을 표시 중입니다 — 드라이브가 돌아오면 자동으로 새로고침됩니다."))
+                .font(.system(size: 12)).foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center).frame(maxWidth: 360)
+            Button(L("Retry Now", "지금 다시 시도"), action: retry)
+        }
+        .padding(24)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 
