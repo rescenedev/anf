@@ -77,7 +77,19 @@ final class FavoritesStore {
 final class PaneModel: Identifiable {
     let id = UUID()
     private(set) var tabs: [BrowserModel]
-    var activeIndex: Int = 0
+    var activeIndex: Int = 0 {
+        didSet {
+            // A locked tab (issue #14) snaps back to its pinned folder whenever it
+            // becomes active — selecting/cycling to it returns there even if it was
+            // navigated elsewhere meanwhile.
+            guard tabs.indices.contains(activeIndex) else { return }
+            let tab = tabs[activeIndex]
+            if let locked = tab.lockedURL,
+               tab.currentURL.standardizedFileURL.path != locked.standardizedFileURL.path {
+                tab.navigate(to: locked)
+            }
+        }
+    }
 
     /// "Focus my pane" — set by the workspace; propagated to every tab here.
     @ObservationIgnored var onActivity: (() -> Void)? {

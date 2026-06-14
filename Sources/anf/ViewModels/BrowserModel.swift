@@ -26,6 +26,14 @@ final class BrowserModel: Identifiable {
     /// what users read as "the network drive is unstable".
     private(set) var networkStalled = false
 
+    /// When set, this tab is "locked" to a folder (issue #14): re-selecting the tab
+    /// snaps it back here, so it works like a pinned quick-access tab (★). nil =
+    /// free tab. Enforced by `PaneModel.activeIndex`.
+    var lockedURL: URL?
+    var isLocked: Bool { lockedURL != nil }
+    /// Lock to the current folder, or unlock if already locked.
+    func toggleLock() { lockedURL = isLocked ? nil : currentURL }
+
     /// Sorted + filtered listing — what the views render. Cached because for big
     /// directories (tens of thousands of entries) re-sorting on every property
     /// read (SwiftUI re-renders, selection math, etc.) is the dominant cost. We
