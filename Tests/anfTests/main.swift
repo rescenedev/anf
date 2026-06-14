@@ -68,6 +68,7 @@ runAIConsentTests()
 runVaultGuardTests()
 MainActor.assumeIsolated { runUndoCoalesceTests() }
 MainActor.assumeIsolated { runNetworkStallTests() }
+MainActor.assumeIsolated { runPathEditTests() }
 runFixVerificationTests()
 
 print("")

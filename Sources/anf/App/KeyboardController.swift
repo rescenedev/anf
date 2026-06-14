@@ -242,7 +242,10 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         case .getInfo: model.showGetInfo()
         case .duplicate: model.duplicateSelection()
         case .toggleFavorite: workspace.toggleFavoriteCurrent()
-        case .goToFolder: model.goToFolderPrompt()
+        // Inline path editing lives in the path bar — only useful when it's
+        // showing. When the bar is hidden, fall back to the modal prompt (#14).
+        case .goToFolder:
+            if workspace.pathBarVisible { model.beginPathEdit() } else { model.goToFolderPrompt() }
         case .newFolder: model.makeNewFolder()
         case .reload: model.reload()
         case .toggleHidden: model.showHidden.toggle()

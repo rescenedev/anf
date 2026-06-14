@@ -1343,14 +1343,25 @@ final class BrowserModel: Identifiable {
         reload()
     }
 
-    func goToFolderPrompt() {
-        guard let raw = TextPrompt.run(title: L("Go to Folder", "폴더로 이동"),
-                                       message: L("Enter or paste a path:", "경로를 입력하거나 붙여넣기:"),
-                                       defaultValue: currentURL.path, action: L("Go", "이동")) else { return }
-        let expanded = (raw as NSString).expandingTildeInPath
-        // Validate OFF the main thread: a pasted path on a slow/disconnected
-        // network mount makes `fileExists` block for the mount's full timeout,
-        // freezing the UI right after the user hits Go.
+    /// Bumped to ask the path bar to begin inline path editing (⌘L / "Go to
+    /// Folder"). The `PathBarView` observes this counter and, on each change,
+    /// swaps its breadcrumbs for a focused text field pre-filled with the current
+    /// path (issue #14). A counter rather than a Bool so repeated ⌘L always
+    /// re-triggers, even if the field is already showing.
+    private(set) var pathEditRequests = 0
+
+    /// Trigger the inline path editor. ⌘L, the "Go to Folder…" menu, and a click
+    /// on the path bar's empty area all route here.
+    func beginPathEdit() { pathEditRequests += 1 }
+
+    /// Navigate to a typed/pasted path (the inline path editor's commit action,
+    /// also the old modal prompt's). Validation runs OFF the main thread: a path
+    /// on a slow/disconnected network mount makes `fileExists` block for the
+    /// mount's full timeout, which would freeze the UI the instant the user hits
+    /// Return. Beeps if it isn't a reachable directory.
+    func navigateToTypedPath(_ raw: String) {
+        let expanded = (raw.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        guard !expanded.isEmpty else { return }
         Task { @MainActor in
             let isDir = await Task.detached(priority: .userInitiated) { () -> Bool in
                 var dir: ObjCBool = false
@@ -1359,5 +1370,14 @@ final class BrowserModel: Identifiable {
             if isDir { navigate(to: URL(fileURLWithPath: expanded)) }
             else { NSSound.beep() }
         }
+    }
+
+    /// Legacy modal "Go to Folder" prompt, kept as a fallback for headless/edge
+    /// cases. The primary path is now the inline editor via `beginPathEdit()`.
+    func goToFolderPrompt() {
+        guard let raw = TextPrompt.run(title: L("Go to Folder", "폴더로 이동"),
+                                       message: L("Enter or paste a path:", "경로를 입력하거나 붙여넣기:"),
+                                       defaultValue: currentURL.path, action: L("Go", "이동")) else { return }
+        navigateToTypedPath(raw)
     }
 }
