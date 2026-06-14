@@ -108,17 +108,19 @@ final class FileUndo {
 
         case .trash(let pairs):
             // Inverse of "these were trashed" = restore from the Trash.
-            var restored: [URL] = []
-            var stillTrashed: [(original: URL, trashed: URL)] = []
+            var restoredPairs: [(original: URL, trashed: URL)] = []
             for (original, trashed) in pairs {
                 do {
                     try fm.moveItem(at: trashed, to: original)
-                    restored.append(original)
-                    stillTrashed.append((original, trashed))
+                    restoredPairs.append((original, trashed))
                 } catch { failures.append("\(original.lastPathComponent): \(error.localizedDescription)") }
             }
             FileOperations.presentFailures(L("Couldn’t restore from Trash", "휴지통에서 복원하지 못했습니다"), failures)
-            // Redo = trash them again; recording as .created(restored) trashes on next inverse.
+            // Redo = trash the restored items again. Return .created(restored originals)
+            // so redo’s inverse calls trashItem and records the NEW trash location.
+            // (We cannot reuse the old `trashed` URLs because moveItem already moved
+            // those files out — FU-001: dead `stillTrashed` removed, behaviour unchanged.)
+            let restored = restoredPairs.map(\.original)
             return restored.isEmpty ? nil : .created(restored)
         }
     }
