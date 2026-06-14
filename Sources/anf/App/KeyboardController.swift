@@ -134,15 +134,15 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
                 if model.viewMode == .list, let it = model.selectedItems.first {
                     // 1) selected folder is open → close it
                     if model.isExpandable(it) && model.isExpanded(it) { model.toggleExpand(it); return true }
-                    // 2) nested row → go to its folder and close it
+                    // 2) nested row → close its containing folder (cursor lands on
+                    //    that folder via orphan-repair)
                     if let parent = model.parentRow(of: it) {
-                        model.selection = [parent.id]
-                        if model.isExpanded(parent) { model.toggleExpand(parent) }
+                        model.toggleExpand(parent)
                         return true
                     }
                     // 3) top-level → keep closing opened folders, walking upward
                     if let above = model.nearestExpandedAbove(of: it) {
-                        model.selection = [above.id]
+                        model.select(above)
                         model.toggleExpand(above)
                         return true
                     }

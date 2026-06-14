@@ -72,6 +72,14 @@ final class BrowserModel: Identifiable {
         return nil
     }
 
+    /// Select a single row and keep the keyboard cursor/anchor in sync, so the
+    /// next ↑/↓ continues from here (used by ← tree navigation).
+    func select(_ item: FileItem) {
+        selection = [item.id]
+        selCursor = items.firstIndex { $0.id == item.id }
+        selAnchor = selCursor
+    }
+
     /// Expand/collapse a folder row inline (list mode). Re-flattens from the
     /// cached sorted top level — no full re-sort, so it stays snappy.
     func toggleExpand(_ item: FileItem) {
@@ -83,15 +91,8 @@ final class BrowserModel: Identifiable {
             expanded.insert(item.url)
             if childCache[item.url] == nil { loadChildren(item.url) }
         }
+        _ = collapsing
         reflattenTree()
-        // Collapsing hides the children — if the selection lived under this
-        // folder it's now orphaned (cursor vanishes, ↑ would jump to the bottom).
-        // Land it back on the folder so arrowing continues from here.
-        if collapsing, selectedItems.isEmpty {
-            selection = [item.id]
-            selCursor = items.firstIndex { $0.id == item.id }
-            selAnchor = selCursor
-        }
     }
 
     /// Rebuild `items` from the cached sorted top + expansions, without sorting.
@@ -101,6 +102,25 @@ final class BrowserModel: Identifiable {
         items = treeOn ? flattenTree(sortedTop) : { rowDepth = [:]; return sortedTop }()
         itemsVersion &+= 1
         selectedItemsCache = nil
+        repairOrphanedSelection()
+    }
+
+    /// If a collapse hid the selected row(s), land the selection on the nearest
+    /// surviving ancestor folder so the cursor never vanishes (and ↑ doesn't jump
+    /// to the bottom). Works no matter which folder up the chain was collapsed.
+    private func repairOrphanedSelection() {
+        guard !selection.isEmpty, selectedItems.isEmpty, let lost = selection.first else { return }
+        var u = lost.deletingLastPathComponent()
+        while u.path.count > 1 {
+            if let row = items.first(where: { $0.url == u }) {
+                selection = [row.id]
+                selCursor = items.firstIndex { $0.id == row.id }
+                selAnchor = selCursor
+                return
+            }
+            u = u.deletingLastPathComponent()
+        }
+        selCursor = nil; selAnchor = nil   // nothing left → fresh cursor (↑/↓ from top)
     }
 
     /// Sorted children for a folder (cached; invalidated when sort/filter change).
