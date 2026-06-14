@@ -38,11 +38,23 @@ enum FileOperations {
         var pairs: [(original: URL, trashed: URL)] = []
         var noTrash: [FileItem] = []     // volume has no Trash (e.g. SMB/network shares)
         var failures: [String] = []
+        let trashDir = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first
         for item in items {
             do {
                 var trashedURL: NSURL?
                 try FileManager.default.trashItem(at: item.url, resultingItemURL: &trashedURL)
-                if let t = trashedURL as URL? { pairs.append((item.url, t)) }
+                if let t = trashedURL as URL? {
+                    pairs.append((item.url, t))
+                } else if let dir = trashDir {
+                    // trashItem succeeded but didn't report the trash location (observed
+                    // on some AFP/third-party volume drivers — FO-001). Search the Trash
+                    // for a file with the same name so undo can still restore it.
+                    let name = item.url.lastPathComponent
+                    if let found = try? FileManager.default.contentsOfDirectory(at: dir,
+                        includingPropertiesForKeys: nil).first(where: { $0.lastPathComponent == name }) {
+                        pairs.append((item.url, found))
+                    }
+                }
             } catch let error as NSError
                         where error.domain == NSCocoaErrorDomain && error.code == NSFeatureUnsupportedError {
                 noTrash.append(item)
