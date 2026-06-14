@@ -597,3 +597,24 @@ dev agent fixed both findings (commits 56c6e26 fix, 796a772 tests). Validator re
 ---
 
 **iter21 점수**: 신규 OPEN 10건 (FT-001·FT-002·FT-003·FT-004 / BM-001·BM-002 / ILC-001 / FU-001 / FO-001·FO-002). 기존 13 FIXED 불변.
+
+---
+## iter22 — 10건 전부 수정 완료 (2026-06-14)
+
+> 사용자 지시: "fix it now / one id → one commit". 10건 각각 독립 커밋.
+
+| ID | 커밋 | 조치 |
+|----|------|------|
+| FT-004 | 98b604d | Move 취소 시 "이동이 취소되었습니다" 표시 |
+| FT-003 | 6e00c06 | 복사 전체 실패 시 생성된 빈 목적지 폴더 정리 |
+| FT-002 | f40ae40 | `boundedForEach`에 `useAllCores` 파라미터 추가 — 네트워크 목적지는 항상 semaphore 경로 사용(destLocal=false → concurrentPerform 우회 방지) |
+| FT-001 | f7678ad | 덮어쓰기 피해파일을 FileOperations.moveToTrash 대신 직접 trash; 복사 전체 실패 시 피해파일 즉시 복원(Task.detached); 성공 시 피해 trash undo + 복사 undo 순으로 기록 |
+| ET-001 | 2cb1cd4 | `process.standardError = FileHandle.nullDevice` — 미소비 stderr 파이프 데드락 제거 |
+| BM-001 | c68d9d7 | `isVault` 체크를 `Task.detached`로 이전 — @MainActor 동기 FS I/O 제거 |
+| BM-002 | 9fa22f1 | `makeNewFolder`/`commitRename`/`renameSelected` 모두 `standardizedFileURL` 사용 |
+| ILC-001 | ff42456 | mtime stat을 락 내부에서 읽고, 분류 완료 후 재stat하여 저장 |
+| FU-001 | 9561745 | 죽은 `stillTrashed` 변수 제거; `.trash` 역연산 코드 정리 |
+| FO-001 | 78de02c | `trashItem` 성공+`resultingItemURL=nil` 시 Trash 디렉토리에서 파일 탐색하여 undo 기록 복구 |
+| FO-002 | f977b74 | 확장자 없는 파일 duplicate 시 `appendingPathExtension("")` 대신 문자열 보간 사용 |
+
+**TOTAL FIXED: 23건** (기존 13 + 이번 10). 워킹트리 클린. 미push.
