@@ -109,6 +109,10 @@ struct IconGridView: NSViewRepresentable {
         func sync() {
             guard let cv = collection else { return }
             model.contentScrollView = cv.enclosingScrollView
+            // Tab switch reuses this coordinator with the next tab's model — force
+            // a reload so a colliding per-model itemsVersion can't leave the old
+            // tab's grid on screen (mirrors FileListView).
+            syncState.modelChanged(model.id)
             if lastIconSize != model.iconSize {
                 lastIconSize = model.iconSize
                 if let layout = cv.collectionViewLayout as? NSCollectionViewFlowLayout {

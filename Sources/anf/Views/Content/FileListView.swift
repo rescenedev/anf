@@ -140,6 +140,11 @@ struct FileListView: NSViewRepresentable {
         func sync() {
             guard let table else { return }
             model.contentScrollView = table.enclosingScrollView
+            // Tab switch reuses this coordinator with the next tab's model; its
+            // version counter and row-id cache belong to the previous tab, so
+            // force a clean reload (else a colliding itemsVersion shows the old
+            // tab's listing under the newly-selected tab).
+            if syncState.modelChanged(model.id) { lastIDs = [] }
             if lastScale != model.textScale {
                 lastScale = model.textScale
                 applyRowHeight()

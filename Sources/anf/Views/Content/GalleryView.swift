@@ -93,6 +93,7 @@ private struct FilmstripView: NSViewRepresentable {
         var model: BrowserModel
         weak var collection: NSCollectionView?
         private var lastVersion = -1
+        private var lastModelID: BrowserModel.ID?
         private var lastFocusedID: FileItem.ID?
         private var syncing = false
 
@@ -105,6 +106,14 @@ private struct FilmstripView: NSViewRepresentable {
 
         func sync() {
             guard let cv = collection else { return }
+            // Tab switch reuses this coordinator with the next tab's model; its
+            // per-model itemsVersion can collide with the previous tab's last
+            // value, so force a reload to avoid showing the old tab's gallery.
+            if lastModelID != model.id {
+                lastModelID = model.id
+                lastVersion = -1
+                lastFocusedID = nil
+            }
             if lastVersion != model.itemsVersion {
                 lastVersion = model.itemsVersion
                 cv.reloadData()

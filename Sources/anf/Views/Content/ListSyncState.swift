@@ -19,12 +19,34 @@ import Foundation
 final class ListSyncState {
     private var lastVersion = -1
     private var lastAppliedSelection: Set<FileItem.ID>?
+    private var lastModelID: AnyHashable?
     private(set) var isSyncing = false
 
     /// True (and records the version) when the listing changed since last call.
     func itemsChanged(version: Int) -> Bool {
         guard lastVersion != version else { return false }
         lastVersion = version
+        return true
+    }
+
+    /// True when the bound model changed identity since the last call — and
+    /// resets the reload/selection gates so the caller does a clean reload.
+    ///
+    /// A tab switch reuses the SAME coordinator (the content view has no per-tab
+    /// id), so `updateNSView` just points `coordinator.model` at the next tab's
+    /// model. But `itemsVersion` is per-model — each tab counts from 0 — so the
+    /// new tab's version can equal the value last applied from the previous tab,
+    /// `itemsChanged` then returns false, the reload is skipped, and the old
+    /// tab's listing stays on screen (the "wrong folder shown under the selected
+    /// tab" bug). Calling this first makes the next `itemsChanged` report a
+    /// change and forces the selection to be re-applied onto the new listing.
+    @discardableResult
+    func modelChanged(_ id: some Hashable) -> Bool {
+        let boxed = AnyHashable(id)
+        guard lastModelID != boxed else { return false }
+        lastModelID = boxed
+        lastVersion = -1            // next itemsChanged(version:) → true
+        lastAppliedSelection = nil  // re-apply selection onto the new listing
         return true
     }
 

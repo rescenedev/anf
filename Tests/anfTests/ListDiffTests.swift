@@ -28,6 +28,28 @@ func runListDiffTests() {
                  "single removal keeps the animated diff")
     }
 
+    T.group("ListSyncState: tab switch forces a reload despite itemsVersion collision") {
+        MainActor.assumeIsolated {
+            let s = ListSyncState()
+            let tabA = UUID(); let tabB = UUID()
+
+            // Tab A: version 0 applied, then stable.
+            T.expect(s.modelChanged(tabA), "first bound model counts as a change")
+            T.expect(s.itemsChanged(version: 0), "tab A v0 → reload")
+            T.expect(!s.itemsChanged(version: 0), "tab A v0 again → no reload")
+
+            // Switch to tab B whose per-model itemsVersion ALSO starts at 0.
+            // Without modelChanged, itemsChanged(version: 0) would return false
+            // and the old tab's listing would stay on screen (the reported bug).
+            T.expect(s.modelChanged(tabB), "switching tabs is a change")
+            T.expect(s.itemsChanged(version: 0),
+                     "tab B v0 → reload even though the version collides with tab A")
+
+            // Re-applying the same model is not a change.
+            T.expect(!s.modelChanged(tabB), "same model id → no forced reload")
+        }
+    }
+
     T.group("ListDiff: worst case stays fast") {
         let clock = ContinuousClock()
         let t0 = clock.now
