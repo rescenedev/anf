@@ -234,8 +234,13 @@ final class Keymap {
         18: "1", 19: "2", 20: "3", 21: "4", 23: "5", 22: "6", 26: "7", 28: "8", 25: "9", 29: "0",
         // punctuation by position
         50: "`", 33: "[", 30: "]", 44: "/", 42: "\\", 24: "=", 27: "-", 47: ".", 43: ",", 41: ";", 39: "'",
-        // editing / navigation
-        49: "space", 36: "return", 76: "enter", 48: "tab", 53: "escape", 51: "delete",
+        // editing / navigation. BOTH delete keys normalize to "delete": 51 is
+        // ⌫ (Backspace, the laptop "delete"); 117 is ⌦ (forward delete — the key
+        // labeled "delete" in the nav cluster on full-size/Magic keyboards, and
+        // what Windows/ForkLift migrants reach for). Mapping both means the
+        // Delete key trashes the selection no matter which physical key it is.
+        49: "space", 36: "return", 76: "enter", 48: "tab", 53: "escape",
+        51: "delete", 117: "delete",
         123: "left", 124: "right", 125: "down", 126: "up",
         115: "home", 119: "end", 116: "pageup", 121: "pagedown",
         // function row

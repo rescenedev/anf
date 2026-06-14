@@ -102,5 +102,19 @@ func runKeymapTests() {
         T.equal(Keymap.token(keyCode: 96, fallback: nil), "f5", "f5 by keyCode")
         T.equal(Keymap.token(keyCode: 43, fallback: ","), ",", "comma (⌘, settings)")
         T.equal(Keymap.token(keyCode: 999, fallback: "Q"), "q", "fallback lowercases")
+        // Both delete keys normalize to "delete" so either trashes the selection:
+        // 51 = ⌫ (Backspace), 117 = ⌦ (forward delete). 117 was unmapped, so the
+        // "delete" key on full-size keyboards did nothing.
+        T.equal(Keymap.token(keyCode: 51, fallback: nil), "delete", "backspace ⌫ → delete")
+        T.equal(Keymap.token(keyCode: 117, fallback: nil), "delete", "forward delete ⌦ → delete")
+    }
+
+    T.group("both delete keys are bound to trash") {
+        let map = Keymap.effectiveBindings(fileAt: URL(fileURLWithPath: "/nonexistent-keymap-file"))
+        let noMods = Keymap.relevantFlags.subtracting(Keymap.relevantFlags).rawValue   // 0
+        let backspace = Keymap.Chord(flags: noMods, key: Keymap.token(keyCode: 51, fallback: nil))
+        let forward = Keymap.Chord(flags: noMods, key: Keymap.token(keyCode: 117, fallback: nil))
+        T.equal(map[backspace], .trash, "⌫ (51) is bound to trash")
+        T.equal(map[forward], .trash, "⌦ (117) is bound to trash")
     }
 }
