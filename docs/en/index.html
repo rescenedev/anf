@@ -44,14 +44,14 @@
 
   <!-- Hero -->
   <section class="hero">
-    <p class="eyebrow">all new finder · <span class="ver-pill">1.0</span></p>
+    <p class="eyebrow">all new finder · <span class="ver-pill">1.5</span></p>
     <h1>Finder, reforged.</h1>
     <p class="lead">Split panes, a built-in terminal, a command palette.<br>A fast, lightweight native file browser for macOS.</p>
     <div class="hero-cta">
       <a class="hero-dl is-soon" href="#install"><span class="dl-ic">⤓</span> Download — coming soon</a>
     </div>
     <p class="hero-hint">The signed .dmg is on the way — for now, <a href="#install">install with Homebrew</a>.</p>
-    <p class="hero-specs">A featherweight native single binary · <strong>just 3.4&thinsp;MB</strong> · zero telemetry · open source</p>
+    <p class="hero-specs">A featherweight native single binary · <strong>just 5.8&thinsp;MB</strong> · zero telemetry · open source</p>
     <div class="carousel">
       <div class="car-frames">
         <figure class="car-frame active"><img src="../assets/layout-single.png?v=2" alt="Single pane layout" loading="eager"></figure>
@@ -168,7 +168,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
         <tr><td>Content-search sweep over 32 PDFs</td><td class="num">410 ms → 4 ms</td><td>extracted once per session, then cached per keystroke</td></tr>
         <tr><td>Copy a 55,860-entry (622MB) folder</td><td class="num">6.8 s</td><td>parallel APFS clones — faster than cp -Rc (8.4s), fully background with progress + instant cancel</td></tr>
         <tr><td>Soak across 150,696 directories</td><td class="num">0 failures</td><td>a real home tree through the production read+sort path, all &lt;55ms except the 26k outlier</td></tr>
-        <tr><td>App size</td><td class="num">3.4 MB</td><td>one native binary — ~1/50th of an Electron file manager</td></tr>
+        <tr><td>App size</td><td class="num">5.8 MB</td><td>one native binary — a fraction of an Electron file manager</td></tr>
         <tr><td>Memory</td><td class="num">~110 MB</td><td>with a 26,549-entry session open; live heap ~30 MB, every cache byte-capped</td></tr>
         <tr><td>Idle CPU</td><td class="num">~0 %</td><td>the index refreshes only when needed</td></tr>
       </tbody>
@@ -393,7 +393,7 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
       </div>
     </div>
     <ul class="ticks centered-list">
-      <li>Built on a local git engine — zero new dependencies, the bundle stays 3.4MB</li>
+      <li>Built on a local git engine — zero new dependencies</li>
       <li>Dev projects (folders that already have a .git) are isolated in <code>.anf_vault</code> so your repo is never touched</li>
       <li>Binaries over 50MB are side-channelled automatically so the store never bloats</li>
     </ul>
@@ -465,7 +465,8 @@ brew install --cask anf</code><button class="copy-btn" type="button" data-target
     <div class="band-inner">
       <h2 class="centered">Release notes.</h2>
       <p class="note centered">Already installed? Update with a single <code>brew upgrade --cask anf</code>.</p>
-      <p class="sub centered">v1.0 — first public release. The fastest native file browser for macOS.</p>
+      <p class="sub centered">v1.5 — <b>on-device AI</b> (summarize, ask, suggest name, auto-tag, organize, image search) and an <b>inline list tree</b> land.</p>
+      <p class="note centered">v1.5.0 — AI features (opt-in): summarize, Q&amp;A, smart rename, auto-tag, organize by kind/content, image search. Pick the backend — <b>Claude, a local model (Ollama/LM Studio), or Apple on-device</b>. Press <code>/</code> in ⌘K to ask. <b>Inline folder tree</b> in list mode, ⌘? shortcuts, F4 open-with, Esc-closable panels, JSON migration for pins &amp; workspaces.</p>
       <p class="note centered">v1.0.3 — sidebar favorites now navigate only the focused pane while split (previously both panes changed).</p>
       <p class="note centered">v1.0.2 — adds macOS 14+ (Sonoma/Sequoia) support; the single macOS 26-only API (writing Finder tags) replaced with the long-standing NSURL spelling.</p>
       <p class="note centered">v1.0.1 — fixes a terminal/SSH crash (missing resource bundle), much faster ⌘1–4 pane switching (188ms → 31–54ms), Vault from more right-click spots.</p>

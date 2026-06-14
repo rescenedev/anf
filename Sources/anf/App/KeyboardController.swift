@@ -258,15 +258,15 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
     /// "openWith" in the ⌘, settings file. Empty → open the settings file with a
     /// pointer to the key.
     private func openWithPresetApp() {
-        let app = (UserDefaults.standard.string(forKey: "anf.openWith") ?? "")
+        let app = (UserDefaults.standard.string(forKey: "anf.openWithApp") ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let items = model.selectedItems
         guard !items.isEmpty else { return }
         if app.isEmpty {
             let a = NSAlert()
             a.messageText = L("No “Open With” app set", "‘다른 앱으로 열기’ 앱이 설정되지 않았어요")
-            a.informativeText = L("Set \"openWith\": \"Typora\" (an app name or path) in Settings (⌘,), then F4 opens the selection with it.",
-                                  "설정(⌘,)에 \"openWith\": \"Typora\"(앱 이름 또는 경로)를 넣으면 F4로 선택 항목을 그 앱으로 엽니다.")
+            a.informativeText = L("Set \"openWithApp\": \"Typora\" (an app name or path) in Settings (⌘,), then F4 opens the selection with it.",
+                                  "설정(⌘,)에 \"openWithApp\": \"Typora\"(앱 이름 또는 경로)를 넣으면 F4로 선택 항목을 그 앱으로 엽니다.")
             a.runModal()
             Keymap.openSettingsFile()
             return
