@@ -420,7 +420,7 @@ kbd {
   border-block: 1px solid var(--line);
 }
 .vault-badge {
-  display: inline-block; margin: 0 auto 18px; padding: 6px 16px; border-radius: 999px;
+  display: block; width: fit-content; margin: 0 auto 18px; padding: 6px 16px; border-radius: 999px;
   font-size: 12.5px; font-weight: 700; letter-spacing: .04em; color: #fff;
   background: linear-gradient(90deg, #2997ff, #7c5cff 55%, #ff5ea8);
   box-shadow: 0 6px 20px rgba(124,92,255,.35);
