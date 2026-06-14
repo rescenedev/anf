@@ -198,7 +198,7 @@ final class FileTransfer {
             }
             if self.cancelRequested {
                 FileOperations.presentFailures(
-                    L("Copy cancelled", "복사가 취소되었습니다"),
+                    move ? L("Move cancelled", "이동이 취소되었습니다") : L("Copy cancelled", "복사가 취소되었습니다"),
                     [L("\(result.done.count) completed item(s) were kept.", "완료된 \(result.done.count)개 항목은 유지됩니다.")])
             }
             FileOperations.presentFailures(move ? L("Couldn’t move", "이동하지 못했습니다") : L("Couldn’t copy", "복사하지 못했습니다"),
