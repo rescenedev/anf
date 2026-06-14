@@ -8,7 +8,7 @@
 <meta property="og:title" content="anf — AI setup">
 <meta property="og:description" content="Turn on AI and connect a Claude, local, or Apple model.">
 <meta property="og:url" content="https://rescenedev.github.io/anf/en/ai.html">
-<link rel="stylesheet" href="../styles.css?v=19">
+<link rel="stylesheet" href="../styles.css?v=20">
 </head>
 <body>
 
@@ -34,6 +34,22 @@
 
   <section class="band">
     <div class="band-inner">
+      <h2 class="centered">Which one?</h2>
+      <p class="sub centered">Three backends. Pick by where your data may go and what hardware you have.</p>
+      <div class="perf-wrap"><table class="perf-table">
+        <thead><tr><th>Provider</th><th>Where it runs</th><th>What you need</th></tr></thead>
+        <tbody>
+          <tr><td class="num">Claude — recommended</td><td>Cloud (Anthropic) · pay-per-use</td><td>API key + billing</td></tr>
+          <tr><td class="num">Local LLM</td><td>Your Mac · free</td><td>Ollama or LM Studio running</td></tr>
+          <tr><td class="num">Apple</td><td>Your Mac · free</td><td>macOS 26 + Apple Intelligence</td></tr>
+        </tbody>
+      </table></div>
+      <p class="perf-caption"><code>"aiProvider": "auto"</code> tries Claude (if a key is set) → a local server (if one is up) → Apple, in that order. Pin one explicitly with <code>"claude"</code>, <code>"local"</code>, or <code>"apple"</code>.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
       <h2 class="centered">1. Open the settings file</h2>
       <p class="sub centered">In anf press <code>⌘,</code> or <b>Tools menu → AI Provider…</b>. Edit the JSON, then switch back to anf to apply.</p>
     </div>
@@ -51,7 +67,7 @@
       <div class="cmd multiline"><code>"aiFeatures": true,
 "aiProvider": "auto",
 "aiApiKey": "sk-ant-api03-your-key"</code></div>
-      <p class="note centered">Leave the model empty for the default <code>claude-opus-4-8</code>, or set <code>"aiModel": "claude-sonnet-4-6"</code>.</p>
+      <p class="note centered">Leave the model empty for the default <code>claude-opus-4-8</code> (deepest), or set <code>"aiModel": "claude-sonnet-4-6"</code> for faster, cheaper replies. Billed per token by Anthropic — a summary is a fraction of a cent; whole-folder questions cost more.</p>
     </div>
   </section>
 
@@ -67,7 +83,7 @@
 "aiProvider": "local",
 "aiEndpoint": "http://localhost:11434/v1",
 "aiModel": "llama3.2"</code></div>
-      <p class="note centered">LM Studio is <code>http://localhost:1234/v1</code>. <code>aiModel</code> is the loaded model's name (LM Studio can leave it blank). Reasoning models may be slow.</p>
+      <p class="note centered">LM Studio is <code>http://localhost:1234/v1</code>. <code>aiModel</code> is the loaded model's name (LM Studio can leave it blank). Good picks: <code>llama3.2</code>, <code>qwen2.5</code>, or an 8B-class model — bigger is smarter but slower; plain (non-reasoning) models feel snappiest.</p>
     </div>
   </section>
 
@@ -78,6 +94,40 @@
       <div class="cmd multiline"><code>"aiFeatures": true,
 "aiProvider": "apple"</code></div>
       <p class="note centered">Turn on Apple Intelligence in System Settings; the Siri language must match.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
+      <h2 class="centered">Settings reference</h2>
+      <p class="sub centered">Every AI key lives in the same settings file (<code>⌘,</code>).</p>
+      <div class="perf-wrap"><table class="perf-table">
+        <thead><tr><th>Key</th><th>Values</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td class="num">aiFeatures</td><td><code>true</code> / <code>false</code> — the master switch</td><td><code>false</code></td></tr>
+          <tr><td class="num">aiProvider</td><td><code>auto</code> · <code>claude</code> · <code>local</code> · <code>apple</code></td><td><code>auto</code></td></tr>
+          <tr><td class="num">aiApiKey</td><td><code>sk-ant-api03-…</code> (Claude only)</td><td>—</td></tr>
+          <tr><td class="num">aiModel</td><td>any model name for the chosen provider</td><td><code>claude-opus-4-8</code></td></tr>
+          <tr><td class="num">aiEndpoint</td><td><code>http://localhost:PORT/v1</code> (local only)</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+      <p class="perf-caption">Cloud (Claude) sends content to Anthropic. Local and Apple never leave your Mac.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
+      <h2 class="centered">Troubleshooting</h2>
+      <ul class="ticks centered-list">
+        <li><b>AI actions are greyed out</b> → <code>aiFeatures</code> isn't <code>true</code>, or you didn't switch back to anf to reload the settings file.</li>
+        <li><b>Claude: 401 / "invalid x-api-key"</b> → you pasted an <code>sk-ant-oat…</code> OAuth token. Use an <code>sk-ant-api03…</code> API key.</li>
+        <li><b>Claude: "credit balance too low"</b> → add a payment method or credits under Billing.</li>
+        <li><b>Local: "connection refused"</b> → the server isn't running, or the port is wrong (Ollama <code>11434</code>, LM Studio <code>1234</code>). Check <code>aiEndpoint</code>.</li>
+        <li><b>Local: "model not found"</b> → <code>aiModel</code> must match a pulled/loaded model (<code>ollama list</code>).</li>
+        <li><b>Apple: unavailable</b> → needs macOS 26 with Apple Intelligence on, and Siri's language must match your content.</li>
+        <li><b>Replies are slow</b> → local reasoning models think a lot; pick a smaller plain model, or use Claude.</li>
+      </ul>
+      <p class="note centered">Still stuck? Open a <a href="https://github.com/rescenedev/anf/issues" target="_blank" rel="noopener">GitHub Issue</a>.</p>
     </div>
   </section>
 

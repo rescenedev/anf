@@ -8,7 +8,7 @@
 <meta property="og:title" content="anf — AI 설정">
 <meta property="og:description" content="AI 기능을 켜고 Claude·로컬·Apple 모델을 연결하세요.">
 <meta property="og:url" content="https://rescenedev.github.io/anf/ai.html">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 
@@ -34,6 +34,22 @@
 
   <section class="band">
     <div class="band-inner">
+      <h2 class="centered">어떤 걸 고를까?</h2>
+      <p class="sub centered">백엔드는 셋. 내용이 기기 밖으로 나가도 되는지와 가진 하드웨어로 고르세요.</p>
+      <div class="perf-wrap"><table class="perf-table">
+        <thead><tr><th>제공자</th><th>실행 위치</th><th>필요한 것</th></tr></thead>
+        <tbody>
+          <tr><td class="num">Claude — 추천</td><td>클라우드(Anthropic) · 사용량 과금</td><td>API 키 + 결제</td></tr>
+          <tr><td class="num">로컬 LLM</td><td>내 Mac · 무료</td><td>Ollama 또는 LM Studio 실행</td></tr>
+          <tr><td class="num">Apple</td><td>내 Mac · 무료</td><td>macOS 26 + Apple Intelligence</td></tr>
+        </tbody>
+      </table></div>
+      <p class="perf-caption"><code>"aiProvider": "auto"</code>는 Claude(키가 있으면) → 로컬 서버(켜져 있으면) → Apple 순으로 시도합니다. <code>"claude"</code>·<code>"local"</code>·<code>"apple"</code>로 직접 고정할 수 있어요.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
       <h2 class="centered">1. 설정 파일 열기</h2>
       <p class="sub centered">anf에서 <code>⌘,</code> 또는 <b>도구 메뉴 → AI 모델 연결…</b>. 열리는 JSON 파일을 편집하고, anf으로 다시 전환하면 적용됩니다.</p>
     </div>
@@ -51,7 +67,7 @@
       <div class="cmd multiline"><code>"aiFeatures": true,
 "aiProvider": "auto",
 "aiApiKey": "sk-ant-api03-여기에-키"</code></div>
-      <p class="note centered">모델은 비워두면 <code>claude-opus-4-8</code>이 기본입니다. <code>"aiModel": "claude-sonnet-4-6"</code>로 바꿀 수 있어요.</p>
+      <p class="note centered">모델을 비워두면 <code>claude-opus-4-8</code>(가장 깊은 추론)이 기본. <code>"aiModel": "claude-sonnet-4-6"</code>으로 바꾸면 더 빠르고 저렴합니다. Anthropic이 토큰 단위로 과금 — 요약 한 번은 1센트도 안 되고, 폴더 통째 질문은 더 듭니다.</p>
     </div>
   </section>
 
@@ -67,7 +83,7 @@
 "aiProvider": "local",
 "aiEndpoint": "http://localhost:11434/v1",
 "aiModel": "llama3.2"</code></div>
-      <p class="note centered">LM Studio는 <code>http://localhost:1234/v1</code>. <code>aiModel</code>은 로드한 모델 이름 (LM Studio는 비워도 됨). 추론 모델은 느릴 수 있어요.</p>
+      <p class="note centered">LM Studio는 <code>http://localhost:1234/v1</code>. <code>aiModel</code>은 로드한 모델 이름 (LM Studio는 비워도 됨). 추천: <code>llama3.2</code>, <code>qwen2.5</code>, 또는 8B급 — 클수록 똑똑하지만 느리고, 비추론(plain) 모델이 가장 빠릿합니다.</p>
     </div>
   </section>
 
@@ -78,6 +94,40 @@
       <div class="cmd multiline"><code>"aiFeatures": true,
 "aiProvider": "apple"</code></div>
       <p class="note centered">시스템 설정에서 Apple Intelligence를 켜고, Siri 언어가 맞아야 활성화됩니다.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
+      <h2 class="centered">설정 키 레퍼런스</h2>
+      <p class="sub centered">AI 키는 전부 같은 설정 파일(<code>⌘,</code>)에 있습니다.</p>
+      <div class="perf-wrap"><table class="perf-table">
+        <thead><tr><th>키</th><th>값</th><th>기본값</th></tr></thead>
+        <tbody>
+          <tr><td class="num">aiFeatures</td><td><code>true</code> / <code>false</code> — 마스터 스위치</td><td><code>false</code></td></tr>
+          <tr><td class="num">aiProvider</td><td><code>auto</code> · <code>claude</code> · <code>local</code> · <code>apple</code></td><td><code>auto</code></td></tr>
+          <tr><td class="num">aiApiKey</td><td><code>sk-ant-api03-…</code> (Claude 전용)</td><td>—</td></tr>
+          <tr><td class="num">aiModel</td><td>선택한 제공자의 모델 이름</td><td><code>claude-opus-4-8</code></td></tr>
+          <tr><td class="num">aiEndpoint</td><td><code>http://localhost:PORT/v1</code> (로컬 전용)</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+      <p class="perf-caption">클라우드(Claude)는 내용을 Anthropic으로 전송합니다. 로컬·Apple은 기기 밖으로 나가지 않습니다.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
+      <h2 class="centered">문제 해결</h2>
+      <ul class="ticks centered-list">
+        <li><b>AI 메뉴가 비활성</b> → <code>aiFeatures</code>가 <code>true</code>가 아니거나, anf으로 다시 전환해 설정을 안 불러왔습니다.</li>
+        <li><b>Claude: 401 / "invalid x-api-key"</b> → <code>sk-ant-oat…</code> OAuth 토큰을 넣었습니다. <code>sk-ant-api03…</code> API 키를 쓰세요.</li>
+        <li><b>Claude: "credit balance too low"</b> → Billing에서 결제수단/크레딧을 추가하세요.</li>
+        <li><b>로컬: "connection refused"</b> → 서버가 안 켜졌거나 포트가 틀립니다 (Ollama <code>11434</code>, LM Studio <code>1234</code>). <code>aiEndpoint</code> 확인.</li>
+        <li><b>로컬: "model not found"</b> → <code>aiModel</code>이 받아둔/로드한 모델과 일치해야 합니다 (<code>ollama list</code>).</li>
+        <li><b>Apple: 사용 불가</b> → macOS 26 + Apple Intelligence 켜짐이 필요하고, Siri 언어가 내용과 맞아야 합니다.</li>
+        <li><b>응답이 느림</b> → 로컬 추론 모델은 생각이 많습니다. 더 작은 비추론 모델을 쓰거나 Claude로.</li>
+      </ul>
+      <p class="note centered">그래도 막히면 <a href="https://github.com/rescenedev/anf/issues" target="_blank" rel="noopener">GitHub Issues</a>로 알려주세요.</p>
     </div>
   </section>
 
