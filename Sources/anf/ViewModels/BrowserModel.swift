@@ -1340,6 +1340,11 @@ final class BrowserModel: Identifiable {
 
     /// Begin inline rename on the (single) selection.
     func beginRename() {
+        // Return on the synthetic ".." row navigates up instead of renaming —
+        // the parent row has no name to edit and Enter-to-go-up is what users
+        // expect there (issue #12). selectedItems excludes "..", so check the
+        // cursor row directly.
+        if let cursor = cursorRowItem, cursor.isParentRef { open(cursor); return }
         guard let item = selectedItems.first else { return }
         editingItemID = item.id
     }

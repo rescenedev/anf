@@ -60,6 +60,21 @@ func runParentRowTests() {
                     "open('..') goes up to the parent folder")
         }
 
+        T.group("Return on '..' navigates up instead of renaming") {
+            let m = BrowserModel(start: child)
+            m.viewMode = .list
+            pump(m) { m.items.contains { $0.isParentRef } }
+            guard let parentRow = m.items.first(where: { $0.isParentRef }) else {
+                T.expect(false, "parent row present"); return
+            }
+            m.selection = [parentRow.id]   // cursor on ".."
+            m.beginRename()                // the action bound to Return
+            T.expect(m.editingItemID == nil, "'..' never enters rename mode")
+            pump(m) { m.currentURL.standardizedFileURL.path == parent.standardizedFileURL.path }
+            T.equal(m.currentURL.standardizedFileURL.path, parent.standardizedFileURL.path,
+                    "Return on '..' goes up to the parent folder")
+        }
+
         T.group("auto-selection lands on a real item, not '..'") {
             let m = BrowserModel(start: child)
             m.viewMode = .list
