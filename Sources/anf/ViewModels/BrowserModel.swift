@@ -277,13 +277,26 @@ final class BrowserModel: Identifiable {
 
     // Selection — changing it marks this tab/pane as the active one.
     var selection: Set<FileItem.ID> = [] {
-        didSet { selectedItemsCache = nil; onActivity?() }
+        didSet { selectedItemsCache = nil; selectedBytesCache = nil; onActivity?() }
     }
 
     /// Memoised `selectedItems`. The naive computed property filters the whole
     /// 26k-item listing on EVERY read, and it's read per keystroke and per render
     /// (inspector, path bar status, keyboard). Invalidate on selection/items change.
     @ObservationIgnored private var selectedItemsCache: [FileItem]?
+    @ObservationIgnored private var selectedBytesCache: Int64?
+
+    /// Total byte size of the selection, memoised — the path/status bar sums it on
+    /// every render, which is O(selection) and adds up during rapid multi-select.
+    /// Invalidated wherever `selectedItemsCache` is.
+    var selectedByteCount: Int64 {
+        _ = selection      // register the observable dependencies before the cache
+        _ = itemsVersion
+        if let c = selectedBytesCache { return c }
+        let bytes = selectedItems.reduce(Int64(0)) { $0 + $1.size }
+        selectedBytesCache = bytes
+        return bytes
+    }
 
     /// Live column count of the icon grid, reported by the view, so ↑/↓ can jump a
     /// whole row instead of stepping one item.
@@ -410,6 +423,7 @@ final class BrowserModel: Identifiable {
         }
         itemsVersion &+= 1
         selectedItemsCache = nil
+        selectedBytesCache = nil
     }
 
     var selectedItems: [FileItem] {
