@@ -18,8 +18,11 @@ struct PaneView: View {
             // never navigated. Keeping it off the path bar restores those clicks;
             // PathBarView focuses the pane itself via `onFocus`.
             VStack(spacing: 0) {
-                TabStripView(workspace: workspace, index: index)
-                Divider()
+                // Finder shows the tab bar only with 2+ tabs.
+                if pane.tabs.count > 1 {
+                    TabStripView(workspace: workspace, index: index)
+                    Divider()
+                }
                 ContentArea(model: pane.current)
             }
             // Focus this pane on any interaction without blocking child gestures. A
