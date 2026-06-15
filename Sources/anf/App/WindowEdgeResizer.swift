@@ -137,6 +137,13 @@ final class WindowEdgeResizer: NSView {
         return self
     }
 
+    #if DEBUG
+    /// Test seam: is `p` (in the resizer's own coords) inside a resize zone? Used
+    /// to guard that the bottom path-bar strip stays click-through — the
+    /// edge-resizer overlay must NOT swallow clicks meant for the breadcrumbs.
+    func isResizeZoneForTest(at p: NSPoint) -> Bool { !edges(at: p).isEmpty }
+    #endif
+
     private func overlapsWindowControl(_ p: NSPoint) -> Bool {
         guard let window else { return false }
         let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
