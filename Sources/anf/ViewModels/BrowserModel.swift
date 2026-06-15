@@ -441,6 +441,21 @@ final class BrowserModel: Identifiable {
         }
         return url.path == "/" ? "Macintosh HD" : url.lastPathComponent
     }
+
+    /// The label shown on a tab chip. A locked tab keeps its LOCKED folder name as
+    /// its identity (Windows Commander style) so selecting another tab never
+    /// relabels it to wherever it was last browsed; while it's actively browsed to
+    /// a different working dir (before it snaps back on re-selection) it shows
+    /// "!workingdir" to flag that the pin is temporarily pointing elsewhere. (#12)
+    static func tabTitle(current: URL, locked: URL?) -> String {
+        func nonEmpty(_ s: String) -> String { s.isEmpty ? "/" : s }
+        guard let locked else { return nonEmpty(displayName(for: current)) }
+        if current.standardizedFileURL.path != locked.standardizedFileURL.path {
+            return "!" + nonEmpty(displayName(for: current))
+        }
+        return nonEmpty(displayName(for: locked))
+    }
+
     var remoteHost: String? { currentURL.host }
     var remotePath: String { let p = currentURL.path; return p.isEmpty ? "/" : p }
     /// Set while a remote listing fails, so the view can show the reason.

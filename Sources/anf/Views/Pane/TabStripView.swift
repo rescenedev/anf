@@ -44,8 +44,7 @@ struct TabStripView: View {
     }
 
     private func title(_ tab: BrowserModel) -> String {
-        let name = BrowserModel.displayName(for: tab.currentURL)
-        return name.isEmpty ? "/" : name
+        BrowserModel.tabTitle(current: tab.currentURL, locked: tab.lockedURL)
     }
 }
 

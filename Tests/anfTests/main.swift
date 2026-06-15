@@ -69,6 +69,7 @@ runVaultGuardTests()
 MainActor.assumeIsolated { runUndoCoalesceTests() }
 MainActor.assumeIsolated { runNetworkStallTests() }
 MainActor.assumeIsolated { runPathEditTests() }
+MainActor.assumeIsolated { runTabTitleTests() }
 runFixVerificationTests()
 
 print("")
