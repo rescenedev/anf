@@ -72,6 +72,7 @@ MainActor.assumeIsolated { runPathEditTests() }
 MainActor.assumeIsolated { runTabTitleTests() }
 MainActor.assumeIsolated { runPathBarClickTests() }
 MainActor.assumeIsolated { runParentRowTests() }
+MainActor.assumeIsolated { runPostActionFocusTests() }
 runFixVerificationTests()
 
 print("")
