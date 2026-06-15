@@ -689,8 +689,22 @@ final class WorkspaceModel {
         favorites.toggle(active.currentURL)
     }
 
+    /// What ⌃` should do, factored out so it's unit-testable without a live PTY.
+    /// ⌃` manages the LOCAL shell: hide only when a local shell is the visible
+    /// active tab; otherwise surface a local shell. This way it opens a local
+    /// terminal even when an SSH/SFTP tab is the active one (#29) — previously it
+    /// just toggled the SSH drawer's visibility and never gave a local shell.
+    enum TerminalToggle: Equatable { case hide, showLocal }
+    static func terminalToggleAction(showing: Bool, activeIsLocalShell: Bool) -> TerminalToggle {
+        (showing && activeIsLocalShell) ? .hide : .showLocal
+    }
+
     func toggleTerminal() {
-        if terminal == nil { openTerminal(at: active.currentURL) } else { showTerminal.toggle() }
+        switch Self.terminalToggleAction(showing: showTerminal,
+                                         activeIsLocalShell: terminal?.sshHost == nil && terminal != nil) {
+        case .hide:      showTerminal = false
+        case .showLocal: openTerminal(at: active.currentURL)   // focus/create local shell, show
+        }
         // When (re)opening, hand keyboard focus to the terminal. The view is
         // re-inserted by SwiftUI asynchronously, so retry until it's in a window.
         if showTerminal, let t = terminal {

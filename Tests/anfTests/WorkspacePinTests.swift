@@ -14,6 +14,18 @@ func runWorkspacePinTests() {
         for d in [a, b, c] { try? fm.createDirectory(at: d, withIntermediateDirectories: true) }
         defer { try? fm.removeItem(at: dir) }
 
+        T.group("⌃` always surfaces a local shell, even over an SSH tab (#29)") {
+            typealias A = WorkspaceModel.TerminalToggle
+            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShell: false), A.showLocal,
+                    "hidden drawer → show local shell")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShell: true), A.showLocal,
+                    "hidden drawer (local exists) → show it")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShell: true), A.hide,
+                    "visible local shell → hide")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShell: false), A.showLocal,
+                    "visible SSH/SFTP tab → open local shell, don't just hide the drawer")
+        }
+
         T.group("openPinned in a split navigates only the focused pane") {
             let ws = WorkspaceModel()
             ws.setLayout(.dual)
