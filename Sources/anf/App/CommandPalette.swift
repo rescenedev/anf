@@ -493,13 +493,21 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             // Filename matches first (local + fd/fzf), then a divider, then
             // ripgrep CONTENT matches. deepResults are already matched by the
             // tools — never re-filter them by name/path.
+            // Single pass over (local + deep) instead of four separate filter
+            // chains per keystroke: dedupe by path and partition into name vs
+            // content rows, stopping once both sections are full.
             var seen = Set<String>()
-            let nameRows = (filteredLocal + deepResults.filter { !$0.isContent })
-                .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
-                .prefix(60).map { $0 }
-            let contentRows = deepResults.filter { $0.isContent }
-                .filter { seen.insert($0.url.standardizedFileURL.path).inserted }
-                .prefix(40).map { $0 }
+            var nameRows: [Target] = []
+            var contentRows: [Target] = []
+            for r in filteredLocal + deepResults {
+                if nameRows.count >= 60 && contentRows.count >= 40 { break }
+                guard seen.insert(r.url.standardizedFileURL.path).inserted else { continue }
+                if r.isContent {
+                    if contentRows.count < 40 { contentRows.append(r) }
+                } else if nameRows.count < 60 {
+                    nameRows.append(r)
+                }
+            }
             // Matching Workspaces and SSH hosts surface at the top.
             let workspaceRows = workspace.savedViews.views
                 .filter { $0.name.localizedCaseInsensitiveContains(q) }

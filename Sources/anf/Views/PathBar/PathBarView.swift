@@ -124,7 +124,7 @@ struct PathBarView: View {
         let total = model.items.count
         let sel = model.selection.count
         if sel > 0 {
-            let bytes = model.selectedItems.reduce(Int64(0)) { $0 + $1.size }
+            let bytes = model.selectedByteCount
             return L("\(sel) of \(total) selected · \(Format.bytes(bytes))", "\(total)개 중 \(sel)개 선택됨 · \(Format.bytes(bytes))")
         }
         let items = L("\(total) item\(total == 1 ? "" : "s")", "\(total)개 항목")
