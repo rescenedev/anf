@@ -21,8 +21,8 @@ func runTreeTests() {
             let deadline = Date().addingTimeInterval(5)
             while !until() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         }
-        pump { model.items.count == 3 }     // a.txt, b.txt, sub
-        T.equal(model.items.count, 3, "top level loaded (2 files + 1 folder)")
+        pump { model.fileItems.count == 3 }     // a.txt, b.txt, sub
+        T.equal(model.fileItems.count, 3, "top level loaded (2 files + 1 folder)")
         model.viewMode = .list
         guard let subItem = model.items.first(where: { $0.name == "sub" }) else {
             T.expect(false, "sub folder not listed"); return
@@ -55,7 +55,7 @@ func runTreeTests() {
 
         T.group("collapse removes children") {
             T.expect(!model.items.contains { $0.name == "s1.txt" }, "children gone after collapse")
-            T.equal(model.items.count, 3, "back to the flat listing")
+            T.equal(model.fileItems.count, 3, "back to the flat listing")
             T.expect(!model.isExpanded(subItem), "folder no longer expanded")
         }
 

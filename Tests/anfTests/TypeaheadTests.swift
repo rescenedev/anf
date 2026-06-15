@@ -49,8 +49,8 @@ func runTypeaheadTests() {
         while model.items.count != 7 && Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.02))
         }
-        T.equal(model.items.count, 7, "fixture listing loaded")
-        guard model.items.count == 7 else { return }
+        T.equal(model.fileItems.count, 7, "fixture listing loaded")
+        guard model.fileItems.count == 7 else { return }
 
         @MainActor func selectedName() -> String {
             model.items.first { model.selection.contains($0.id) }?.name ?? "(none)"

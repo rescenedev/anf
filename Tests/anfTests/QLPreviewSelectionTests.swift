@@ -24,44 +24,47 @@ func runQLPreviewSelectionTests() {
         while model.items.count != 4 && Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.02))
         }
-        T.equal(model.items.count, 4, "QL fixture listing loaded")
-        guard model.items.count == 4 else { return }
+        T.equal(model.fileItems.count, 4, "QL fixture listing loaded")
+        guard model.fileItems.count == 4 else { return }
 
         model.viewMode = .list
 
+        // List mode shows the synthetic ".." row at index 0 (issue #12), so the
+        // real files are fileItems[0...]; cursor math is verified against those.
         T.group("QL preview: selectedItems URL changes on cursor down") {
-            model.selection = [model.items[0].id]
+            model.selection = [model.fileItems[0].id]
             let before = model.selectedItems.first?.url
-            T.equal(before, model.items[0].url, "initial selection is item 0")
+            T.equal(before, model.fileItems[0].url, "initial selection is the first file")
 
             model.moveSelection(by: 1)
 
             let after = model.selectedItems.first?.url
-            T.equal(after, model.items[1].url,
-                    "selectedItems reflects item 1 after moveSelection(by:1)")
+            T.equal(after, model.fileItems[1].url,
+                    "selectedItems reflects the next file after moveSelection(by:1)")
             T.expect(before != after,
                      "selectedItems URL must change so panel.reloadData() shows new preview")
         }
 
         T.group("QL preview: selectedItems URL changes on cursor up") {
-            model.selection = [model.items[3].id]
+            model.selection = [model.fileItems[3].id]
             model.moveSelection(by: -1)
-            T.equal(model.selectedItems.first?.url, model.items[2].url,
-                    "selectedItems reflects item 2 after moveSelection(by:-1)")
+            T.equal(model.selectedItems.first?.url, model.fileItems[2].url,
+                    "selectedItems reflects the previous file after moveSelection(by:-1)")
         }
 
         T.group("QL preview: selectedItems URL changes on page down") {
-            model.selection = [model.items[0].id]
+            model.selection = [model.fileItems[0].id]
             model.moveSelection(by: 3)   // jump to last
-            T.equal(model.selectedItems.first?.url, model.items[3].url,
+            T.equal(model.selectedItems.first?.url, model.fileItems[3].url,
                     "selectedItems reflects last item after large positive delta")
         }
 
-        T.group("QL preview: selectedItems URL changes on Home") {
-            model.selection = [model.items[3].id]
-            model.moveSelection(by: -model.items.count)
-            T.equal(model.selectedItems.first?.url, model.items[0].url,
-                    "selectedItems reflects first item after -items.count delta (Home)")
+        T.group("QL preview: Home reaches the top '..' row") {
+            model.selection = [model.fileItems[3].id]
+            model.moveSelection(by: -model.items.count)   // Home → very top
+            // With the orthodox ".." row, Home lands on it; it has no preview.
+            T.expect(model.cursorRowItem?.isParentRef == true, "Home reaches the '..' row")
+            T.expect(model.selectedItems.isEmpty, "'..' carries no previewable selection")
         }
     }
 }

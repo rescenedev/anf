@@ -26,19 +26,19 @@ func runListingCacheTests() {
 
         T.group("ListingCache: instant re-entry") {
             let model = BrowserModel(start: dir)
-            pump { model.items.count == 5 }
-            T.equal(model.items.count, 5, "first visit loads fresh")
+            pump { model.fileItems.count == 5 }
+            T.equal(model.fileItems.count, 5, "first visit loads fresh")
 
             model.navigate(to: other)
-            pump { model.items.isEmpty }
+            pump { model.fileItems.isEmpty }
 
             // A new file appears while we're away.
             try? "y".write(to: dir.appendingPathComponent("f6.txt"), atomically: true, encoding: .utf8)
 
             model.goBack()
-            T.equal(model.items.count, 5, "cached listing paints synchronously (no read yet)")
-            pump { model.items.count == 6 }
-            T.equal(model.items.count, 6, "fresh read replaces the cache with the new file")
+            T.equal(model.fileItems.count, 5, "cached listing paints synchronously (no read yet)")
+            pump { model.fileItems.count == 6 }
+            T.equal(model.fileItems.count, 6, "fresh read replaces the cache with the new file")
         }
     }
 }

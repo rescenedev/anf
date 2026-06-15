@@ -21,7 +21,7 @@ func runNetworkStallTests() {
             pump(m) { !m.isLoading }
             T.expect(!m.networkStalled, "empty reachable folder is not flagged as a network stall")
             T.expect(!m.accessDenied, "empty reachable folder is not flagged access-denied")
-            T.equal(m.items.count, 0, "empty folder shows empty")
+            T.equal(m.fileItems.count, 0, "empty folder shows empty")
         }
 
         T.group("vanished path holds the listing and flags a stall") {
@@ -29,13 +29,13 @@ func runNetworkStallTests() {
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             try? "x".write(to: dir.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
             let m = BrowserModel(start: dir)
-            pump(m) { m.items.count == 1 }
-            T.equal(m.items.count, 1, "file loaded before the drop")
+            pump(m) { m.fileItems.count == 1 }
+            T.equal(m.fileItems.count, 1, "file loaded before the drop")
             try? fm.removeItem(at: dir)   // stand-in for the volume going unreachable
             m.reload()
             pump(m) { m.networkStalled }
             T.expect(m.networkStalled, "a vanished path flags a network stall")
-            T.equal(m.items.count, 1, "the stall holds the last listing instead of blanking")
+            T.equal(m.fileItems.count, 1, "the stall holds the last listing instead of blanking")
             T.expect(!m.accessDenied, "a stall is not surfaced as a permission error")
         }
     }

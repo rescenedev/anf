@@ -18,6 +18,11 @@ struct FileItem: Identifiable, Hashable, Sendable {
     /// An iCloud item whose content is not on disk yet (dataless placeholder).
     let isCloudPlaceholder: Bool
 
+    /// The synthetic ".." row at the top of a folder listing (issue #12). It is a
+    /// navigation affordance only: `selectedItems` excludes it, so NO file
+    /// operation can ever act on it, and opening it calls `goUp()`.
+    let isParentRef: Bool
+
     var id: URL { url }
 
     /// A folder the user navigates *into* (not a bundle/app that opens).
@@ -115,12 +120,21 @@ struct FileItem: Identifiable, Hashable, Sendable {
     private init(url: URL, name: String, isDirectory: Bool, isPackage: Bool,
                  isApplication: Bool, isSymlink: Bool, isHidden: Bool, size: Int64,
                  modified: Date, created: Date, contentType: UTType?,
-                 isCloudPlaceholder: Bool) {
+                 isCloudPlaceholder: Bool, isParentRef: Bool = false) {
         self.url = url; self.name = name; self.isDirectory = isDirectory
         self.isPackage = isPackage; self.isApplication = isApplication
         self.isSymlink = isSymlink; self.isHidden = isHidden; self.size = size
         self.modified = modified; self.created = created; self.contentType = contentType
-        self.isCloudPlaceholder = isCloudPlaceholder
+        self.isCloudPlaceholder = isCloudPlaceholder; self.isParentRef = isParentRef
+    }
+
+    /// The synthetic ".." parent row for `dir`. Opening it routes to `goUp()`, so
+    /// its URL is only an identity (unique per folder), never acted upon.
+    static func parent(of dir: URL) -> FileItem {
+        FileItem(url: dir.appendingPathComponent(".."), name: "..", isDirectory: true,
+                 isPackage: false, isApplication: false, isSymlink: false, isHidden: false,
+                 size: 0, modified: .distantPast, created: .distantPast,
+                 contentType: .folder, isCloudPlaceholder: false, isParentRef: true)
     }
 
     /// Build an item from a remote SFTP listing. `url` is the synthetic
@@ -203,6 +217,7 @@ struct FileItem: Identifiable, Hashable, Sendable {
         self.created = .distantPast
         self.contentType = nil
         self.isCloudPlaceholder = false
+        self.isParentRef = false
     }
 
     init?(url: URL) {
@@ -222,5 +237,6 @@ struct FileItem: Identifiable, Hashable, Sendable {
         self.contentType = v.contentType
         self.isCloudPlaceholder = (v.isUbiquitousItem ?? false)
             && v.ubiquitousItemDownloadingStatus == .notDownloaded
+        self.isParentRef = false
     }
 }

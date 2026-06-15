@@ -58,7 +58,23 @@ final class BrowserModel: Identifiable {
     /// Indent depth per row URL, rebuilt on every flatten (0 = top level).
     @ObservationIgnored private(set) var rowDepth: [URL: Int] = [:]
 
-    func isExpandable(_ item: FileItem) -> Bool { viewMode == .list && item.isBrowsableContainer }
+    func isExpandable(_ item: FileItem) -> Bool { viewMode == .list && item.isBrowsableContainer && !item.isParentRef }
+
+    /// Whether to show the synthetic ".." parent row at the top of the listing
+    /// (issue #12). List mode only, real (non-virtual) folders that have a parent,
+    /// and not while Arrange-by grouping is active (group rows own the index math).
+    var showsParentRow: Bool {
+        viewMode == .list && !isVirtual && groupKey == .none && canGoUp
+    }
+
+    /// The row the keyboard cursor sits on, INCLUDING the synthetic ".." that
+    /// `selectedItems` filters out — navigation (open/openSelected) uses this so
+    /// the cursor can still act on the parent row.
+    var cursorRowItem: FileItem? {
+        if let c = selCursor, items.indices.contains(c) { return items[c] }
+        if let id = selection.first { return items.first { $0.id == id } }
+        return nil
+    }
     func isExpanded(_ item: FileItem) -> Bool { expanded.contains(item.url) }
     func depth(of item: FileItem) -> Int { rowDepth[item.url] ?? 0 }
 
@@ -223,8 +239,10 @@ final class BrowserModel: Identifiable {
     var viewMode: ViewMode = .list {
         didSet {
             guard viewMode != oldValue else { return }
-            if viewMode != .list && !expanded.isEmpty { recomputeItems() }  // tree is list-only
-            else if viewMode == .list && !expanded.isEmpty { recomputeItems() }
+            // The disclosure tree AND the ".." parent row are both list-only, so a
+            // switch into or out of list mode must rebuild `items` (add/remove the
+            // parent row; splice/unsplice the tree).
+            if (viewMode == .list) != (oldValue == .list) || !expanded.isEmpty { recomputeItems() }
             guard !applyingFolderViewMode else { return }
             ViewModePrefs.shared.set(viewMode, for: currentURL)
         }
@@ -383,7 +401,12 @@ final class BrowserModel: Identifiable {
             items = g.items
         } else {
             groupRanges = []
-            items = treeOn ? flattenTree(base) : { rowDepth = [:]; return base }()
+            var flat = treeOn ? flattenTree(base) : { rowDepth = [:]; return base }()
+            // Orthodox ".." parent row at the very top (issue #12). Prepended AFTER
+            // sort/tree so it's always first; excluded from `selectedItems` so no
+            // operation can touch it; opening it calls goUp().
+            if showsParentRow { flat.insert(.parent(of: currentURL), at: 0) }
+            items = flat
         }
         itemsVersion &+= 1
         selectedItemsCache = nil
@@ -399,10 +422,18 @@ final class BrowserModel: Identifiable {
         let sel = selection
         _ = itemsVersion
         if let cached = selectedItemsCache { return cached }
-        let computed = sel.isEmpty ? [] : items.filter { sel.contains($0.id) }
+        // The synthetic ".." row is never an operable selection — filtering it here
+        // is the single chokepoint that keeps every file operation (trash, copy,
+        // rename, duplicate, drag, inspector) from ever acting on the parent dir.
+        let computed = sel.isEmpty ? [] : items.filter { sel.contains($0.id) && !$0.isParentRef }
         selectedItemsCache = computed
         return computed
     }
+
+    /// The listing WITHOUT the synthetic ".." parent row — the real file entries.
+    /// Use this when you mean "the files in this folder" rather than "the rows on
+    /// screen" (which may include the navigation chrome). (issue #12)
+    var fileItems: [FileItem] { items.contains { $0.isParentRef } ? items.filter { !$0.isParentRef } : items }
 
     var canGoBack: Bool { !back.isEmpty }
     var canGoForward: Bool { !forward.isEmpty }
@@ -569,6 +600,7 @@ final class BrowserModel: Identifiable {
     }
 
     func open(_ item: FileItem) {
+        if item.isParentRef { goUp(); return }
         if isRemote {
             if item.isDirectory {
                 navigate(to: item.url)
@@ -663,8 +695,11 @@ final class BrowserModel: Identifiable {
         Task { @MainActor in
             for _ in 0..<20 {   // poll up to ~1s; loads are usually <100ms
                 guard token == loadToken else { return }   // superseded
-                if itemsVersion != versionBefore, let first = items.first {
-                    if selection.isEmpty { selection = [first.id] }
+                if itemsVersion != versionBefore {
+                    // Land on the first REAL item, never the synthetic ".." row.
+                    if selection.isEmpty, let first = items.first(where: { !$0.isParentRef }) {
+                        selection = [first.id]
+                    }
                     return
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
@@ -716,9 +751,11 @@ final class BrowserModel: Identifiable {
         if filterText.isEmpty, groupKey == .none,
            let hit = ListingCache.shared.get(url: url, hidden: hidden, sort: sort) {
             allItems = hit.all
-            items = hit.sorted
-            itemsVersion &+= 1
-            selectedItemsCache = nil
+            sortedTop = hit.sorted
+            // Route through publishItems (not a raw `items =`) so the synthetic
+            // ".." row is prepended on the cache fast-paint too — otherwise it
+            // vanished as soon as a folder's listing was cached (issue #12).
+            publishItems(base: hit.sorted, treeOn: false)
         }
         Task {
             // Single bulk pass: name + type + size + dates for every entry in a
@@ -1021,7 +1058,9 @@ final class BrowserModel: Identifiable {
     // MARK: - Keyboard-driven actions
 
     func openSelected() {
-        if let item = selectedItems.first { open(item) }
+        // Use the cursor row (which may be "..") so ⌘↓ on the parent row goes up;
+        // selectedItems excludes "..", so fall back to it for normal files.
+        if let item = cursorRowItem ?? selectedItems.first { open(item) }
         else if let first = items.first { open(first) }
     }
 

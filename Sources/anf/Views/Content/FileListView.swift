@@ -329,11 +329,15 @@ struct FileListView: NSViewRepresentable {
                 ?? PlainCell()
             cell.identifier = .textCell
             let text: String
-            switch col {
-            case "date": text = Format.when(item.modified)
-            case "size": text = item.isBrowsableContainer ? "—" : Format.bytes(item.size)
-            case "kind": text = Format.kind(item)
-            default:     text = ""
+            if item.isParentRef {
+                text = ""   // the ".." row carries no date/size/kind
+            } else {
+                switch col {
+                case "date": text = Format.when(item.modified)
+                case "size": text = item.isBrowsableContainer ? "—" : Format.bytes(item.size)
+                case "kind": text = Format.kind(item)
+                default:     text = ""
+                }
             }
             cell.set(text, fontSize: subSize, trailing: col == "size")
             return cell
@@ -386,7 +390,9 @@ struct FileListView: NSViewRepresentable {
         // MARK: Drag & drop
 
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-            (item(atRow: row)?.url).map { $0 as NSURL }
+            // The ".." row is not draggable — it has no real file behind it.
+            guard let it = item(atRow: row), !it.isParentRef else { return nil }
+            return it.url as NSURL
         }
 
         // Without these two, registering for dragged types makes the table SWALLOW
@@ -398,7 +404,7 @@ struct FileListView: NSViewRepresentable {
                        proposedRow row: Int,
                        proposedDropOperation op: NSTableView.DropOperation) -> NSDragOperation {
             guard info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: nil) else { return [] }
-            if !(op == .on && item(atRow: row)?.isBrowsableContainer == true) {
+            if !(op == .on && isDropFolder(item(atRow: row))) {
                 tableView.setDropRow(-1, dropOperation: .above)   // whole-table drop
             }
             return copyRequested(info) ? .copy : .move
@@ -409,13 +415,20 @@ struct FileListView: NSViewRepresentable {
             guard let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self],
                                                                  options: nil) as? [URL],
                   !urls.isEmpty else { return false }
-            let dropFolder = (op == .on && item(atRow: row)?.isBrowsableContainer == true) ? item(atRow: row) : nil
+            let dropFolder = (op == .on && isDropFolder(item(atRow: row))) ? item(atRow: row) : nil
             let into: URL = dropFolder?.url ?? model.currentURL
             // Never drop a folder into itself or its own subtree.
             guard !urls.contains(where: { into.path == $0.path || into.path.hasPrefix($0.path + "/") })
             else { return false }
             model.acceptDrop(urls, into: into, copy: copyRequested(info))
             return true
+        }
+
+        /// A row that accepts a drop INTO it: a real browsable folder, never the
+        /// synthetic ".." row (which has no real file behind it).
+        private func isDropFolder(_ item: FileItem?) -> Bool {
+            guard let item else { return false }
+            return item.isBrowsableContainer && !item.isParentRef
         }
 
         /// Option held narrows the source mask to copy-only (and external drags
@@ -445,7 +458,9 @@ struct FileListView: NSViewRepresentable {
         func menu(forRow row: Int) -> NSMenu? {
             // Empty space → the folder's background menu (New Folder, Vault, …),
             // matching the icon grid. A clicked row → that item's menu.
-            guard let it = item(atRow: row) else { return FileItemMenu.background(model: model) }
+            // Empty space and the synthetic ".." row → background menu (no
+            // file-specific actions that could target the parent).
+            guard let it = item(atRow: row), !it.isParentRef else { return FileItemMenu.background(model: model) }
             return FileItemMenu.build(for: it, model: model)
         }
     }
@@ -611,6 +626,22 @@ private final class NameCell: NSTableCellView {
 
     func configure(item: FileItem, fontSize: CGFloat,
                    depth: Int, expandable: Bool, expanded: Bool, onToggle: (() -> Void)?) {
+        // The synthetic ".." row: an up-arrow glyph, no rename/disclosure/tags.
+        if item.isParentRef {
+            icon.image = NSImage(systemSymbolName: "arrowshape.turn.up.left.fill",
+                                 accessibilityDescription: "Parent folder")
+            icon.contentTintColor = .secondaryLabelColor
+            label.stringValue = ".."
+            label.font = .systemFont(ofSize: fontSize)
+            label.isEditable = false
+            self.onToggle = nil
+            indent.constant = 2
+            disclosure.isHidden = true
+            tagDot.isHidden = true
+            tagText.isHidden = true
+            return
+        }
+        icon.contentTintColor = nil
         icon.image = IconProvider.shared.icon(for: item)
         label.stringValue = item.name
         label.font = .systemFont(ofSize: fontSize)

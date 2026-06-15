@@ -24,8 +24,8 @@ func runGridSelectionTests() {
         while model.items.count != 12 && Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.02))
         }
-        T.equal(model.items.count, 12, "fixture listing loaded")
-        guard model.items.count == 12 else { return }
+        T.equal(model.fileItems.count, 12, "fixture listing loaded")
+        guard model.fileItems.count == 12 else { return }
 
         model.viewMode = .icons
         model.gridColumns = 4
@@ -94,7 +94,7 @@ func runGridSelectionTests() {
 
         T.group("list mode: contiguous reading-order range") {
             model.viewMode = .list
-            model.selection = [model.items[2].id]            // "click" f03
+            model.selection = [model.fileItems[2].id]        // "click" f03 (items[0] is "..")
             model.moveSelection(by: 1, extend: true)
             model.moveSelection(by: 1, extend: true)
             T.equal(names(), ["f03.txt", "f04.txt", "f05.txt"], "shift+↓ grows a contiguous run")

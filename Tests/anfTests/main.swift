@@ -71,6 +71,7 @@ MainActor.assumeIsolated { runNetworkStallTests() }
 MainActor.assumeIsolated { runPathEditTests() }
 MainActor.assumeIsolated { runTabTitleTests() }
 MainActor.assumeIsolated { runPathBarClickTests() }
+MainActor.assumeIsolated { runParentRowTests() }
 runFixVerificationTests()
 
 print("")
