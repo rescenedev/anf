@@ -15,6 +15,8 @@ struct PaneLayoutView: View {
     @Bindable var workspace: WorkspaceModel
 
     private let grip: CGFloat = 9
+    @State private var draggingH = false
+    @State private var draggingV = false
 
     var body: some View {
         GeometryReader { geo in
@@ -39,8 +41,31 @@ struct PaneLayoutView: View {
                     rowHandle(totalHeight: geo.size.height - grip)
                         .offset(y: (geo.size.height - grip) * workspace.splitRatioV)
                 }
+                // Live split-ratio readout while dragging a divider (issue #12).
+                if draggingH {
+                    splitBadge(WorkspaceModel.splitLabel(workspace.splitRatioH))
+                        .position(x: (geo.size.width - grip) * workspace.splitRatioH + grip / 2,
+                                  y: geo.size.height / 2)
+                }
+                if draggingV {
+                    splitBadge(WorkspaceModel.splitLabel(workspace.splitRatioV))
+                        .position(x: geo.size.width / 2,
+                                  y: (geo.size.height - grip) * workspace.splitRatioV + grip / 2)
+                }
             }
         }
+    }
+
+    /// Pill showing the current split (e.g. "60% · 40%") centred on the divider.
+    private func splitBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08)))
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
+            .allowsHitTesting(false)
     }
 
     /// Frame for pane `index` in the current layout, or nil if it isn't shown.
@@ -89,7 +114,8 @@ struct PaneLayoutView: View {
             orientation: .vertical,
             read: { workspace.splitRatioH * totalWidth },
             write: { workspace.splitRatioH = WorkspaceModel.clampSplitRatio($0 / max(totalWidth, 1)) },
-            onEnded: { workspace.save() }
+            onBegan: { draggingH = true },
+            onEnded: { draggingH = false; workspace.save() }
         )
         .frame(width: grip)
     }
@@ -99,7 +125,8 @@ struct PaneLayoutView: View {
             orientation: .horizontal,
             read: { workspace.splitRatioV * totalHeight },
             write: { workspace.splitRatioV = WorkspaceModel.clampSplitRatio($0 / max(totalHeight, 1)) },
-            onEnded: { workspace.save() }
+            onBegan: { draggingV = true },
+            onEnded: { draggingV = false; workspace.save() }
         )
         .frame(height: grip)
     }

@@ -2,6 +2,16 @@ import Foundation
 @testable import anf
 
 func runSavedViewTests() {
+    T.group("split divider HUD label (issue #12)") {
+        // Halves always sum to 100 — rounding must never show e.g. "60% · 41%".
+        T.equal(WorkspaceModel.splitLabel(0.5), "50% · 50%", "even split")
+        T.equal(WorkspaceModel.splitLabel(0.6), "60% · 40%", "60/40")
+        T.equal(WorkspaceModel.splitLabel(0.333), "33% · 67%", "rounds and complements to 100")
+        T.equal(WorkspaceModel.splitLabel(0.666), "67% · 33%", "rounding stays consistent")
+        T.equal(WorkspaceModel.splitLabel(0.15), "15% · 85%", "min clamp edge")
+        T.equal(WorkspaceModel.splitLabel(0.85), "85% · 15%", "max clamp edge")
+    }
+
     T.group("SavedView codable") {
         let snap = ViewSnapshot(
             layout: "quad", activePane: 1, splitRatioH: 0.4, splitRatioV: 0.6,

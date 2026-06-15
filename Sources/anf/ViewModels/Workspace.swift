@@ -340,6 +340,13 @@ final class WorkspaceModel {
         min(max(r, 0.15), 0.85)
     }
 
+    /// "60% · 40%" — the split shown in the divider HUD while dragging (issue #12).
+    /// The two halves always sum to 100 so rounding never shows e.g. 60% · 41%.
+    nonisolated static func splitLabel(_ ratio: CGFloat) -> String {
+        let left = Int((ratio * 100).rounded())
+        return "\(left)% · \(100 - left)%"
+    }
+
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
         panes = (0..<4).map { _ in PaneModel(start: home) }

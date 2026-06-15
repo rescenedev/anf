@@ -36,6 +36,13 @@ struct FileListView: NSViewRepresentable {
         addColumn(table, "kind", L("Kind", "종류"), min: 90, width: 160)
 
         table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
+        // Persist column widths/order across view-mode switches and relaunches.
+        // Without this the table is rebuilt with the default widths every time the
+        // representable is re-made (e.g. toggling icon ↔ list), so a user's column
+        // resize appeared to "reset". Set after the columns exist so AppKit can
+        // match saved widths to their identifiers. (issue #12)
+        table.autosaveName = "anf.fileList.columns"
+        table.autosaveTableColumns = true
         coord.table = table
 
         table.backgroundColor = .clear

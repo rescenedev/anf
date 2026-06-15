@@ -32,6 +32,16 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         super.init()
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .otherMouseDown]) { [weak self] event in
             guard let self, self.workspace != nil else { return event }
+            // Stand down while a modal alert/sheet (or the palette overlay) owns
+            // input. NSAlert.runModal sets NSApp.modalWindow; without this the
+            // monitor would consume the alert's keys — e.g. Return mapped to
+            // rename swallowed the Enter that should hit a confirm dialog's
+            // default button, so the delete-confirm only worked by mouse.
+            if InputGate.modalActive
+                || NSApp.modalWindow != nil
+                || NSApp.keyWindow?.attachedSheet != nil {
+                return event
+            }
             if event.type == .otherMouseDown {
                 return self.handleMouse(event) ? nil : event
             }

@@ -24,6 +24,7 @@ struct DragDividerHandle: View {
     var sign: CGFloat = 1
     let read: () -> CGFloat
     let write: (CGFloat) -> Void
+    var onBegan: () -> Void = {}
     var onEnded: () -> Void = {}
 
     private let gripThickness: CGFloat = 9
@@ -41,7 +42,7 @@ struct DragDividerHandle: View {
                maxHeight: orientation == .vertical ? .infinity : nil)
         .background(
             HandleAnchor(orientation: orientation, sign: sign,
-                         read: read, write: write, onEnded: onEnded)
+                         read: read, write: write, onBegan: onBegan, onEnded: onEnded)
         )
         .onHover { inside in
             if inside {
@@ -60,6 +61,7 @@ private struct HandleAnchor: NSViewRepresentable {
     let sign: CGFloat
     let read: () -> CGFloat
     let write: (CGFloat) -> Void
+    let onBegan: () -> Void
     let onEnded: () -> Void
 
     func makeNSView(context: Context) -> NSView {
@@ -79,7 +81,7 @@ private struct HandleAnchor: NSViewRepresentable {
     private func register(_ view: NSView) {
         DividerDragRouter.shared.register(.init(
             anchor: view, orientation: orientation, sign: sign,
-            read: read, write: write, onEnded: onEnded))
+            read: read, write: write, onBegan: onBegan, onEnded: onEnded))
     }
 }
 
@@ -96,6 +98,7 @@ final class DividerDragRouter {
         let sign: CGFloat
         let read: () -> CGFloat
         let write: (CGFloat) -> Void
+        let onBegan: () -> Void
         let onEnded: () -> Void
     }
 
@@ -140,6 +143,7 @@ final class DividerDragRouter {
                 guard rect.insetBy(dx: -12, dy: -12).contains(p) else { continue }
                 Trace.log("router: down consumed at \(p) rect=\(rect)")
                 active = (entry, entry.read(), p)
+                entry.onBegan()
                 return nil
             }
             return event
