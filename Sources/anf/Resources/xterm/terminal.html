@@ -19,8 +19,11 @@ const term = new Terminal({
   // Menlo first (body text), then per-glyph fallback for Powerline/Nerd Font
   // icons — powerlevel10k and friends draw private-use glyphs Menlo lacks.
   // "MesloLGS NF" is what `p10k configure` installs; the rest cover the other
-  // popular Nerd Fonts, and Apple Color Emoji catches actual emoji.
-  fontFamily: 'Menlo, Monaco, "MesloLGS NF", "MesloLGS Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "Symbols Nerd Font", "Apple Color Emoji", "Courier New", monospace',
+  // popular Nerd Fonts. Then CJK system fonts (Apple SD Gothic Neo / Hiragino /
+  // PingFang) so Korean·Japanese·Chinese output renders instead of tofu boxes —
+  // Menlo carries no CJK glyphs, which made Hangul filenames/output look broken.
+  // Apple Color Emoji catches actual emoji last.
+  fontFamily: 'Menlo, Monaco, "MesloLGS NF", "MesloLGS Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "Symbols Nerd Font", "Apple SD Gothic Neo", "Hiragino Sans", "PingFang SC", "Apple Color Emoji", "Courier New", monospace',
   fontSize: 13,
   lineHeight: 1.2,
   cursorBlink: true,

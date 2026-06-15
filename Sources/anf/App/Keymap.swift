@@ -255,7 +255,17 @@ final class Keymap {
     static func openSettingsFile() {
         let url = ensureFileExists()
         migrateMissingSettings(at: url)
-        NSWorkspace.shared.open(url)
+        // ⌘, must always surface the file. A bare open() silently no-ops when no
+        // app is associated with .json, which read as "Settings does nothing".
+        // Fall back to TextEdit, then to revealing it in Finder.
+        if NSWorkspace.shared.open(url) { return }
+        let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
+        NSWorkspace.shared.open([url], withApplicationAt: textEdit,
+                                configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            if error != nil {
+                DispatchQueue.main.async { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            }
+        }
     }
 
     /// Files created by older templates lack newer settings keys. Append them
