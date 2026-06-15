@@ -10,6 +10,14 @@ func runLLMTests() {
     try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? fm.removeItem(at: dir) }
 
+    // Isolate the WHOLE suite run from the real Keychain — the very first
+    // `LocalLLM.status` read below routes through AISecret → Keychain, which on a
+    // headless/ad-hoc build would block on a keychain trust prompt. Set the seam
+    // up front (the provider-routing group below re-saves/restores it locally).
+    let outerOverride = AISecret.testOverride
+    AISecret.testOverride = .some(nil)
+    defer { AISecret.testOverride = outerOverride }
+
     T.group("LocalLLM availability gating") {
         // Whatever the machine reports, status maps to a stable hint and
         // isAvailable tracks the "usable" states.

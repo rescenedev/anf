@@ -9,7 +9,19 @@ enum Keychain {
     private static let service = "com.anf.finder"
 
     /// The stored secret for `account`, or nil if absent/empty.
+    ///
+    /// A READ must never block on a prompt. The key lives in the legacy login
+    /// keychain, whose ACL pops a "allow access?" trust dialog when the calling
+    /// binary's signature isn't on the item's trusted list — which happens every
+    /// time a dev/ad-hoc build is re-signed, and in a headless/background context
+    /// (a self-test, an AI-status check) that invisible dialog hangs the process
+    /// on securityd forever. `SecKeychainSetUserInteractionAllowed(false)` makes
+    /// the read fail fast (→ nil) instead of prompting. A properly-signed release
+    /// already trusts itself, so the happy path is unchanged; setting the key
+    /// (via the AI menu) still goes through the interactive `set` path.
     static func get(_ account: String) -> String? {
+        SecKeychainSetUserInteractionAllowed(false)
+        defer { SecKeychainSetUserInteractionAllowed(true) }
         var q = baseQuery(account)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
