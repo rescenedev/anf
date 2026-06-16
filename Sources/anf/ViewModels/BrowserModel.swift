@@ -1397,9 +1397,12 @@ final class BrowserModel: Identifiable {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != item.name else { return }
         if let dest = FileOperations.rename(item, to: trimmed) {
-            // standardizedFileURL normalises the URL so it matches the listing entry
-            // that FastDirRead will return after reload (BM-002).
-            reload(); selection = [dest.standardizedFileURL]
+            // Don't assign `selection = [dest.standardizedFileURL]` directly: a folder
+            // dest has no trailing slash but FastDirRead emits directory URLs WITH one,
+            // and FileItem.id is that raw URL — so the ids never match and the new
+            // folder loses focus after renaming (issue #36). selectWhenLoaded matches
+            // by standardized path and selects the real item id.
+            reload(); selectWhenLoaded([dest])
             broadcast(dirs: [currentURL.standardizedFileURL.path])
         }
     }
@@ -1410,7 +1413,7 @@ final class BrowserModel: Identifiable {
         guard let newName = TextPrompt.run(title: L("Rename", "이름 변경"), message: L("New name for ‘\(item.name)’:", "‘\(item.name)’의 새 이름:"),
                                            defaultValue: item.name, action: L("Rename", "변경")) else { return }
         if let dest = FileOperations.rename(item, to: newName) {
-            reload(); selection = [dest.standardizedFileURL]
+            reload(); selectWhenLoaded([dest])   // match by path, not raw URL id (issue #36)
         }
     }
 
