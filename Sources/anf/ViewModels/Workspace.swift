@@ -263,8 +263,12 @@ final class WorkspaceModel {
     }
 
     func openTerminal(at directory: URL) {
-        // Reuse the (single) local-shell tab if one is alive; otherwise add one.
-        if let i = terminals.firstIndex(where: { $0.sshHost == nil && $0.isRunning }) {
+        // Per-folder: reuse a live local shell started in THIS folder, else open a
+        // new tab for it — so each folder tab gets its own terminal (#29).
+        let target = directory.standardizedFileURL
+        if let i = terminals.firstIndex(where: {
+            $0.sshHost == nil && $0.isRunning && $0.startDirectory?.standardizedFileURL == target
+        }) {
             activeTerminalIndex = i
         } else {
             addTerminalTab(.shell(at: directory))
@@ -702,20 +706,24 @@ final class WorkspaceModel {
     }
 
     /// What ⌃` should do, factored out so it's unit-testable without a live PTY.
-    /// ⌃` manages the LOCAL shell: hide only when a local shell is the visible
-    /// active tab; otherwise surface a local shell. This way it opens a local
-    /// terminal even when an SSH/SFTP tab is the active one (#29) — previously it
-    /// just toggled the SSH drawer's visibility and never gave a local shell.
+    /// ⌃` is folder-aware: hide only when the visible active tab is a local shell
+    /// for the CURRENT folder; otherwise surface this folder's local shell. So it
+    /// opens a terminal for the current folder even when an SSH/SFTP tab or a
+    /// different folder's terminal is showing, instead of just toggling the drawer
+    /// (#29) — previously it never gave the current folder a shell.
     enum TerminalToggle: Equatable { case hide, showLocal }
-    static func terminalToggleAction(showing: Bool, activeIsLocalShell: Bool) -> TerminalToggle {
-        (showing && activeIsLocalShell) ? .hide : .showLocal
+    static func terminalToggleAction(showing: Bool, activeIsLocalShellForCurrentFolder: Bool) -> TerminalToggle {
+        (showing && activeIsLocalShellForCurrentFolder) ? .hide : .showLocal
     }
 
     func toggleTerminal() {
+        let here = active.currentURL.standardizedFileURL
+        let activeIsLocalHere = terminal != nil && terminal?.sshHost == nil
+            && terminal?.startDirectory?.standardizedFileURL == here
         switch Self.terminalToggleAction(showing: showTerminal,
-                                         activeIsLocalShell: terminal?.sshHost == nil && terminal != nil) {
+                                         activeIsLocalShellForCurrentFolder: activeIsLocalHere) {
         case .hide:      showTerminal = false
-        case .showLocal: openTerminal(at: active.currentURL)   // focus/create local shell, show
+        case .showLocal: openTerminal(at: active.currentURL)   // focus/create this folder's shell
         }
         // When (re)opening, hand keyboard focus to the terminal. The view is
         // re-inserted by SwiftUI asynchronously, so retry until it's in a window.
