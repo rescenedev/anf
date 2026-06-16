@@ -421,7 +421,7 @@ final class WorkspaceModel {
 
     private static let stateKey = "anf.workspace.v1"
 
-    private struct TabState: Codable { var path: String; var viewMode: String }
+    private struct TabState: Codable { var path: String; var viewMode: String; var locked: String? }
     private struct PaneState: Codable { var tabs: [TabState]; var activeIndex: Int }
     private struct State: Codable {
         var layout: String
@@ -433,6 +433,8 @@ final class WorkspaceModel {
         var splitRatioH: Double?
         var splitRatioV: Double?
         var terminalFontSize: Double?
+        var terminalHeight: Double?
+        var terminalHeightUserSet: Bool?
         var panes: [PaneState]
     }
 
@@ -448,12 +450,17 @@ final class WorkspaceModel {
             splitRatioH: splitRatioH,
             splitRatioV: splitRatioV,
             terminalFontSize: terminalFontSize,
+            terminalHeight: Double(terminalHeight),
+            terminalHeightUserSet: terminalHeightUserSet,
             // Only visible panes persist: setLayout resets newly revealed panes
             // to the current folder anyway, so saving hidden panes' tabs only
             // resurrects dead listings (a hidden 26k tab cost ~15MB at launch).
             panes: panes.prefix(layout.count).map { pane in
                 PaneState(
-                    tabs: pane.tabs.map { TabState(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue) },
+                    tabs: pane.tabs.map {
+                        TabState(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue,
+                                 locked: $0.lockedURL?.path)   // persist tab pin (issue #29)
+                    },
                     activeIndex: pane.activeIndex
                 )
             }
@@ -490,6 +497,11 @@ final class WorkspaceModel {
         if let fs = state.terminalFontSize {
             terminalFontSize = min(max(CGFloat(fs), 8), 24)
         }
+        // Terminal drawer height was saved on every divider drag but never restored
+        // (issue #29) — it reset to the default each launch. userSet stops the auto
+        // 1/3-height default from overriding the user's chosen height.
+        if let th = state.terminalHeight { terminalHeight = Self.clampTerminalHeight(CGFloat(th)) }
+        if let u = state.terminalHeightUserSet { terminalHeightUserSet = u }
 
         for (i, paneState) in state.panes.enumerated() where i < layout.count && i < panes.count {
             // `PathProbe` (not `fm.fileExists`): a folder on a now-unreachable
@@ -501,6 +513,7 @@ final class WorkspaceModel {
             let models = validTabs.map { ts -> BrowserModel in
                 let m = BrowserModel(start: URL(fileURLWithPath: ts.path))
                 if let vm = ViewMode(rawValue: ts.viewMode) { m.viewMode = vm }
+                if let lp = ts.locked { m.lockedURL = URL(fileURLWithPath: lp) }   // restore tab pin (#29)
                 return m
             }
             pane.replaceTabs(models, activeIndex: min(paneState.activeIndex, models.count - 1))

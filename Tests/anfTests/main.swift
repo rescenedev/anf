@@ -81,6 +81,7 @@ runFileOpsNamingTests()
 runKeybindingMapTests()
 runDirectoryWatcherTests()
 MainActor.assumeIsolated { runExternalRefreshTests() }
+MainActor.assumeIsolated { runWorkspacePersistenceTests() }
 runFixVerificationTests()
 
 print("")
