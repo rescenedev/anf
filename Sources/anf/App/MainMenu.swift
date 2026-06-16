@@ -173,6 +173,12 @@ final class SettingsMenuTarget: NSObject {
     @MainActor @objc func openSettings(_ sender: Any?) { Keymap.openSettingsFile() }
 }
 
+/// Target for the "Check for Updates…" App-menu item (issue #38).
+final class UpdateMenuTarget: NSObject {
+    @MainActor static let shared = UpdateMenuTarget()
+    @MainActor @objc func checkForUpdates(_ sender: Any?) { UpdateChecker.shared.checkNow() }
+}
+
 enum MainMenu {
     @MainActor static func install() {
         let main = NSMenu()
@@ -184,6 +190,10 @@ enum MainMenu {
         appItem.submenu = appMenu
         let about = appMenu.addItem(withTitle: L("About anf", "anf에 관하여"), action: #selector(AboutController.show(_:)), keyEquivalent: "")
         about.target = AboutController.shared
+        let update = appMenu.addItem(withTitle: L("Check for Updates…", "업데이트 확인…"),
+                                     action: #selector(UpdateMenuTarget.checkForUpdates(_:)),
+                                     keyEquivalent: "")
+        update.target = UpdateMenuTarget.shared
         appMenu.addItem(.separator())
         // ⌘, the Ghostty way: no settings window — opens keybindings.json,
         // pre-filled with every current default binding.

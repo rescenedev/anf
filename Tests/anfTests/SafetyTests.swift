@@ -8,6 +8,11 @@ func runSafetyTests() {
             T.expect(UpdateChecker.isNewer("1.10.0", than: "1.9"), "numeric not lexicographic")
             T.expect(!UpdateChecker.isNewer("1.0", than: "1.0"), "equal is not newer")
             T.expect(!UpdateChecker.isNewer("0.9.9", than: "1.0"), "older is not newer")
+            // Manual "Check for Updates…" (#38) relies on the same comparison to
+            // decide between the update banner and the "up to date" alert.
+            T.expect(UpdateChecker.isNewer("1.5.17", than: "1.5.16"), "patch bump is newer (#38)")
+            T.expect(!UpdateChecker.isNewer("1.5.17", than: "1.5.17"), "same patch → up to date (#38)")
+            T.expect(!UpdateChecker.currentVersion.isEmpty, "currentVersion resolves (#38)")
         }
 
         T.group("FileUndo move round-trip") {
