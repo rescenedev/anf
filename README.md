@@ -21,9 +21,12 @@ brew install --cask anf
 
 업데이트는 `brew upgrade --cask anf`.
 
-> self-signed 빌드(노터라이즈 안 됨)라 첫 실행 시 Gatekeeper가 막을 수 있습니다.
-> cask가 quarantine를 제거하려 시도하지만, 그래도 막히면:
-> **anf.app 우클릭 → 열기**, 또는 `xattr -dr com.apple.quarantine /Applications/anf.app`.
+### 직접 다운로드 (.dmg)
+
+Apple **공증(notarized)** 된 빌드라 받아서 바로 실행됩니다 — Gatekeeper 경고도, `xattr`
+우회도 필요 없습니다. 자동 업데이트가 필요하면 위의 Homebrew 설치를 권장합니다.
+
+- 최신 .dmg: **https://github.com/rescenedev/anf/releases/latest/download/anf.dmg**
 
 ### 소스에서 빌드
 
