@@ -10,12 +10,16 @@ final class TerminalSession: NSObject, Identifiable {
     @ObservationIgnored let view: XtermTerminalView
     /// Set when this session is an `ssh <host>` connection.
     @ObservationIgnored let sshHost: String?
+    /// The folder a local shell was started in (nil for ssh/sftp) — used to give
+    /// each folder its own terminal so ⌃` opens the current folder's shell (#29).
+    @ObservationIgnored let startDirectory: URL?
     private(set) var title: String
     private(set) var isRunning = true
 
-    private init(title: String, sshHost: String? = nil) {
+    private init(title: String, sshHost: String? = nil, startDirectory: URL? = nil) {
         self.title = title
         self.sshHost = sshHost
+        self.startDirectory = startDirectory
         view = XtermTerminalView(frame: NSRect(x: 0, y: 0, width: 640, height: 320))
         super.init()
         view.onExit = { [weak self] in
@@ -25,7 +29,8 @@ final class TerminalSession: NSObject, Identifiable {
 
     static func shell(at directory: URL) -> TerminalSession {
         let session = TerminalSession(
-            title: directory.lastPathComponent.isEmpty ? "/" : directory.lastPathComponent
+            title: directory.lastPathComponent.isEmpty ? "/" : directory.lastPathComponent,
+            startDirectory: directory
         )
         session.view.startShell(at: directory)
         return session

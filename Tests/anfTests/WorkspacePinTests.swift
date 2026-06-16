@@ -14,16 +14,18 @@ func runWorkspacePinTests() {
         for d in [a, b, c] { try? fm.createDirectory(at: d, withIntermediateDirectories: true) }
         defer { try? fm.removeItem(at: dir) }
 
-        T.group("⌃` always surfaces a local shell, even over an SSH tab (#29)") {
+        T.group("⌃` is folder-aware: opens the current folder's shell (#29)") {
             typealias A = WorkspaceModel.TerminalToggle
-            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShell: false), A.showLocal,
-                    "hidden drawer → show local shell")
-            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShell: true), A.showLocal,
-                    "hidden drawer (local exists) → show it")
-            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShell: true), A.hide,
-                    "visible local shell → hide")
-            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShell: false), A.showLocal,
-                    "visible SSH/SFTP tab → open local shell, don't just hide the drawer")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShellForCurrentFolder: false), A.showLocal,
+                    "hidden drawer → show this folder's shell")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShellForCurrentFolder: true), A.showLocal,
+                    "hidden drawer (this folder's shell exists) → show it")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShellForCurrentFolder: true), A.hide,
+                    "this folder's shell is visible → hide")
+            // Reported cases: an SSH tab OR a DIFFERENT folder's terminal is
+            // visible → ⌃` opens THIS folder's terminal instead of just hiding.
+            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShellForCurrentFolder: false), A.showLocal,
+                    "another folder's terminal / SSH visible → open this folder's shell")
         }
 
         T.group("openPinned in a split navigates only the focused pane") {
