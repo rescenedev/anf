@@ -767,33 +767,13 @@ final class BrowserModel: Identifiable {
     }
 
     /// A folder change made by ANOTHER app (or the watcher's poll) landed — re-read
-    /// the listing but keep the user's selection on whatever still exists. Unlike a
-    /// navigation reload this must not yank focus, so it skips while an inline rename
-    /// is open or a load/stall is in flight.
+    /// the listing WITHOUT touching the selection, so the current folder neither
+    /// flickers nor steals pane focus (selection.didSet fires onActivity). Vanished
+    /// items drop out of `selectedItems` on their own. Skips while an inline rename
+    /// is open or a load/stall is in flight (#47).
     func externalRefresh() {
         guard editingItemID == nil, !isLoading, !networkStalled else { return }
-        let keep = selection
-        reload()
-        restoreSelectionWhenLoaded(keep)
-    }
-
-    /// After the refresh's listing commits, re-select the still-present subset of
-    /// `keep` (matched by id) so an external change doesn't clear the selection.
-    private func restoreSelectionWhenLoaded(_ keep: Set<FileItem.ID>) {
-        guard !keep.isEmpty else { return }
-        let token = loadToken
-        let versionBefore = itemsVersion
-        Task { @MainActor in
-            for _ in 0..<25 {
-                guard token == loadToken else { return }
-                if itemsVersion != versionBefore {
-                    let restored = keep.intersection(Set(items.map(\.id)))
-                    if !restored.isEmpty, restored != selection { selection = restored }
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-            }
-        }
+        reload(preserveSelection: true)
     }
 
     /// After the new listing commits, select the item matching `child` (and scroll
@@ -820,7 +800,13 @@ final class BrowserModel: Identifiable {
 
     // MARK: - Loading
 
-    func reload() {
+    /// `preserveSelection: true` is for an external-change refresh (live folder
+    /// watcher): it must NOT clear the selection, because `selection.didSet` fires
+    /// `onActivity` — which makes the pane active and steals focus — and the
+    /// clear→re-select cycle visibly flickers. With it preserved, vanished items
+    /// just drop out of `selectedItems` (publishItems recomputes it) and nothing
+    /// touches `selection`, so no flicker and no focus theft (#47).
+    func reload(preserveSelection: Bool = false) {
         loadToken += 1
         let token = loadToken
         let url = currentURL
@@ -829,7 +815,7 @@ final class BrowserModel: Identifiable {
         FileTags.clearColorCache()   // tags may have changed since last listing
         childCache.removeAll()       // refetch expanded folders' children on reload
         let priorSelection = selection   // restored if this turns out to be a stall
-        selection.removeAll()
+        if !preserveSelection { selection.removeAll() }
         refreshFreeSpace()
         startWatchingIfNeeded()
         if isVirtual { reloadVirtual(token: token); return }
@@ -869,7 +855,7 @@ final class BrowserModel: Identifiable {
                     // Volume unreachable → hold the last listing + selection, flag the
                     // stall, and retry until it comes back. Don't wipe `allItems`.
                     networkStalled = true
-                    selection = priorSelection
+                    if !preserveSelection { selection = priorSelection }
                     selectedItemsCache = nil
                     isLoading = false
                     scheduleStallRetry(token: token)

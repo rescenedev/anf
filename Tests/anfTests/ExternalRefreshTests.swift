@@ -34,7 +34,7 @@ func runExternalRefreshTests() {
             T.equal(m.selectedItems.first?.name, "a.txt", "selection is preserved across the refresh")
         }
 
-        T.group("externalRefresh drops a vanished selection without crashing") {
+        T.group("externalRefresh drops a vanished selected item from selectedItems") {
             let dir = fm.temporaryDirectory.appendingPathComponent("anfext2-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             try? "a".write(to: dir.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
@@ -48,9 +48,29 @@ func runExternalRefreshTests() {
             m.externalRefresh()
             pump(m) { m.fileItems.isEmpty }
             T.expect(m.fileItems.isEmpty, "the folder reads as empty")
+            // selectedItems filters by what's still on screen, so the deleted item
+            // is no longer operable even though the refresh never touched `selection`.
+            T.expect(m.selectedItems.isEmpty, "the deleted item is no longer an operable selection")
             T.expect(!m.selectedItems.contains { $0.isParentRef }, "no '..' left selected")
-            let live = Set(m.items.map(\.id))
-            T.expect(m.selection.allSatisfy { live.contains($0) }, "no dangling selection id")
+        }
+
+        T.group("externalRefresh never fires onActivity — no flicker / focus theft (#47)") {
+            let dir = fm.temporaryDirectory.appendingPathComponent("anfext4-\(UUID().uuidString)")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            try? "a".write(to: dir.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+            defer { try? fm.removeItem(at: dir) }
+            let m = BrowserModel(start: dir)
+            m.viewMode = .list
+            pump(m) { m.fileItems.count == 1 }
+            m.select(m.items.first { $0.name == "a.txt" }!)
+            // Count only AFTER the user's own select() (which legitimately fires).
+            var activity = 0
+            m.onActivity = { activity += 1 }
+            try? "c".write(to: dir.appendingPathComponent("c.txt"), atomically: true, encoding: .utf8)
+            m.externalRefresh()
+            pump(m) { m.items.contains { $0.name == "c.txt" } }
+            T.equal(activity, 0, "an external refresh must not mark the pane active (regression #47)")
+            T.equal(m.selectedItems.first?.name, "a.txt", "selection stays put across the refresh")
         }
 
         T.group("externalRefresh defers while an inline rename is open") {
