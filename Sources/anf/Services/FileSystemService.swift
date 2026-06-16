@@ -102,6 +102,38 @@ struct FileSystemService: Sendable {
     /// same-prefix ties fall back to a memcmp of the full key. Keys build in
     /// parallel. For NFC text (incl. Hangul, dictionary-ordered in Unicode) byte
     /// order matches expectations. 26k Hangul names: ~480ms → ~40ms.
+    /// Natural-sort key for `name` (issue #34): each maximal run of ASCII digits
+    /// is encoded as `0x00` marker + significant-digit count + the digits +
+    /// original length, so comparing two keys byte-wise orders numbers
+    /// numerically ("2" < "10") while everything else stays lowercased byte order
+    /// (unchanged for non-numeric names like Hangul). The 0x00 marker can't appear
+    /// in a real filename, so it never collides; it sorts numbers before letters,
+    /// matching localizedStandardCompare. The trailing original-length byte breaks
+    /// ties between leading-zero variants ("1" before "01").
+    static func naturalKey(_ name: String) -> [UInt8] {
+        let b = Array(name.lowercased().utf8)
+        var key: [UInt8] = []
+        key.reserveCapacity(b.count + 8)
+        var i = 0
+        while i < b.count {
+            if b[i] >= 0x30 && b[i] <= 0x39 {   // ASCII digit run
+                var j = i
+                while j < b.count, b[j] >= 0x30, b[j] <= 0x39 { j += 1 }
+                let origLen = j - i
+                var s = i
+                while s < j - 1 && b[s] == 0x30 { s += 1 }   // drop leading zeros for value
+                key.append(0x00)                              // numeric-run marker
+                key.append(UInt8(min(j - s, 250)))           // significant-digit count
+                key.append(contentsOf: b[s..<j])             // the digits
+                key.append(UInt8(min(origLen, 250)))         // tiebreak: original length
+                i = j
+            } else {
+                key.append(b[i]); i += 1
+            }
+        }
+        return key
+    }
+
     static func fastNameSort(_ items: [FileItem], ascending asc: Bool) -> [FileItem] {
         struct Key {
             var hi: UInt64 = 0, lo: UInt64 = 0
@@ -117,7 +149,7 @@ struct FileSystemService: Sendable {
             DispatchQueue.concurrentPerform(iterations: chunks) { c in
                 for i in (c * per) ..< min((c + 1) * per, n) {
                     var k = Key(dir: items[i].isBrowsableContainer, idx: Int32(i))
-                    k.full = Array(items[i].name.lowercased().utf8)
+                    k.full = naturalKey(items[i].name)
                     for (j, byte) in k.full.prefix(16).enumerated() {
                         if j < 8 { k.hi |= UInt64(byte) << (56 - j * 8) }
                         else { k.lo |= UInt64(byte) << (56 - (j - 8) * 8) }
