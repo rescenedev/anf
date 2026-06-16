@@ -79,6 +79,8 @@ MainActor.assumeIsolated { runPaneTabTests() }
 MainActor.assumeIsolated { runListSyncStateTests() }
 runFileOpsNamingTests()
 runKeybindingMapTests()
+runDirectoryWatcherTests()
+MainActor.assumeIsolated { runExternalRefreshTests() }
 runFixVerificationTests()
 
 print("")
