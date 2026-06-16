@@ -984,22 +984,48 @@ final class BrowserModel: Identifiable {
     }
 
     func duplicateSelection() {
-        FileOperations.duplicate(selectedItems)
+        let copies = FileOperations.duplicate(selectedItems)
         reload()
         broadcast(dirs: [currentURL.standardizedFileURL.path])
+        // Select the new copies so they're ready to move/copy to the other pane
+        // without reaching for the mouse (issue #31).
+        selectWhenLoaded(copies)
     }
 
     func makeNewFolder() {
         if let url = FileOperations.newFolder(in: currentURL) {
             reload()
             broadcast(dirs: [currentURL.standardizedFileURL.path])
-            // Select the new folder once the reload lands. Use standardizedFileURL
-            // so the selection key matches what FastDirRead returns for the same
-            // path (avoids mismatch when the raw creation URL differs from the
-            // listing URL in case-folding or symlink form — BM-002).
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 120_000_000)
-                selection = [url.standardizedFileURL]
+            // Select the new folder once the reload lands AND begin renaming it,
+            // Finder-style, so the user can type the name immediately (issue #31).
+            selectWhenLoaded([url], renameFirst: true)
+        }
+    }
+
+    /// After the next listing commit, select `urls` (matched by standardized path,
+    /// since FastDirRead may return a different URL form than the create call —
+    /// BM-002) and, when `renameFirst`, begin inline-renaming the first one. This
+    /// lands a freshly created folder / duplicate focused and actionable (issue
+    /// #31) without a fragile fixed delay.
+    private func selectWhenLoaded(_ urls: [URL], renameFirst: Bool = false) {
+        guard !urls.isEmpty else { return }
+        let token = loadToken
+        let versionBefore = itemsVersion
+        let targets = Set(urls.map { $0.standardizedFileURL.path })
+        Task { @MainActor in
+            for _ in 0..<25 {   // poll up to ~1.25s; reloads are usually <100ms
+                guard token == loadToken else { return }   // superseded by navigation
+                if itemsVersion != versionBefore {
+                    let hits = items.filter { targets.contains($0.url.standardizedFileURL.path) }
+                    if let first = hits.first {
+                        selection = Set(hits.map { $0.id })
+                        selCursor = items.firstIndex { $0.id == first.id }
+                        selAnchor = selCursor
+                        if renameFirst { editingItemID = first.id }
+                        return
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
             }
         }
     }

@@ -37,14 +37,26 @@ final class FavoritesStore {
         var imported = Set(UserDefaults.standard.stringArray(forKey: importedKey) ?? [])
         var changed = false, importedChanged = false
         for raw in list {
-            let path = (raw as NSString).expandingTildeInPath
-            guard !imported.contains(path) else { continue }
+            let path = Self.cleanFavoritePath(raw)
+            guard !path.isEmpty, !imported.contains(path) else { continue }
             imported.insert(path); importedChanged = true
             let url = URL(fileURLWithPath: path)
             if fm.fileExists(atPath: path), !contains(url) { items.append(url); changed = true }
         }
         if importedChanged { UserDefaults.standard.set(Array(imported), forKey: importedKey) }
         if changed { persist() }
+    }
+
+    /// Normalise a favorites-JSON entry into a usable path: trim whitespace, strip
+    /// one layer of surrounding quotes (users sometimes shell-quote a path with
+    /// spaces inside the JSON string — issue #31), then expand a leading `~`.
+    static func cleanFavoritePath(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.count >= 2,
+           (s.hasPrefix("'") && s.hasSuffix("'")) || (s.hasPrefix("\"") && s.hasSuffix("\"")) {
+            s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return s.isEmpty ? "" : (s as NSString).expandingTildeInPath
     }
 
     func contains(_ url: URL) -> Bool {

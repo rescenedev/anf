@@ -128,7 +128,10 @@ enum FileOperations {
         }
     }
 
-    static func duplicate(_ items: [FileItem]) {
+    /// Returns the created copy URLs so the caller can select them (issue #31:
+    /// after ⌘D the copy is selected, ready to move/copy to the other pane).
+    @discardableResult
+    static func duplicate(_ items: [FileItem]) -> [URL] {
         let fm = FileManager.default
         var created: [URL] = []
         var failures: [String] = []
@@ -158,6 +161,7 @@ enum FileOperations {
         }
         if !created.isEmpty { FileUndo.shared.record(.created(created)) }
         presentFailures(L("Couldn’t duplicate", "복제하지 못했습니다"), failures)
+        return created
     }
 
     /// Next available "name", "name 2", "name 3"… in `dir`.
