@@ -30,4 +30,28 @@ func runSortTests() {
         let filtered = fs.filteredSorted(docs, filter: "report", by: SortOrder())
         T.equal(Set(filtered.map(\.name)), ["report.md", "old report.txt"], "filter by name substring")
     }
+
+    T.group("natural numeric sort (issue #34 — fastNameSort path)") {
+        let fs = FileSystemService()
+        func names(_ ns: [String], asc: Bool = true) -> [String] {
+            fs.filteredSorted(ns.map { item($0, dir: false) },
+                              filter: "", by: SortOrder(key: .name, ascending: asc)).map(\.name)
+        }
+        T.equal(names(["1.txt", "10.txt", "2.txt", "11.txt", "21.txt", "3.txt"]),
+                ["1.txt", "2.txt", "3.txt", "10.txt", "11.txt", "21.txt"],
+                "numbers sort naturally (not 1, 10, 11, 2)")
+        T.equal(names(["file2", "file10", "file1"]),
+                ["file1", "file2", "file10"], "numeric suffix sorts naturally")
+        T.equal(names(["1", "10", "2", "3"], asc: false),
+                ["10", "3", "2", "1"], "descending is natural too")
+        T.equal(names(["1", "01", "2", "02"]),
+                ["1", "01", "2", "02"], "leading-zero tiebreak: bare number before zero-padded")
+        // Non-numeric names keep their existing (byte/Unicode) order — Hangul is
+        // dictionary-ordered in NFC, so this must be unchanged.
+        T.equal(names(["나", "가", "다"]), ["가", "나", "다"], "Hangul order unchanged")
+        // Folders still float to the top regardless of natural keys.
+        let mix = [item("10", dir: false), item("2", dir: true), item("1", dir: true)]
+        T.equal(fs.filteredSorted(mix, filter: "", by: SortOrder(key: .name, ascending: true)).map(\.name),
+                ["1", "2", "10"], "dirs first (1,2), then files (10)")
+    }
 }
