@@ -340,11 +340,19 @@ final class BrowserModel: Identifiable {
     /// Bumped on every `recomputeItems`; an async sort only commits if still current.
     private var itemsToken = 0
 
+    /// Live folder watcher (FSEvents on local volumes, polling on network mounts)
+    /// so an open tab refreshes when another app changes the folder. `watchedURL`
+    /// tracks what we're watching so a same-folder reload doesn't churn it.
+    @ObservationIgnored private var watcher: DirectoryWatcher?
+    @ObservationIgnored private var watchedURL: URL?
+
     init(start: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.currentURL = start
         applyFolderViewMode()
         reload()
     }
+
+    deinit { watcher?.stop() }
 
     /// Restore this folder's remembered view mode — its own setting or the
     /// nearest ancestor's (subfolders follow the parent unless overridden).
@@ -729,6 +737,65 @@ final class BrowserModel: Identifiable {
         }
     }
 
+    /// (Re)attach the live folder watcher for `currentURL`. No-op if we're already
+    /// watching this folder; stops the watcher for virtual/remote/non-file URLs.
+    /// The local-vs-network probe runs OFF the main thread (it can block on a
+    /// stalled mount), then the watcher is created back on the main actor.
+    private func startWatchingIfNeeded() {
+        // Headless (unit tests / self-tests): don't spin up FSEvents/polling for
+        // every transient model — tests drive externalRefresh() and the watcher
+        // classes directly. Only the real running app watches folders live.
+        guard NSApplication.shared.isRunning else { return }
+        let url = currentURL
+        guard url.isFileURL, !isVirtual, !isRemote else {
+            watcher?.stop(); watcher = nil; watchedURL = nil; return
+        }
+        guard url != watchedURL else { return }   // already watching this folder
+        watchedURL = url
+        watcher?.stop(); watcher = nil
+        Task.detached(priority: .utility) {
+            let local = DirectoryWatcherFactory.isLocalVolume(url)
+            await MainActor.run { [weak self] in
+                guard let self, self.currentURL == url else { return }   // navigated away mid-probe
+                let w: DirectoryWatcher = local ? FSEventDirectoryWatcher() : PollingDirectoryWatcher()
+                w.start(url) { [weak self] in
+                    Task { @MainActor in self?.externalRefresh() }
+                }
+                self.watcher = w
+            }
+        }
+    }
+
+    /// A folder change made by ANOTHER app (or the watcher's poll) landed — re-read
+    /// the listing but keep the user's selection on whatever still exists. Unlike a
+    /// navigation reload this must not yank focus, so it skips while an inline rename
+    /// is open or a load/stall is in flight.
+    func externalRefresh() {
+        guard editingItemID == nil, !isLoading, !networkStalled else { return }
+        let keep = selection
+        reload()
+        restoreSelectionWhenLoaded(keep)
+    }
+
+    /// After the refresh's listing commits, re-select the still-present subset of
+    /// `keep` (matched by id) so an external change doesn't clear the selection.
+    private func restoreSelectionWhenLoaded(_ keep: Set<FileItem.ID>) {
+        guard !keep.isEmpty else { return }
+        let token = loadToken
+        let versionBefore = itemsVersion
+        Task { @MainActor in
+            for _ in 0..<25 {
+                guard token == loadToken else { return }
+                if itemsVersion != versionBefore {
+                    let restored = keep.intersection(Set(items.map(\.id)))
+                    if !restored.isEmpty, restored != selection { selection = restored }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+    }
+
     /// After the new listing commits, select the item matching `child` (and scroll
     /// to it). Falls back to the first row if it isn't present.
     private func selectChildWhenLoaded(_ child: URL) {
@@ -764,6 +831,7 @@ final class BrowserModel: Identifiable {
         let priorSelection = selection   // restored if this turns out to be a stall
         selection.removeAll()
         refreshFreeSpace()
+        startWatchingIfNeeded()
         if isVirtual { reloadVirtual(token: token); return }
         if isRemote { reloadRemote(token: token); return }
         // Paint the last known listing instantly (no read, no sort) — the fresh
