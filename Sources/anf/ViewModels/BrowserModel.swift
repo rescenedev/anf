@@ -71,7 +71,15 @@ final class BrowserModel: Identifiable {
     /// `selectedItems` filters out — navigation (open/openSelected) uses this so
     /// the cursor can still act on the parent row.
     var cursorRowItem: FileItem? {
-        if let c = selCursor, items.indices.contains(c) { return items[c] }
+        // Trust selCursor only while the live selection still sits on that row.
+        // A mouse click updates `selection` (the SwiftUI list binding) but NOT
+        // selCursor, so it goes stale — often parked at row 0, the synthetic
+        // ".." — which made Enter navigate up instead of renaming the selected
+        // file/folder (regression after the ".." row landed). Mirror the guard
+        // selectionCursorIndex already uses.
+        if let c = selCursor, items.indices.contains(c), selection.contains(items[c].id) {
+            return items[c]
+        }
         if let id = selection.first { return items.first { $0.id == id } }
         return nil
     }

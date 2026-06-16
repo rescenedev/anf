@@ -75,6 +75,27 @@ func runParentRowTests() {
                     "Return on '..' goes up to the parent folder")
         }
 
+        T.group("Return renames the selected file even with a stale cursor on '..'") {
+            // Regression: clicking a file updates `selection` via the SwiftUI list
+            // binding but leaves selCursor parked on the ".." row from a prior
+            // keyboard move. Enter must rename the selected file, NOT go up.
+            let m = BrowserModel(start: child)
+            m.viewMode = .list
+            pump(m) { m.items.contains { $0.isParentRef } && m.items.contains { !$0.isParentRef } }
+            // Park the keyboard cursor on the top ".." row.
+            m.moveSelection(by: -1000)
+            T.expect(m.cursorRowItem?.isParentRef == true, "cursor parked on '..'")
+            // Mouse-click a real file: selection set directly, selCursor stays stale.
+            guard let file = m.items.first(where: { !$0.isParentRef }) else {
+                T.expect(false, "a real file exists"); return
+            }
+            m.selection = [file.id]
+            m.beginRename()   // the action bound to Return
+            T.equal(m.currentURL.standardizedFileURL.path, child.standardizedFileURL.path,
+                    "stayed in the folder — did NOT navigate up")
+            T.equal(m.editingItemID, file.id, "Enter began renaming the selected file")
+        }
+
         T.group("auto-selection lands on a real item, not '..'") {
             let m = BrowserModel(start: child)
             m.viewMode = .list
