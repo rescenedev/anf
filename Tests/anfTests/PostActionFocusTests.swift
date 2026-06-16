@@ -40,6 +40,30 @@ func runPostActionFocusTests() {
             T.expect(m.selectedItems.first?.isDirectory == true, "selection is the new folder")
         }
 
+        T.group("renamed new folder keeps focus (#36)") {
+            // Repro of #36: create a folder, then commit a rename. The folder's
+            // dest URL has no trailing slash but the reloaded listing entry does,
+            // so a raw-URL selection would silently empty out. selectWhenLoaded
+            // matches by path, so focus must survive the rename.
+            let dir = fm.temporaryDirectory.appendingPathComponent("anfren-\(UUID().uuidString)")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: dir) }
+            let m = BrowserModel(start: dir)
+            m.viewMode = .list
+            pump(m) { !m.isLoading }
+            m.makeNewFolder()
+            pump(m) { m.editingItemID != nil }
+            guard let folder = m.selectedItems.first else {
+                T.expect(false, "new folder should be selected before rename"); return
+            }
+            m.commitRename(folder, to: "Renamed Folder")
+            pump(m) { m.selectedItems.first?.name == "Renamed Folder" }
+            T.equal(m.selectedItems.count, 1, "exactly one item stays selected after rename")
+            T.equal(m.selectedItems.first?.name, "Renamed Folder",
+                    "focus lands on the renamed folder, not lost")
+            T.expect(m.selectedItems.first?.isDirectory == true, "still a folder")
+        }
+
         T.group("duplicate lands on the copy (#31)") {
             let dir = fm.temporaryDirectory.appendingPathComponent("anfdup-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
