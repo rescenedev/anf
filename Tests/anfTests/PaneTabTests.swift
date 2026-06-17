@@ -60,5 +60,24 @@ func runPaneTabTests() {
             T.equal(pane.current.currentURL.standardizedFileURL.path, b.standardizedFileURL.path,
                     "the locked tab returned to b on re-activation")
         }
+
+        T.group("a locked tab snaps back the moment it's LEFT, so its chip relabels (#57)") {
+            let pane = PaneModel(start: a)
+            pane.newTab(at: b)        // tab 1 starts at b, active = 1
+            let locked = pane.tabs[1]
+            locked.toggleLock()       // lock tab 1 to b
+            locked.navigate(to: c)    // drift it elsewhere while active
+            pump(locked) { locked.currentURL.standardizedFileURL.path == c.standardizedFileURL.path }
+            // While it's the active tab and drifted, the chip flags it temporary.
+            T.expect(BrowserModel.tabTitle(current: locked.currentURL, locked: locked.lockedURL).hasPrefix("!"),
+                     "drifted locked tab shows the temporary '!' label while active")
+            pane.select(0)            // leave it → should snap back on deactivation
+            pump(locked) { locked.currentURL.standardizedFileURL.path == b.standardizedFileURL.path }
+            T.equal(locked.currentURL.standardizedFileURL.path, b.standardizedFileURL.path,
+                    "the locked tab returned to b as soon as it lost focus")
+            T.equal(BrowserModel.tabTitle(current: locked.currentURL, locked: locked.lockedURL),
+                    BrowserModel.displayName(for: b),
+                    "its chip now shows the locked folder name, not '!workingdir'")
+        }
     }
 }

@@ -130,16 +130,27 @@ final class PaneModel: Identifiable {
     private(set) var tabs: [BrowserModel]
     var activeIndex: Int = 0 {
         didSet {
-            // A locked tab (issue #14) snaps back to its pinned folder whenever it
-            // becomes active — selecting/cycling to it returns there even if it was
-            // navigated elsewhere meanwhile.
-            guard tabs.indices.contains(activeIndex) else { return }
-            let tab = tabs[activeIndex]
-            if let locked = tab.lockedURL,
-               tab.currentURL.standardizedFileURL.path != locked.standardizedFileURL.path {
-                tab.navigate(to: locked)
+            // Snap the tab we just LEFT back to its lock, so a pinned tab always
+            // rests at — and its chip is labeled with — its locked folder once
+            // it's no longer active, instead of lingering on the temporary place
+            // it was browsed to (the stale "!workingdir" label, issue #57).
+            if oldValue != activeIndex, tabs.indices.contains(oldValue) {
+                snapToLock(tabs[oldValue])
             }
+            // A locked tab (issue #14) also snaps back to its pinned folder
+            // whenever it becomes active — selecting/cycling to it returns there
+            // even if it was navigated elsewhere meanwhile.
+            guard tabs.indices.contains(activeIndex) else { return }
+            snapToLock(tabs[activeIndex])
         }
+    }
+
+    /// Return a locked tab to its locked folder if it has wandered off.
+    private func snapToLock(_ tab: BrowserModel) {
+        guard let locked = tab.lockedURL,
+              tab.currentURL.standardizedFileURL.path != locked.standardizedFileURL.path
+        else { return }
+        tab.navigate(to: locked)
     }
 
     /// "Focus my pane" — set by the workspace; propagated to every tab here.
