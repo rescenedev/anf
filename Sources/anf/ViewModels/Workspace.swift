@@ -76,8 +76,47 @@ final class FavoritesStore {
         items.removeAll { $0.path == url.path }; persist()
     }
 
+    /// Drop folders into the pins at `index`, preserving the dropped order:
+    /// brand-new folders are added, already-pinned ones relocate to the drop
+    /// point (drag a folder onto the sidebar to pin / rearrange, issue #53).
+    /// Non-directories are ignored. Returns how many folders ended up placed.
+    @discardableResult
+    func drop(_ urls: [URL], at index: Int) -> Int {
+        let folders = urls.filter(Self.isDirectory)
+        guard !folders.isEmpty else { return 0 }
+        items = Self.placing(items.map(\.path), drop: folders.map(\.path), at: index)
+            .map { URL(fileURLWithPath: $0) }
+        persist()
+        // `placing` always inserts every dropped folder, so the count placed is
+        // just the de-duplicated folder count.
+        var seen = Set<String>()
+        return folders.filter { seen.insert($0.path).inserted }.count
+    }
+
     private func persist() {
         UserDefaults.standard.set(items.map(\.path), forKey: key)
+    }
+
+    static func isDirectory(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+    }
+
+    /// Pure list transform behind `move`/`drop` (tested directly): drop
+    /// `dropPaths` into `current` at `index`, removing any of them already
+    /// present so they relocate rather than duplicate, and de-duplicating the
+    /// dropped list itself. Order within the drop is preserved.
+    static func placing(_ current: [String], drop dropPaths: [String], at index: Int) -> [String] {
+        let dropSet = Set(dropPaths)
+        // Removing relocated items that sit before the drop point shifts the
+        // insertion index left by that many.
+        let clamped = min(max(0, index), current.count)
+        let removedBefore = current.prefix(clamped).filter { dropSet.contains($0) }.count
+        var out = current.filter { !dropSet.contains($0) }
+        let insertAt = min(max(0, clamped - removedBefore), out.count)
+        var seen = Set<String>()
+        let ordered = dropPaths.filter { seen.insert($0).inserted }
+        out.insert(contentsOf: ordered, at: insertAt)
+        return out
     }
 }
 

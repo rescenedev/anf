@@ -26,6 +26,24 @@ func runPostActionFocusTests() {
             T.equal(FavoritesStore.cleanFavoritePath("   "), "", "blank → empty (skipped on import)")
         }
 
+        T.group("favorites drag-drop / reorder placement (#53)") {
+            let p = FavoritesStore.placing
+            // Add a brand-new pin at a position.
+            T.equal(p(["a", "b", "c"], ["x"], 1), ["a", "x", "b", "c"], "insert new at index 1")
+            T.equal(p(["a", "b"], ["x"], 99), ["a", "b", "x"], "out-of-range index clamps to end")
+            T.equal(p(["a", "b"], ["x"], -5), ["x", "a", "b"], "negative index clamps to front")
+            T.equal(p([], ["x"], 0), ["x"], "first pin into an empty list")
+            // Reorder an existing pin (it relocates, never duplicates).
+            T.equal(p(["a", "b", "c"], ["a"], 2), ["b", "a", "c"],
+                    "move first toward the end (index adjusts for the removal)")
+            T.equal(p(["a", "b", "c"], ["c"], 0), ["c", "a", "b"], "move last to front")
+            T.equal(p(["a", "b", "c"], ["b"], 1), ["a", "b", "c"], "drop onto its own spot → no-op")
+            // Multi-folder drop preserves order and de-dups the dropped list.
+            T.equal(p(["a"], ["x", "y"], 0), ["x", "y", "a"], "two new pins keep drop order")
+            T.equal(p(["a", "b"], ["b", "a"], 0), ["b", "a"], "reorder several at once")
+            T.equal(p(["a"], ["x", "x"], 0), ["x", "a"], "duplicate in the dropped list collapses")
+        }
+
         T.group("new folder lands selected and renaming (#31)") {
             let dir = fm.temporaryDirectory.appendingPathComponent("anfnew-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
