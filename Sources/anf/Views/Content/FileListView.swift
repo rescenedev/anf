@@ -8,6 +8,9 @@ import AppKit
 /// chokes at that scale.
 struct FileListView: NSViewRepresentable {
     @Bindable var model: BrowserModel
+    /// Whether this pane is the focused one (always true in a single-pane layout).
+    /// Drives whether the selection draws emphasized or muted (issue #59).
+    var paneActive: Bool = true
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
@@ -69,6 +72,7 @@ struct FileListView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.model = model
+        context.coordinator.setPaneActive(paneActive)
         context.coordinator.sync()
     }
 
@@ -78,6 +82,9 @@ struct FileListView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
         var model: BrowserModel
         weak var table: NSTableView?
+        /// Mirrors FileListView.paneActive; pushed to every visible row so the
+        /// unfocused pane's selection draws muted (issue #59).
+        private(set) var paneActive = true
         private let syncState = ListSyncState()
         private var lastScale = 1.0
         private var lastEditingID: FileItem.ID?
@@ -376,7 +383,18 @@ struct FileListView: NSViewRepresentable {
             let view = RoundedRowView()
             // No zebra stripes when grouped — the headers already segment the list.
             view.stripe = !isHeaderRow(row) && !model.grouped && row % 2 == 1
+            view.paneActive = paneActive
             return view
+        }
+
+        /// Update the focused-pane flag and repaint visible selections so the
+        /// unfocused pane dims as soon as focus moves (issue #59).
+        func setPaneActive(_ active: Bool) {
+            guard active != paneActive else { return }
+            paneActive = active
+            table?.enumerateAvailableRowViews { rowView, _ in
+                (rowView as? RoundedRowView)?.paneActive = active
+            }
         }
 
         /// Row indices shift on incremental diffs, so re-derive every visible
@@ -500,6 +518,13 @@ final class RoundedRowView: NSTableRowView {
         didSet { if stripe != oldValue { needsDisplay = true } }
     }
 
+    /// False when this row's pane isn't the focused one in a split layout, so its
+    /// selection draws muted instead of accent-blue (issue #59: both panes looked
+    /// equally selected). Single-pane and the active pane stay emphasized.
+    var paneActive = true {
+        didSet { if paneActive != oldValue && isSelected { needsDisplay = true } }
+    }
+
     override func drawBackground(in dirtyRect: NSRect) {
         super.drawBackground(in: dirtyRect)
         guard stripe else { return }
@@ -511,9 +536,10 @@ final class RoundedRowView: NSTableRowView {
         guard selectionHighlightStyle != .none else { return }
         let rect = bounds.insetBy(dx: 6, dy: 1)
         // Finder-style: accent blue whenever the window is key (so clicking a
-        // disclosure triangle or the sidebar doesn't drop it to gray); muted only
-        // when the whole window is inactive.
-        let key = window?.isKeyWindow ?? false
+        // disclosure triangle or the sidebar doesn't drop it to gray); muted when
+        // the whole window is inactive, OR when this is the unfocused pane of a
+        // split (issue #59 — only the focused pane shows the emphasized selection).
+        let key = (window?.isKeyWindow ?? false) && paneActive
         let color = key
             ? NSColor.selectedContentBackgroundColor
             : NSColor.unemphasizedSelectedContentBackgroundColor

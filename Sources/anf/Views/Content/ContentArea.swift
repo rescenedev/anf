@@ -3,6 +3,8 @@ import SwiftUI
 /// Routes to the active view mode and overlays empty / loading states.
 struct ContentArea: View {
     @Bindable var model: BrowserModel
+    /// Whether this pane is the focused one (#59). Single-pane → always true.
+    var paneActive: Bool = true
 
     var body: some View {
         ZStack {
@@ -18,7 +20,7 @@ struct ContentArea: View {
 
             switch model.viewMode {
             case .icons:   IconGridView(model: model)
-            case .list:    FileListView(model: model)
+            case .list:    FileListView(model: model, paneActive: paneActive)
             case .columns: ColumnView(model: model)
             case .gallery: GalleryView(model: model)
             }
