@@ -78,6 +78,9 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         outline.intercellSpacing = NSSize(width: 0, height: 2)
         outline.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: true)
         outline.setDraggingSourceOperationMask([.copy], forLocal: false)
+        // Accept folder drops onto the Pinned section — add a pin, or reorder an
+        // existing one (issue #53).
+        outline.registerForDraggedTypes([.fileURL])
 
         let col = NSTableColumn(identifier: .init("main"))
         col.resizingMask = .autoresizingMask
@@ -241,10 +244,14 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
                          removable: false, ejectable: false))
         }
         roots.append(header(.favorites, favChildren)!)
-        if let pinned = header(.pinned, workspace.favorites.items.map {
+        // Pinned always shows (even when empty) so it stays a drop target for
+        // drag-to-pin, mirroring Smart Folders (issue #53).
+        let pinnedNode = Node(.header(.pinned))
+        pinnedNode.children = workspace.favorites.items.map {
             Node(.folder(name: $0.lastPathComponent.isEmpty ? $0.path : $0.lastPathComponent,
                          symbol: "star.fill", url: $0, removable: true, ejectable: false))
-        }) { roots.append(pinned) }
+        }
+        roots.append(pinnedNode)
         if let ws = header(.workspace, workspace.savedViews.views.map {
             Node(.workspaceRow($0))
         }) { roots.append(ws) }
@@ -481,6 +488,50 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     func outlineView(_ o: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
         if case .folder(_, _, let url, _, _) = (item as! Node).kind { return url as NSURL }
         return nil
+    }
+
+    // MARK: Drop target (pin folders / reorder pins, issue #53)
+
+    /// The always-present Pinned section header node, the only drop target.
+    private var pinnedHeaderNode: Node? {
+        roots.first { if case .header(.pinned) = $0.kind { return true } else { return false } }
+    }
+
+    private func droppedFileURLs(_ info: NSDraggingInfo) -> [URL] {
+        (info.draggingPasteboard.readObjects(forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+    }
+
+    func outlineView(_ o: NSOutlineView, validateDrop info: NSDraggingInfo,
+                     proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+        guard let pinned = pinnedHeaderNode,
+              info.draggingPasteboard.canReadObject(forClasses: [NSURL.self],
+                  options: [.urlReadingFileURLsOnly: true]) else { return [] }
+        // Redirect any drop landing inside the Pinned section to a clean
+        // between-rows insertion so the user sees the drop line, not a row
+        // highlight. Dropping ON a pin (index −1) inserts just before it.
+        let count = pinned.children.count
+        if let node = item as? Node {
+            if case .header(.pinned) = node.kind {
+                o.setDropItem(pinned, dropChildIndex: index < 0 ? count : index)
+            } else if let childIdx = pinned.children.firstIndex(where: { $0 === node }) {
+                o.setDropItem(pinned, dropChildIndex: index < 0 ? childIdx : index)
+            } else {
+                return []
+            }
+        } else {
+            return []
+        }
+        // Internal reorder = move; a folder dragged in from elsewhere = copy.
+        return (info.draggingSource as? NSOutlineView) === outline ? .move : .copy
+    }
+
+    func outlineView(_ o: NSOutlineView, acceptDrop info: NSDraggingInfo,
+                     item: Any?, childIndex index: Int) -> Bool {
+        let urls = droppedFileURLs(info)
+        guard !urls.isEmpty else { return false }
+        let at = index < 0 ? workspace.favorites.items.count : index
+        return workspace.favorites.drop(urls, at: at) > 0
     }
 
     // MARK: Actions
