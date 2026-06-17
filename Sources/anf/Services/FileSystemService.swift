@@ -33,6 +33,11 @@ struct FileSystemService: Sendable {
             @inline(__always) func vaultHidden(_ name: String) -> Bool {
                 vault && (name == ".git" || name == ".gitignore")
             }
+            // Windows leaves $RECYCLE.BIN-style clutter on volumes it touches;
+            // hide it with dot-files unless "show hidden" is on (issue #53).
+            @inline(__always) func winHidden(_ name: String) -> Bool {
+                !showHidden && WindowsSystemFiles.isHidden(name)
+            }
             // Native bulk read (no per-item stat). Falls back to FileManager only
             // if getattrlistbulk is unavailable for this volume.
             if let entries = FastDirRead.list(path: url.path) {
@@ -43,7 +48,7 @@ struct FileSystemService: Sendable {
                 out.withUnsafeMutableBufferPointer { buf in
                     DispatchQueue.concurrentPerform(iterations: entries.count) { i in
                         let e = entries[i]
-                        if (showHidden || !e.isHidden) && !vaultHidden(e.name) {
+                        if (showHidden || !e.isHidden) && !vaultHidden(e.name) && !winHidden(e.name) {
                             buf[i] = FileItem.fast(parentPath: parentPath, entry: e)
                         }
                     }
@@ -59,7 +64,8 @@ struct FileSystemService: Sendable {
                 options: options
             ) else { return [] }
             return urls.compactMap { u in
-                vaultHidden(u.lastPathComponent) ? nil : FileItem(fastURL: u)
+                let name = u.lastPathComponent
+                return (vaultHidden(name) || winHidden(name)) ? nil : FileItem(fastURL: u)
             }
         }.value
     }

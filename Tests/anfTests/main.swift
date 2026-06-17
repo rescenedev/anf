@@ -79,6 +79,7 @@ MainActor.assumeIsolated { runPaneTabTests() }
 MainActor.assumeIsolated { runListSyncStateTests() }
 runFileOpsNamingTests()
 runKeybindingMapTests()
+runWindowsSystemFilesTests()
 runDirectoryWatcherTests()
 MainActor.assumeIsolated { runExternalRefreshTests() }
 MainActor.assumeIsolated { runWorkspacePersistenceTests() }

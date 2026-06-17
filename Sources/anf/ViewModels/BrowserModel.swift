@@ -907,7 +907,7 @@ final class BrowserModel: Identifiable {
                 let entries = try await SFTPClient.list(host: host, path: path)
                 guard token == loadToken else { return }
                 allItems = entries
-                    .filter { hidden || !$0.name.hasPrefix(".") }
+                    .filter { hidden || (!$0.name.hasPrefix(".") && !WindowsSystemFiles.isHidden($0.name)) }
                     .map { e in
                         FileItem.remote(
                             url: Self.remoteURL(host: host, path: joinRemote(path, e.name)),
