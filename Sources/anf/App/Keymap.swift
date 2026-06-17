@@ -16,6 +16,18 @@ enum KeyAction: String, CaseIterable {
     case quickLook, rename, trash
     case openWith
     case openSettings
+    // Selection movement (issue #52): first-class so up/down/left/right and
+    // their Vim/Emacs aliases are remappable like every other action.
+    case moveUp, moveDown, moveLeft, moveRight
+
+    /// Move actions route through dispatch with the shift modifier (selection
+    /// extension) and may decline the event (columns view → native AppKit nav).
+    var isMove: Bool {
+        switch self {
+        case .moveUp, .moveDown, .moveLeft, .moveRight: return true
+        default: return false
+        }
+    }
 }
 
 /// User-customizable shortcuts the Ghostty way: no settings UI — ⌘, opens
@@ -62,6 +74,14 @@ final class Keymap {
         (.rename, ["return", "shift+return", "enter", "shift+enter"]),
         (.trash, ["delete", "shift+delete", "cmd+delete"]),
         (.openSettings, ["cmd+,"]),
+        // Selection movement (issue #52). Arrow keys stay default; Emacs
+        // (ctrl+p/n) and Vim (ctrl+h/j/k/l) chords are added so arrow-less
+        // keyboards can navigate. Shift extends the selection (handled in the
+        // dispatcher), so no separate shift+ chords are listed here.
+        (.moveUp, ["up", "ctrl+p", "ctrl+k"]),
+        (.moveDown, ["down", "ctrl+n", "ctrl+j"]),
+        (.moveLeft, ["left", "ctrl+h"]),
+        (.moveRight, ["right", "ctrl+l"]),
     ]
 
     private var bindings: [Chord: KeyAction] = [:]

@@ -99,7 +99,16 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         // Keymap-driven actions (defaults pre-filled in keybindings.json; ⌘,
         // opens it). Everything bindable dispatches here; the hardcoded
         // shortcuts below are the non-bindable navigation/system set.
-        if let bound { return dispatch(bound) }
+        if let bound { return dispatch(bound, shift: flagsAll.contains(.shift)) }
+        // Shift extends a selection move, but the move chords are bound without
+        // shift, so a shifted press misses the exact-flags match above. Retry
+        // with shift stripped and honor it only when it lands on a move action
+        // (Shift+↑/↓/←/→ and Shift+Ctrl+P/N/H/J/K/L extend the selection).
+        if flagsAll.contains(.shift),
+           let move = Keymap.shared.action(flags: flagsAll.subtracting(.shift), key: token),
+           move.isMove {
+            return dispatch(move, shift: true)
+        }
 
         let flags = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let cmd = flags.contains(.command)
@@ -118,57 +127,13 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         // (charactersIgnoringModifiers yields "D"/"G"/"N") and symbol keys.
         let chars = Self.latinLetter[code] ?? (e.charactersIgnoringModifiers ?? "").lowercased()
 
-        // Vertical step: a full grid row in the icon grid; one item in the
-        // gallery filmstrip (a single horizontal row) and in list/columns.
-        let gridStep = model.viewMode == .icons ? max(1, model.gridColumns) : 1
-
         // --- No-modifier keys (orthodox navigation; not remappable) ---
-        // space/return/delete/F5/F6 moved to the keymap dispatch above.
+        // Arrow keys (↑↓←→) are now keymap actions (moveUp/Down/Left/Right) and
+        // were dispatched above; space/return/delete/F5/F6 likewise. What's left
+        // here is the non-bindable navigation/system set.
         if !cmd && !opt {
             switch code {
             case 48: workspace.cyclePane(shift ? -1 : 1); return true // Tab → switch pane
-            case 125:   // ↓ — icon grid jumps a whole row (falls back to next
-                        // item when there's no row below: single/last row)
-                moveSel(by: gridStep, extend: shift, rowJump: model.viewMode == .icons); return true
-            case 126:   // ↑
-                moveSel(by: -gridStep, extend: shift, rowJump: model.viewMode == .icons); return true
-            // ←/→ move the selection in icon/gallery grids (no native arrow
-            // handling there). In list/columns they fall through to the native
-            // view. Folder history stays on ⌘←/⌘→.
-            case 123:
-                if model.viewMode == .icons || model.viewMode == .gallery {
-                    moveSel(by: -1, extend: shift); return true
-                }
-                // List: ← collapses the selected folder; on a nested row it jumps
-                // up to the parent folder and collapses it (ForkLift/Finder).
-                if model.viewMode == .list, let it = model.selectedItems.first {
-                    // 1) selected folder is open → close it
-                    if model.isExpandable(it) && model.isExpanded(it) { model.toggleExpand(it); return true }
-                    // 2) nested row → close its containing folder, cursor → folder
-                    if let parent = model.parentRow(of: it) {
-                        model.toggleExpand(parent)
-                        model.select(parent)        // explicit (don't rely on repair)
-                        return true
-                    }
-                    // 3) top-level → keep closing opened folders, walking upward
-                    if let above = model.nearestExpandedAbove(of: it) {
-                        model.select(above)
-                        model.toggleExpand(above)
-                        return true
-                    }
-                }
-                return false
-            case 124:
-                if model.viewMode == .icons || model.viewMode == .gallery {
-                    moveSel(by: 1, extend: shift); return true
-                }
-                // List: → expands the selected folder, or steps to the next row
-                // when there's nothing left to open here — so mashing → opens
-                // every folder and walks the whole tree.
-                if model.viewMode == .list && !shift {
-                    return model.expandOrAdvance()
-                }
-                return false
             // PgUp/PgDn move the SELECTION a viewport's worth (Explorer-style —
             // works even when there's nothing to scroll); Home/End jump it to
             // the first/last item. The views scroll to follow the selection.
@@ -228,9 +193,15 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         return false
     }
 
-    /// Execute one keymap-driven action. Always consumes the event.
-    private func dispatch(_ action: KeyAction) -> Bool {
+    /// Execute one keymap-driven action. Consumes the event unless a move action
+    /// declines it (columns view left/right → native AppKit browser navigation).
+    private func dispatch(_ action: KeyAction, shift: Bool = false) -> Bool {
         switch action {
+        // Selection movement (issue #52). These return their own consumed flag.
+        case .moveUp: return moveVertical(-1, extend: shift)
+        case .moveDown: return moveVertical(1, extend: shift)
+        case .moveLeft: return moveHorizontal(-1, extend: shift)
+        case .moveRight: return moveHorizontal(1, extend: shift)
         case .newTab: workspace.activePaneModel.newTab()
         case .closeTab:
             // Close the current tab → pane → window (Finder/browser order).
@@ -376,6 +347,49 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
     private func moveSel(by delta: Int, extend: Bool = false, rowJump: Bool = false) {
         model.moveSelection(by: delta, extend: extend, rowJump: rowJump)
         refreshQLPanelIfVisible()
+    }
+
+    /// ↑/↓ (and Ctrl+P/N/K/J): step the selection one item, or a whole row in
+    /// the icon grid. Always consumes the event.
+    private func moveVertical(_ dir: Int, extend: Bool) -> Bool {
+        let gridStep = model.viewMode == .icons ? max(1, model.gridColumns) : 1
+        moveSel(by: dir * gridStep, extend: extend, rowJump: model.viewMode == .icons)
+        return true
+    }
+
+    /// ←/→ (and Ctrl+H/L): selection in icon/gallery grids; folder collapse/
+    /// expand in list (ForkLift/Finder semantics); native AppKit navigation in
+    /// columns (returns false so the column browser handles the arrow itself).
+    private func moveHorizontal(_ dir: Int, extend: Bool) -> Bool {
+        if model.viewMode == .icons || model.viewMode == .gallery {
+            moveSel(by: dir, extend: extend); return true
+        }
+        if dir < 0 {
+            // List ←: collapse the selected folder; on a nested row jump up to
+            // its parent folder and collapse it; at top level keep closing
+            // opened folders, walking upward. Columns falls through to native.
+            if model.viewMode == .list, let it = model.selectedItems.first {
+                if model.isExpandable(it) && model.isExpanded(it) { model.toggleExpand(it); return true }
+                if let parent = model.parentRow(of: it) {
+                    model.toggleExpand(parent)
+                    model.select(parent)        // explicit (don't rely on repair)
+                    return true
+                }
+                if let above = model.nearestExpandedAbove(of: it) {
+                    model.select(above)
+                    model.toggleExpand(above)
+                    return true
+                }
+            }
+            return false
+        }
+        // List →: expand the selected folder, or step to the next row when
+        // there's nothing left to open — so mashing → walks the whole tree.
+        // Columns falls through to native.
+        if model.viewMode == .list && !extend {
+            return model.expandOrAdvance()
+        }
+        return false
     }
 
     private func refreshQLPanelIfVisible() {

@@ -23,9 +23,23 @@ func runKeybindingMapTests() {
             ("cmd+d", .duplicate), ("cmd+shift+n", .newFolder),
             ("cmd+shift+d", .toggleFavorite),
             ("cmd+1", .layoutSingle), ("cmd+4", .layoutQuad),
+            // Selection movement (issue #52): arrows plus Emacs/Vim aliases.
+            ("up", .moveUp), ("ctrl+p", .moveUp), ("ctrl+k", .moveUp),
+            ("down", .moveDown), ("ctrl+n", .moveDown), ("ctrl+j", .moveDown),
+            ("left", .moveLeft), ("ctrl+h", .moveLeft),
+            ("right", .moveRight), ("ctrl+l", .moveRight),
         ]
         for (spec, action) in expect {
             T.equal(m[chord(spec)], action, "'\(spec)' → \(action)")
+        }
+        // The move chords must not collide with the ⌘-modified history/open
+        // navigation that shares the arrow keys.
+        T.equal(m[chord("cmd+up")], .goUp, "⌘↑ stays goUp, not moveUp")
+        T.equal(m[chord("cmd+down")], .openSelected, "⌘↓ stays openSelected")
+        // isMove flags exactly the four movement actions.
+        for a in KeyAction.allCases {
+            let shouldMove = [.moveUp, .moveDown, .moveLeft, .moveRight].contains(a)
+            T.equal(a.isMove, shouldMove, "\(a).isMove == \(shouldMove)")
         }
     }
 
