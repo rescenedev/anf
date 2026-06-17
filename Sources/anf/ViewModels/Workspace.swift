@@ -708,7 +708,15 @@ final class WorkspaceModel {
         let survivorIdx = (0..<layout.count).first { $0 != activePane } ?? 0
         if survivorIdx != 0 {
             let survivor = panes[survivorIdx]
-            panes[0].replaceTabs(survivor.tabs, activeIndex: survivor.activeIndex)
+            let movedTabs = survivor.tabs
+            let movedIdx = survivor.activeIndex
+            panes[0].replaceTabs(movedTabs, activeIndex: movedIdx)
+            // The survivor slot just handed its live BrowserModel instances to
+            // pane 0 — it must NOT keep referencing them, or a later split reuses
+            // this hidden pane and the two panes share one model and move in
+            // lockstep (#50). Reset it to a fresh, independent model.
+            let folder = movedTabs[min(movedIdx, movedTabs.count - 1)].currentURL
+            survivor.replaceTabs([BrowserModel(start: folder)], activeIndex: 0)
         }
         activePane = 0
         setLayout(.single)

@@ -52,5 +52,32 @@ func runWorkspacePersistenceTests() {
             let ws2 = WorkspaceModel()
             T.expect(ws2.panes.first?.tabs.first?.isLocked == false, "no spurious pin on a normal tab")
         }
+
+        T.group("collapsing a pane then re-splitting keeps the panes independent (#50)") {
+            let a = fm.temporaryDirectory.appendingPathComponent("anfpa-\(UUID().uuidString)")
+            let b = fm.temporaryDirectory.appendingPathComponent("anfpb-\(UUID().uuidString)")
+            let c = fm.temporaryDirectory.appendingPathComponent("anfpc-\(UUID().uuidString)")
+            for d in [a, b, c] { try? fm.createDirectory(at: d, withIntermediateDirectories: true) }
+            defer { for d in [a, b, c] { try? fm.removeItem(at: d) } }
+
+            let ws = WorkspaceModel()
+            ws.setLayout(.dual)
+            ws.panes[0].current.navigate(to: a)
+            ws.panes[1].current.navigate(to: b)
+            ws.activePane = 0
+            ws.closeActivePane()        // close pane 0; survivor (pane 1 = b) becomes pane 0
+            ws.setLayout(.dual)         // re-split — the bug shared one model across both panes
+
+            let p0 = ws.panes[0].current
+            let p1 = ws.panes[1].current
+            T.expect(p0 !== p1, "the two visible panes are distinct BrowserModel instances")
+            // Navigating one pane must not move the other (they were synced before).
+            let p0Before = p0.currentURL.standardizedFileURL.path
+            p1.navigate(to: c)
+            T.equal(ws.panes[0].current.currentURL.standardizedFileURL.path, p0Before,
+                    "navigating pane 1 leaves pane 0 where it was (no sync)")
+            T.equal(ws.panes[1].current.currentURL.standardizedFileURL.path, c.standardizedFileURL.path,
+                    "pane 1 actually moved")
+        }
     }
 }
