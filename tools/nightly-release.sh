@@ -17,10 +17,14 @@ mkdir -p "$LOG_DIR"
 exec >>"$LOG_DIR/nightly-$(date +%Y%m%d).log" 2>&1
 echo "===== nightly run $(date) ====="
 
-# Sync main (untracked scratch like black-board.md / .gstack don't block this).
+# Sync main to exactly origin/main. Hard-reset (not pull) so a PRIOR failed run
+# can't block this one: release.sh bumps Info.plist BEFORE running tests, so a
+# red test leaves that bump uncommitted — and the next run's clean-tree check
+# would then abort. Reset discards that leftover. Untracked scratch
+# (black-board.md / .gstack) is gitignored, so it survives.
 git fetch origin --tags --quiet
 git checkout main --quiet
-git pull origin main --quiet
+git reset --hard origin/main --quiet
 
 LATEST_TAG=$(git tag --sort=-v:refname | grep '^v[0-9]' | head -1)
 echo "latest tag: $LATEST_TAG"
