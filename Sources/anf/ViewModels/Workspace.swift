@@ -221,6 +221,17 @@ final class PaneModel: Identifiable {
         guard !tabs.isEmpty else { return }
         activeIndex = (activeIndex + delta + tabs.count) % tabs.count
     }
+
+    /// Drag-reorder a tab to a new position (issue #68); the same tab stays
+    /// active after the move.
+    func moveTab(from src: Int, to dst: Int) {
+        guard tabs.indices.contains(src), tabs.indices.contains(dst), src != dst else { return }
+        let active = tabs[activeIndex]
+        var copy = tabs
+        copy.insert(copy.remove(at: src), at: dst)
+        tabs = copy
+        if let i = tabs.firstIndex(where: { $0 === active }) { activeIndex = i }
+    }
 }
 
 // MARK: - Workspace (layout + panes + favorites)
@@ -380,6 +391,16 @@ final class WorkspaceModel {
     }
 
     /// Close one terminal tab (kills its PTY). Closing the last hides the drawer.
+    /// Drag-reorder a terminal session tab (issue #68); keeps focus on it.
+    func moveTerminal(from src: Int, to dst: Int) {
+        guard terminals.indices.contains(src), terminals.indices.contains(dst), src != dst else { return }
+        let active = terminals[activeTerminalIndex]
+        var copy = terminals
+        copy.insert(copy.remove(at: src), at: dst)
+        terminals = copy
+        if let i = terminals.firstIndex(where: { $0 === active }) { activeTerminalIndex = i }
+    }
+
     func closeTerminal(at index: Int) {
         guard terminals.indices.contains(index) else { return }
         terminals[index].view.terminate()

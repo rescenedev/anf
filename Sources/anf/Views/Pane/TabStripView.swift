@@ -31,6 +31,14 @@ struct TabStripView: View {
                     onToggleLock: { tab.toggleLock() }
                 )
                 .frame(maxWidth: .infinity)   // equal-width: tabs fill the bar
+                // Drag a tab to reorder it within the pane (issue #68).
+                .draggable("\(i)")
+                .dropDestination(for: String.self) { items, _ in
+                    guard let from = items.first.flatMap({ Int($0) }) else { return false }
+                    pane.moveTab(from: from, to: i)
+                    workspace.save()
+                    return true
+                }
             }
             Button {
                 workspace.focusPane(index); pane.newTab()
