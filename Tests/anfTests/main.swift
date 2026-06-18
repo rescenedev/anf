@@ -80,6 +80,7 @@ MainActor.assumeIsolated { runListSyncStateTests() }
 runFileOpsNamingTests()
 runKeybindingMapTests()
 runWindowsSystemFilesTests()
+MainActor.assumeIsolated { runTerminalLauncherTests() }
 runDirectoryWatcherTests()
 MainActor.assumeIsolated { runExternalRefreshTests() }
 MainActor.assumeIsolated { runWorkspacePersistenceTests() }
