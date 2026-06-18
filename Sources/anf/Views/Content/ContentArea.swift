@@ -5,6 +5,7 @@ struct ContentArea: View {
     @Bindable var model: BrowserModel
     /// Whether this pane is the focused one (#59). Single-pane → always true.
     var paneActive: Bool = true
+    var onFocus: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -19,10 +20,10 @@ struct ContentArea: View {
                 .ignoresSafeArea()
 
             switch model.viewMode {
-            case .icons:   IconGridView(model: model)
-            case .list:    FileListView(model: model, paneActive: paneActive)
-            case .columns: ColumnView(model: model)
-            case .gallery: GalleryView(model: model)
+            case .icons:   IconGridView(model: model, onFocus: onFocus)
+            case .list:    FileListView(model: model, paneActive: paneActive, onFocus: onFocus)
+            case .columns: ColumnView(model: model, onFocus: onFocus)
+            case .gallery: GalleryView(model: model, onFocus: onFocus)
             }
 
             if model.networkStalled {
@@ -62,7 +63,10 @@ struct ContentArea: View {
         // Click on empty space clears selection (icon/gallery modes).
         .background(
             Color.clear.contentShape(Rectangle())
-                .onTapGesture { model.selection.removeAll() }
+                .onTapGesture {
+                    onFocus()
+                    model.selection.removeAll()
+                }
                 .contextMenu { BackgroundMenu(model: model) }
         )
     }

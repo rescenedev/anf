@@ -76,6 +76,7 @@ MainActor.assumeIsolated { runPostActionFocusTests() }
 MainActor.assumeIsolated { runNavHistoryTests() }
 MainActor.assumeIsolated { runSelectionSafetyTests() }
 MainActor.assumeIsolated { runPaneTabTests() }
+MainActor.assumeIsolated { runPaneMouseFocusTests() }
 MainActor.assumeIsolated { runListSyncStateTests() }
 runFileOpsNamingTests()
 runKeybindingMapTests()

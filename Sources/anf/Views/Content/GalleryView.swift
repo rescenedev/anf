@@ -6,6 +6,7 @@ import SwiftUI
 /// native selection); the big preview stays SwiftUI/QuickLook.
 struct GalleryView: View {
     @Bindable var model: BrowserModel
+    var onFocus: () -> Void = {}
 
     private var focused: FileItem? {
         model.selectedItems.first ?? model.items.first
@@ -26,11 +27,13 @@ struct GalleryView: View {
 
             Divider()
 
-            FilmstripView(model: model)
+            FilmstripView(model: model, onFocus: onFocus)
                 .frame(height: 112)
                 .background(.regularMaterial)
         }
         .background(.background)
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded(onFocus))
     }
 }
 
@@ -50,8 +53,9 @@ private struct ContentUnavailableLabel: View {
 /// Horizontal thumbnail strip — native collection view.
 private struct FilmstripView: NSViewRepresentable {
     @Bindable var model: BrowserModel
+    var onFocus: () -> Void = {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, onFocus: onFocus) }
 
     func makeNSView(context: Context) -> NSScrollView {
         let coord = context.coordinator
@@ -63,7 +67,8 @@ private struct FilmstripView: NSViewRepresentable {
         layout.minimumLineSpacing = 10
         layout.itemSize = NSSize(width: 78, height: 84)
 
-        let cv = NSCollectionView()
+        let cv = FilmstripCollectionView()
+        cv.coordinator = coord
         cv.collectionViewLayout = layout
         cv.isSelectable = true
         cv.allowsMultipleSelection = false
@@ -85,21 +90,30 @@ private struct FilmstripView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.model = model
+        context.coordinator.onFocus = onFocus
         context.coordinator.sync()
     }
 
     @MainActor
     final class Coordinator: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate {
         var model: BrowserModel
+        var onFocus: () -> Void
         weak var collection: NSCollectionView?
         private var lastVersion = -1
         private var lastModelID: BrowserModel.ID?
         private var lastFocusedID: FileItem.ID?
         private var syncing = false
 
-        init(model: BrowserModel) { self.model = model }
+        init(model: BrowserModel, onFocus: @escaping () -> Void) {
+            self.model = model
+            self.onFocus = onFocus
+        }
 
         var items: [FileItem] { model.items }
+
+        func focusPaneFromMouse() {
+            onFocus()
+        }
         private var focusedID: FileItem.ID? {
             model.selectedItems.first?.id ?? model.items.first?.id
         }
@@ -154,6 +168,20 @@ private struct FilmstripView: NSViewRepresentable {
             lastFocusedID = id
             model.selection = [id]
         }
+    }
+}
+
+private final class FilmstripCollectionView: NSCollectionView {
+    weak var coordinator: FilmstripView.Coordinator?
+
+    override func mouseDown(with event: NSEvent) {
+        coordinator?.focusPaneFromMouse()
+        super.mouseDown(with: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        coordinator?.focusPaneFromMouse()
+        super.rightMouseDown(with: event)
     }
 }
 

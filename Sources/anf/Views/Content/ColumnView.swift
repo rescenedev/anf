@@ -4,6 +4,7 @@ import SwiftUI
 /// pushes a new column by navigating, selecting a file shows it in the preview column.
 struct ColumnView: View {
     @Bindable var model: BrowserModel
+    var onFocus: () -> Void = {}
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -15,7 +16,12 @@ struct ColumnView: View {
                     ForEach(Array(model.pathComponents.enumerated()), id: \.offset) { idx, dir in
                         let childURL = idx + 1 < model.pathComponents.count
                             ? model.pathComponents[idx + 1] : nil
-                        ColumnList(model: model, directory: dir, highlightedChild: childURL)
+                        ColumnList(
+                            model: model,
+                            directory: dir,
+                            highlightedChild: childURL,
+                            onFocus: onFocus
+                        )
                             .frame(width: 240)
                             .id(dir)
                         Divider()
@@ -40,6 +46,7 @@ private struct ColumnList: View {
     @Bindable var model: BrowserModel
     let directory: URL
     let highlightedChild: URL?
+    let onFocus: () -> Void
 
     @State private var items: [FileItem] = []
     private let fs = FileSystemService()
@@ -54,6 +61,7 @@ private struct ColumnList: View {
                             || model.selection.contains(item.id)
                     )
                     .onTapGesture {
+                        onFocus()
                         if item.isBrowsableContainer {
                             model.navigate(to: item.url)
                         } else {

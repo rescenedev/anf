@@ -23,7 +23,11 @@ struct PaneView: View {
                     TabStripView(workspace: workspace, index: index)
                     Divider()
                 }
-                ContentArea(model: pane.current, paneActive: isActive)
+                ContentArea(
+                    model: pane.current,
+                    paneActive: isActive,
+                    onFocus: { workspace.focusPane(index) }
+                )
             }
             // Focus this pane on any interaction without blocking child gestures. A
             // zero-distance drag fires on mouse-down, so it also catches clicks on

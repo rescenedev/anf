@@ -11,8 +11,9 @@ struct FileListView: NSViewRepresentable {
     /// Whether this pane is the focused one (always true in a single-pane layout).
     /// Drives whether the selection draws emphasized or muted (issue #59).
     var paneActive: Bool = true
+    var onFocus: () -> Void = {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, onFocus: onFocus) }
 
     func makeNSView(context: Context) -> NSScrollView {
         let coord = context.coordinator
@@ -72,6 +73,7 @@ struct FileListView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.model = model
+        context.coordinator.onFocus = onFocus
         context.coordinator.setPaneActive(paneActive)
         context.coordinator.sync()
     }
@@ -81,6 +83,7 @@ struct FileListView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
         var model: BrowserModel
+        var onFocus: () -> Void
         weak var table: NSTableView?
         /// Mirrors FileListView.paneActive; pushed to every visible row so the
         /// unfocused pane's selection draws muted (issue #59).
@@ -89,9 +92,16 @@ struct FileListView: NSViewRepresentable {
         private var lastScale = 1.0
         private var lastEditingID: FileItem.ID?
 
-        init(model: BrowserModel) { self.model = model }
+        init(model: BrowserModel, onFocus: @escaping () -> Void) {
+            self.model = model
+            self.onFocus = onFocus
+        }
 
         var items: [FileItem] { model.items }
+
+        func focusPaneFromMouse() {
+            onFocus()
+        }
 
         // MARK: Row model (grouping)
         //
@@ -552,6 +562,16 @@ final class RoundedRowView: NSTableRowView {
 /// monitor handle navigation keys.
 final class FileTableView: NSTableView {
     weak var coordinator: FileListView.Coordinator?
+
+    override func mouseDown(with event: NSEvent) {
+        coordinator?.focusPaneFromMouse()
+        super.mouseDown(with: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        coordinator?.focusPaneFromMouse()
+        super.rightMouseDown(with: event)
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)

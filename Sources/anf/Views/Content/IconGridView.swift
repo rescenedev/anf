@@ -6,8 +6,9 @@ import SwiftUI
 /// `NSMenu` as the list view, and native drag & drop.
 struct IconGridView: NSViewRepresentable {
     @Bindable var model: BrowserModel
+    var onFocus: () -> Void = {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, onFocus: onFocus) }
 
     func makeNSView(context: Context) -> NSScrollView {
         let coord = context.coordinator
@@ -52,6 +53,7 @@ struct IconGridView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.model = model
+        context.coordinator.onFocus = onFocus
         context.coordinator.sync()
     }
 
@@ -60,12 +62,16 @@ struct IconGridView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegateFlowLayout {
         var model: BrowserModel
+        var onFocus: () -> Void
         weak var collection: NSCollectionView?
         private let syncState = ListSyncState()
         private var lastIconSize: Double = 0
         private var lastEditingID: FileItem.ID?
 
-        init(model: BrowserModel) { self.model = model }
+        init(model: BrowserModel, onFocus: @escaping () -> Void) {
+            self.model = model
+            self.onFocus = onFocus
+        }
 
         deinit {
             // Selector-based observers auto-clear on macOS 11+, but remove explicitly
@@ -75,6 +81,10 @@ struct IconGridView: NSViewRepresentable {
         }
 
         var items: [FileItem] { model.items }
+
+        func focusPaneFromMouse() {
+            onFocus()
+        }
 
         static func itemSize(icon: Double) -> NSSize {
             NSSize(width: icon + 28, height: icon + 46)
@@ -294,6 +304,16 @@ struct IconGridView: NSViewRepresentable {
 /// Collection view that routes right-clicks to the shared menus.
 final class GridCollectionView: NSCollectionView {
     weak var coordinator: IconGridView.Coordinator?
+
+    override func mouseDown(with event: NSEvent) {
+        coordinator?.focusPaneFromMouse()
+        super.mouseDown(with: event)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        coordinator?.focusPaneFromMouse()
+        super.rightMouseDown(with: event)
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
