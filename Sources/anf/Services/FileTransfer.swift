@@ -148,8 +148,34 @@ final class FileTransfer {
                     work = kids.map { ($0, plan[0].dest.appendingPathComponent($0.lastPathComponent)) }
                 }
 
-                await MainActor.run {
-                    self?.label = verb + L(" (\(work.count) items)", " (\(work.count)개 항목)")
+                // Snapshot into immutable locals so the concurrent closures below
+                // don't capture the mutable `work`.
+                let workCount = work.count
+                let firstSrc = work[0].src
+                let destPaths = work.map(\.dest)
+                let trackBytes = Self.byteTrackTotal(of: work.map(\.src))
+                await MainActor.run { [weak self] in
+                    self?.label = Self.transferLabel(verb: verb, count: workCount, first: firstSrc)
+                }
+
+                // Byte-accurate progress for a few big files (#63): item-count
+                // progress sits at 0% through a single large file, which reads as
+                // frozen. Poll the growing destination size instead. The copy
+                // itself is untouched (still copyItem → APFS clones stay instant);
+                // the poller only READS sizes. nil total → item-count progress.
+                let pollStop = CancelFlag()
+                if let total = trackBytes {
+                    Task.detached(priority: .utility) { [weak self] in
+                        while !pollStop.isSet {
+                            let copied = Self.bytesPresent(at: destPaths)
+                            let f = Swift.min(Double(copied) / Double(total), 0.99)
+                            await MainActor.run { [weak self] in
+                                guard let self, !self.jobDone, self.jobGeneration == gen else { return }
+                                self.fraction = f
+                            }
+                            try? await Task.sleep(nanoseconds: 150_000_000)
+                        }
+                    }
                 }
 
                 var done: [(URL, URL)] = []
@@ -187,7 +213,7 @@ final class FileTransfer {
                     let push = now - lastPushed > .milliseconds(80) || n == work.count
                     if push { lastPushed = now }
                     lock.unlock()
-                    if push {
+                    if push && trackBytes == nil {
                         let f = Double(n) / Double(work.count)
                         DispatchQueue.main.async { [weak self] in
                             guard let self else { return }
@@ -195,6 +221,7 @@ final class FileTransfer {
                         }
                     }
                 }
+                pollStop.set()   // stop the byte poller now the copy is finished
                 // If the destination folder was pre-created for expansion but every
                 // child copy failed, the empty stub directory would be orphaned with
                 // no undo record (result.done is empty, so nothing is recorded).
@@ -316,6 +343,42 @@ final class FileTransfer {
             q.async { body(i); sem.signal(); group.leave() }
         }
         group.wait()
+    }
+
+    /// Total bytes for byte-accurate copy progress — but ONLY for a small batch
+    /// of regular files. Sizing a big tree is the slow path we deliberately
+    /// avoid, so a directory (or >64 items, or empty) returns nil to fall back to
+    /// item-count progress (#63).
+    nonisolated static func byteTrackTotal(of urls: [URL]) -> Int64? {
+        guard (1...64).contains(urls.count) else { return nil }
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .totalFileAllocatedSizeKey, .fileSizeKey]
+        var total: Int64 = 0
+        for url in urls {
+            guard let v = try? url.resourceValues(forKeys: keys), v.isRegularFile == true
+            else { return nil }
+            total += Int64(v.totalFileAllocatedSize ?? v.fileSize ?? 0)
+        }
+        return total > 0 ? total : nil
+    }
+
+    /// Bytes currently written at `paths` — polled to drive copy progress.
+    nonisolated static func bytesPresent(at paths: [URL]) -> Int64 {
+        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileSizeKey]
+        var total: Int64 = 0
+        for p in paths {
+            if let v = try? p.resourceValues(forKeys: keys) {
+                total += Int64(v.totalFileAllocatedSize ?? v.fileSize ?? 0)
+            }
+        }
+        return total
+    }
+
+    /// HUD label: a single item shows its name ("Copying bigfile.zip"); a batch
+    /// shows the count.
+    nonisolated static func transferLabel(verb: String, count: Int, first: URL) -> String {
+        count == 1
+            ? verb + " " + first.lastPathComponent
+            : verb + L(" (\(count) items)", " (\(count)개 항목)")
     }
 
     /// Recursive size of `urls` (files + directory contents).
