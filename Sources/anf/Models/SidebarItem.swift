@@ -60,6 +60,21 @@ enum SidebarBuilder {
         return items
     }
 
+    /// URLs of the default favorites, used to seed the editable Favorites list on
+    /// first run under the merged model (#61).
+    static func defaultFavoriteURLs() -> [URL] { favorites().map(\.url) }
+
+    /// Name + SF Symbol for a favorite URL: a known default folder keeps its nice
+    /// localized name and icon; anything the user pinned is a generic folder.
+    static func describeFavorite(_ url: URL) -> (name: String, symbol: String) {
+        let path = url.standardizedFileURL.path
+        if let known = favorites().first(where: { $0.url.standardizedFileURL.path == path }) {
+            return (known.name, known.symbol)
+        }
+        let name = url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+        return (name, "folder")
+    }
+
     static func locations() -> [SidebarItem] {
         let fm = FileManager.default
         let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsBrowsableKey, .volumeIsLocalKey,

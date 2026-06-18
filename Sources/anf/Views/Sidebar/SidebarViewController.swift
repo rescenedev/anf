@@ -78,8 +78,8 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         outline.intercellSpacing = NSSize(width: 0, height: 2)
         outline.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: true)
         outline.setDraggingSourceOperationMask([.copy], forLocal: false)
-        // Accept folder drops onto the Pinned section — add a pin, or reorder an
-        // existing one (issue #53).
+        // Accept folder drops onto the Favorites section — add a favorite, or
+        // reorder an existing one (issues #53, #61).
         outline.registerForDraggedTypes([.fileURL])
 
         let col = NSTableColumn(identifier: .init("main"))
@@ -233,25 +233,23 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             let h = Node(.header(s)); h.children = children; return h
         }
 
-        // "Recents" (recently opened files) leads the Favorites section, mirroring
-        // Finder. It's a virtual anf:// location, not a real folder.
-        var favChildren: [Node] = [
+        // One Finder-style editable Favorites section (#61): "Recents" leads as a
+        // fixed virtual anf:// row, followed by the user's favorites — seeded with
+        // the default folders on first run, then fully editable (drag to add,
+        // reorder, right-click to remove). The header always shows so it stays a
+        // drop target even when emptied.
+        workspace.favorites.seedDefaultsIfNeeded(SidebarBuilder.defaultFavoriteURLs())
+        let favNode = Node(.header(.favorites))
+        favNode.children = [
             Node(.folder(name: L("Recents", "최근"), symbol: "clock",
                          url: BrowserModel.recentsURL, removable: false, ejectable: false))
         ]
-        favChildren += SidebarBuilder.favorites().map {
-            Node(.folder(name: $0.name, symbol: $0.symbol, url: $0.url,
-                         removable: false, ejectable: false))
+        favNode.children += workspace.favorites.items.map { url in
+            let d = SidebarBuilder.describeFavorite(url)
+            return Node(.folder(name: d.name, symbol: d.symbol, url: url,
+                                removable: true, ejectable: false))
         }
-        roots.append(header(.favorites, favChildren)!)
-        // Pinned always shows (even when empty) so it stays a drop target for
-        // drag-to-pin, mirroring Smart Folders (issue #53).
-        let pinnedNode = Node(.header(.pinned))
-        pinnedNode.children = workspace.favorites.items.map {
-            Node(.folder(name: $0.lastPathComponent.isEmpty ? $0.path : $0.lastPathComponent,
-                         symbol: "star.fill", url: $0, removable: true, ejectable: false))
-        }
-        roots.append(pinnedNode)
+        roots.append(favNode)
         if let ws = header(.workspace, workspace.savedViews.views.map {
             Node(.workspaceRow($0))
         }) { roots.append(ws) }
@@ -486,16 +484,23 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     // MARK: Drag source (folders out)
 
     func outlineView(_ o: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
-        if case .folder(_, _, let url, _, _) = (item as! Node).kind { return url as NSURL }
+        // Only real folders are draggable — never the virtual "Recents" anf:// row.
+        if case .folder(_, _, let url, _, _) = (item as! Node).kind, url.isFileURL {
+            return url as NSURL
+        }
         return nil
     }
 
-    // MARK: Drop target (pin folders / reorder pins, issue #53)
+    // MARK: Drop target (edit the Favorites section: add / reorder, issue #61)
 
-    /// The always-present Pinned section header node, the only drop target.
-    private var pinnedHeaderNode: Node? {
-        roots.first { if case .header(.pinned) = $0.kind { return true } else { return false } }
+    /// The Favorites section header — the drop target. Its first child is the
+    /// fixed "Recents" row; the editable favorites follow.
+    private var favoritesHeaderNode: Node? {
+        roots.first { if case .header(.favorites) = $0.kind { return true } else { return false } }
     }
+    /// Fixed, non-editable rows at the top of Favorites ("Recents"), which the
+    /// store indices sit past — a drop never lands above them.
+    private let favoritesFixedPrefix = 1
 
     private func droppedFileURLs(_ info: NSDraggingInfo) -> [URL] {
         (info.draggingPasteboard.readObjects(forClasses: [NSURL.self],
@@ -504,18 +509,18 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
 
     func outlineView(_ o: NSOutlineView, validateDrop info: NSDraggingInfo,
                      proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
-        guard let pinned = pinnedHeaderNode,
+        guard let fav = favoritesHeaderNode,
               info.draggingPasteboard.canReadObject(forClasses: [NSURL.self],
                   options: [.urlReadingFileURLsOnly: true]) else { return [] }
-        // Redirect any drop landing inside the Pinned section to a clean
-        // between-rows insertion so the user sees the drop line, not a row
-        // highlight. Dropping ON a pin (index −1) inserts just before it.
-        let count = pinned.children.count
+        // Redirect any drop landing inside Favorites to a clean between-rows
+        // insertion (never above the fixed Recents row) so the user sees the drop
+        // line, not a row highlight. Dropping ON a row (index −1) inserts at it.
+        let count = fav.children.count
         if let node = item as? Node {
-            if case .header(.pinned) = node.kind {
-                o.setDropItem(pinned, dropChildIndex: index < 0 ? count : index)
-            } else if let childIdx = pinned.children.firstIndex(where: { $0 === node }) {
-                o.setDropItem(pinned, dropChildIndex: index < 0 ? childIdx : index)
+            if case .header(.favorites) = node.kind {
+                o.setDropItem(fav, dropChildIndex: index < 0 ? count : max(favoritesFixedPrefix, index))
+            } else if let childIdx = fav.children.firstIndex(where: { $0 === node }) {
+                o.setDropItem(fav, dropChildIndex: max(favoritesFixedPrefix, index < 0 ? childIdx : index))
             } else {
                 return []
             }
@@ -530,7 +535,9 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
                      item: Any?, childIndex index: Int) -> Bool {
         let urls = droppedFileURLs(info)
         guard !urls.isEmpty else { return false }
-        let at = index < 0 ? workspace.favorites.items.count : index
+        // Section child index → store index, past the fixed Recents prefix.
+        let at = index < 0 ? workspace.favorites.items.count
+                           : max(0, index - favoritesFixedPrefix)
         return workspace.favorites.drop(urls, at: at) > 0
     }
 
