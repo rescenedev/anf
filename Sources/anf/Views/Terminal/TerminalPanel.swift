@@ -101,5 +101,12 @@ struct TerminalPanel: View {
             workspace.activeTerminalIndex = index
             t.focus()
         }
+        // Drag a terminal session tab to reorder it (issue #68).
+        .draggable("\(index)")
+        .dropDestination(for: String.self) { items, _ in
+            guard let from = items.first.flatMap({ Int($0) }) else { return false }
+            workspace.moveTerminal(from: from, to: index)
+            return true
+        }
     }
 }

@@ -61,6 +61,24 @@ func runPaneTabTests() {
                     "the locked tab returned to b on re-activation")
         }
 
+        T.group("moveTab drag-reorders and keeps the same tab active (#68)") {
+            let pane = PaneModel(start: a)
+            pane.newTab(at: b)
+            pane.newTab(at: c)        // [a, b, c], active = 2 (c)
+            pane.select(0)            // active = a
+            let paths: () -> [String] = { pane.tabs.map { $0.currentURL.standardizedFileURL.path } }
+            pane.moveTab(from: 0, to: 2)   // move a to the end → [b, c, a]
+            T.equal(paths(), [b, c, a].map { $0.standardizedFileURL.path }, "tab order updated")
+            T.equal(pane.activeIndex, 2, "the active tab followed the move")
+            T.equal(pane.current.currentURL.standardizedFileURL.path, a.standardizedFileURL.path,
+                    "still showing the same (moved) tab's folder")
+            // Out-of-range / no-op guards.
+            pane.moveTab(from: 0, to: 0)
+            T.equal(paths(), [b, c, a].map { $0.standardizedFileURL.path }, "src == dst is a no-op")
+            pane.moveTab(from: 9, to: 1)
+            T.equal(paths(), [b, c, a].map { $0.standardizedFileURL.path }, "out-of-range src ignored")
+        }
+
         T.group("a locked tab snaps back the moment it's LEFT, so its chip relabels (#57)") {
             let pane = PaneModel(start: a)
             pane.newTab(at: b)        // tab 1 starts at b, active = 1
