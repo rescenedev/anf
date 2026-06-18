@@ -12,11 +12,28 @@ final class FavoritesStore {
     private let key = "anf.favorites.v1"
 
     private let importedKey = "anf.favorites.importedPaths"
+    /// Set once the default folders (Home/Desktop/…) have been seeded into the
+    /// editable favorites — the #61 merge of the old auto "Favorites" section and
+    /// the user "Pinned" section into one Finder-style editable list.
+    private let seededKey = "anf.favorites.seededDefaults.v2"
 
     init() {
         let paths = UserDefaults.standard.stringArray(forKey: key) ?? []
         items = paths.map { URL(fileURLWithPath: $0) }
         importFromSettings()
+    }
+
+    /// On first run under the merged model, fold the default favorite folders in
+    /// front of any pins the user already had, so the unified "Favorites" section
+    /// starts populated exactly like before — but now fully editable (#61).
+    func seedDefaultsIfNeeded(_ defaults: [URL]) {
+        guard !UserDefaults.standard.bool(forKey: seededKey) else { return }
+        UserDefaults.standard.set(true, forKey: seededKey)
+        let have = Set(items.map(\.standardizedFileURL.path))
+        let fresh = defaults.filter { !have.contains($0.standardizedFileURL.path) }
+        guard !fresh.isEmpty else { return }
+        items = fresh + items
+        persist()
     }
 
     /// Import a `"favorites": ["~/Code", "/Volumes/x", …]` list from the ⌘,
