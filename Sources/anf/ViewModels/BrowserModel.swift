@@ -523,11 +523,18 @@ final class BrowserModel: Identifiable {
     private(set) var remoteError: String?
 
     /// Synthetic address for a remote path; reuses the normal navigation/history.
+    /// The `host` is an ~/.ssh/config alias, which can legitimately contain "/",
+    /// "@", etc. (VSCode-style "homelab/nuc/-root", issue #70). Those aren't valid
+    /// in a URL host, so percent-encode the alias into the host position — and
+    /// since `URL.host` decodes it back, `remoteHost` keeps returning the full
+    /// alias with no change needed on the read side.
     static func remoteURL(host: String, path: String) -> URL {
-        var c = URLComponents()
-        c.scheme = "sftp"; c.host = host
-        c.path = path.hasPrefix("/") ? path : "/" + path
-        return c.url ?? URL(string: "sftp://\(host)/")!
+        var hostAllowed = CharacterSet.alphanumerics
+        hostAllowed.insert(charactersIn: "-._~")   // RFC 3986 unreserved
+        let h = host.addingPercentEncoding(withAllowedCharacters: hostAllowed) ?? host
+        let p = path.hasPrefix("/") ? path : "/" + path
+        let pe = p.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? p
+        return URL(string: "sftp://\(h)\(pe)") ?? URL(string: "sftp://\(h)/")!
     }
 
     /// Open a host's home directory in this pane as a browsable remote folder.
