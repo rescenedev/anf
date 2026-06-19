@@ -351,23 +351,27 @@ final class FileTransfer {
     /// item-count progress (#63).
     nonisolated static func byteTrackTotal(of urls: [URL]) -> Int64? {
         guard (1...64).contains(urls.count) else { return nil }
-        let keys: Set<URLResourceKey> = [.isRegularFileKey, .totalFileAllocatedSizeKey, .fileSizeKey]
+        // Logical size (fileSize), NOT allocated size: copyfile preallocates the
+        // destination's allocated blocks to the FULL size up front, so allocated
+        // size can never measure progress — only the logical EOF grows as bytes
+        // land. Polling allocated size pegged the bar near 100% (#63 follow-up).
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey]
         var total: Int64 = 0
         for url in urls {
             guard let v = try? url.resourceValues(forKeys: keys), v.isRegularFile == true
             else { return nil }
-            total += Int64(v.totalFileAllocatedSize ?? v.fileSize ?? 0)
+            total += Int64(v.fileSize ?? 0)
         }
         return total > 0 ? total : nil
     }
 
-    /// Bytes currently written at `paths` — polled to drive copy progress.
+    /// Logical bytes written to `paths` so far (the destination's EOF), which
+    /// tracks actual copied bytes — the allocated size is preallocated full.
     nonisolated static func bytesPresent(at paths: [URL]) -> Int64 {
-        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileSizeKey]
         var total: Int64 = 0
         for p in paths {
-            if let v = try? p.resourceValues(forKeys: keys) {
-                total += Int64(v.totalFileAllocatedSize ?? v.fileSize ?? 0)
+            if let v = try? p.resourceValues(forKeys: [.fileSizeKey]) {
+                total += Int64(v.fileSize ?? 0)
             }
         }
         return total
