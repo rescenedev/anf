@@ -58,6 +58,21 @@ func runTransferTests() {
             T.expect(FileTransfer.bytesPresent(at: [fileA]) > 0, "bytesPresent reads a real file")
             T.equal(FileTransfer.bytesPresent(at: [src.appendingPathComponent("nope")]), 0,
                     "a missing path contributes 0 bytes")
+            // Progress MUST follow logical size (EOF), not allocated blocks: a
+            // copy's destination has its allocated size preallocated full up
+            // front, so allocated size would peg the bar near 100% the whole copy
+            // (the reported display bug). A sparse file proves which one we read:
+            // logical 4MB, allocated ~0.
+            let sparse = src.appendingPathComponent("sparse.bin")
+            fm.createFile(atPath: sparse.path, contents: nil)
+            if let fh = try? FileHandle(forWritingTo: sparse) {
+                try? fh.truncate(atOffset: 4_000_000)   // logical EOF = 4MB, no blocks written
+                try? fh.close()
+            }
+            T.equal(FileTransfer.bytesPresent(at: [sparse]), 4_000_000,
+                    "bytesPresent reports the logical EOF, not the (near-zero) allocated size")
+            T.equal(FileTransfer.byteTrackTotal(of: [sparse]), 4_000_000,
+                    "byteTrackTotal uses logical size too, so the fraction reaches 100%")
         }
 
         T.group("transfer HUD label: name for one item, count for many (#63)") {
