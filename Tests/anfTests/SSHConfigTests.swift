@@ -41,4 +41,23 @@ func runSSHConfigTests() {
         T.expect(SSHConfig.parse("").isEmpty, "empty config → no hosts")
         T.expect(SSHConfig.parse("# just a comment\nForwardAgent yes").isEmpty, "no Host lines → none")
     }
+
+    MainActor.assumeIsolated {
+        T.group("remote URL keeps an alias with '/' intact (#70)") {
+            // VSCode-style grouped aliases ("homelab/nuc/-root") aren't valid in a
+            // URL host; remoteURL must encode them so remoteHost decodes back fully
+            // instead of collapsing to the first segment ("homelab").
+            let alias = "homelab/soyo/-root"
+            let url = BrowserModel.remoteURL(host: alias, path: "/home/dearmai")
+            T.equal(url.scheme, "sftp", "scheme is sftp")
+            T.equal(url.host, alias, "the full grouped alias survives (not just 'homelab')")
+            T.equal(url.path, "/home/dearmai", "path preserved")
+            // An '@' in the alias survives too.
+            let at = BrowserModel.remoteURL(host: "user@box/x", path: "/")
+            T.equal(at.host, "user@box/x", "'@' and '/' in the alias both survive")
+            // A plain alias is unchanged.
+            T.equal(BrowserModel.remoteURL(host: "prod", path: "/var").host, "prod",
+                    "a normal alias round-trips unchanged")
+        }
+    }
 }
