@@ -54,25 +54,39 @@ func runTransferTests() {
             // A directory → fall back to item-count progress (avoid sizing a tree).
             T.equal(FileTransfer.byteTrackTotal(of: [src]), nil, "a directory is NOT byte-tracked")
             T.equal(FileTransfer.byteTrackTotal(of: []), nil, "empty input → nil")
-            // bytesPresent sums what's on disk.
-            T.expect(FileTransfer.bytesPresent(at: [fileA]) > 0, "bytesPresent reads a real file")
-            T.equal(FileTransfer.bytesPresent(at: [src.appendingPathComponent("nope")]), 0,
-                    "a missing path contributes 0 bytes")
-            // Progress MUST follow logical size (EOF), not allocated blocks: a
-            // copy's destination has its allocated size preallocated full up
-            // front, so allocated size would peg the bar near 100% the whole copy
-            // (the reported display bug). A sparse file proves which one we read:
-            // logical 4MB, allocated ~0.
+            // byteTrackTotal uses logical size (a sparse file proves it: logical
+            // 4MB, allocated ~0) so the fraction can actually reach 100%.
             let sparse = src.appendingPathComponent("sparse.bin")
             fm.createFile(atPath: sparse.path, contents: nil)
             if let fh = try? FileHandle(forWritingTo: sparse) {
                 try? fh.truncate(atOffset: 4_000_000)   // logical EOF = 4MB, no blocks written
                 try? fh.close()
             }
-            T.equal(FileTransfer.bytesPresent(at: [sparse]), 4_000_000,
-                    "bytesPresent reports the logical EOF, not the (near-zero) allocated size")
             T.equal(FileTransfer.byteTrackTotal(of: [sparse]), 4_000_000,
-                    "byteTrackTotal uses logical size too, so the fraction reaches 100%")
+                    "byteTrackTotal uses logical size, so the fraction reaches 100%")
+        }
+
+        T.group("copyFileCancellable: correct copy + clean failure (#63)") {
+            // NOTE: live progress and mid-file cancellation only happen on a REAL
+            // data copy (cross-volume) — a same-volume copy here is an instant
+            // APFS clone that bypasses copyfile's status callback entirely, so
+            // those paths are verified cross-volume (RAM disk) by hand, not here.
+            // The outer transfer loop also catches a pre-set cancel before calling
+            // this, so what matters same-volume is correctness + failure handling.
+            let from = src.appendingPathComponent("f2.txt")
+            try? "hello copyfile".write(to: from, atomically: true, encoding: .utf8)
+            let to = destDir.appendingPathComponent("f2-copy.txt")
+            let ok = FileTransfer.copyFileCancellable(from: from, to: to, cancel: CancelFlag()) { _ in }
+            T.equal(ok, .copied, "copy reports success")
+            T.equal((try? String(contentsOf: to, encoding: .utf8)), "hello copyfile", "content matches the source")
+            // A bad destination (missing parent dir) → .failed, no file created.
+            let bad = src.appendingPathComponent("nope-dir/x.txt")
+            if case .failed = FileTransfer.copyFileCancellable(from: from, to: bad, cancel: CancelFlag(), onProgress: { _ in }) {
+                T.expect(true, "copy into a missing directory fails cleanly")
+            } else {
+                T.expect(false, "expected .failed for a missing destination directory")
+            }
+            T.expect(!fm.fileExists(atPath: bad.path), "no partial left after a failed copy")
         }
 
         T.group("transfer HUD label: name for one item, count for many (#63)") {

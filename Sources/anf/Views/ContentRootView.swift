@@ -74,6 +74,11 @@ private struct UpdateBanner: View {
 /// active; the cancel button stops between items (finished items are kept).
 private struct TransferHUD: View {
     private var transfer: FileTransfer { FileTransfer.shared }
+    // The bar sits at the bottom by default but can be dragged anywhere (it can
+    // cover the files you're acting on) — requested on #63. The position sticks
+    // for the session.
+    @State private var offset: CGSize = .zero
+    @GestureState private var drag: CGSize = .zero
 
     var body: some View {
         if transfer.isActive {
@@ -91,6 +96,16 @@ private struct TransferHUD: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
             .padding(.bottom, 18)
+            .offset(x: offset.width + drag.width, y: offset.height + drag.height)
+            .gesture(
+                DragGesture()
+                    .updating($drag) { value, state, _ in state = value.translation }
+                    .onEnded { value in
+                        offset.width += value.translation.width
+                        offset.height += value.translation.height
+                    }
+            )
+            .help(L("Drag to move", "드래그해서 이동"))
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
