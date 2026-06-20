@@ -38,6 +38,16 @@ struct TerminalPanel: View {
                             }
                         }
                     }
+                    // New terminal tab: the terminal carries its own tabs, opened
+                    // here rather than spawned per folder-tab (#76).
+                    Button {
+                        workspace.newTerminalTab()
+                    } label: {
+                        Image(systemName: "plus").font(.system(size: 10, weight: .bold))
+                            .frame(width: 18, height: 18).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).focusEffectDisabled()
+                    .help(L("New Terminal Tab", "새 터미널 탭"))
                     Spacer(minLength: 6)
                     Button {
                         workspace.showTerminal = false
