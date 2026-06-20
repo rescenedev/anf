@@ -726,7 +726,11 @@ final class WorkspaceModel {
     var activePaneModel: PaneModel { panes[min(activePane, panes.count - 1)] }
     var active: BrowserModel { activePaneModel.current }
 
-    func focusPane(_ i: Int) { if panes.indices.contains(i) { activePane = i } }
+    func focusPane(_ i: Int) {
+        // Only mutate when it actually changes: clicking inside the already-active
+        // pane shouldn't fire an observation → re-render on every click (#73).
+        if panes.indices.contains(i), activePane != i { activePane = i }
+    }
 
     func cyclePane(_ delta: Int) {
         let n = layout.count
