@@ -152,33 +152,20 @@ final class FileTransfer {
                 // don't capture the mutable `work`.
                 let workCount = work.count
                 let firstSrc = work[0].src
-                let destPaths = work.map(\.dest)
                 let trackBytes = Self.byteTrackTotal(of: work.map(\.src))
                 await MainActor.run { [weak self] in
                     self?.label = Self.transferLabel(verb: verb, count: workCount, first: firstSrc)
                 }
 
-                // Byte-accurate progress for a few big files (#63): item-count
-                // progress sits at 0% through a single large file, which reads as
-                // frozen. Poll the growing destination size instead. The copy
-                // itself is untouched (still copyItem → APFS clones stay instant);
-                // the poller only READS sizes. nil total → item-count progress.
-                let pollStop = CancelFlag()
-                if let total = trackBytes {
-                    Task.detached(priority: .utility) { [weak self] in
-                        while !pollStop.isSet {
-                            let copied = Self.bytesPresent(at: destPaths)
-                            let f = Swift.min(Double(copied) / Double(total), 0.99)
-                            await MainActor.run { [weak self] in
-                                guard let self, !self.jobDone, self.jobGeneration == gen else { return }
-                                self.fraction = f
-                            }
-                            try? await Task.sleep(nanoseconds: 150_000_000)
-                        }
-                    }
-                }
-
                 var done: [(URL, URL)] = []
+                // Byte-accurate progress + mid-file cancel for a few big files
+                // (#63): copyfile's status callback reports the bytes as they land
+                // (no frozen 0% / stuck 99%) and aborts mid-file when Cancel is
+                // pressed. Only for COPY (move keeps moveItem); nil total or a
+                // folder/large batch → plain copyItem with item-count progress.
+                let byteCopy = (trackBytes != nil) && !move
+                var copiedPerFile = [Int64](repeating: 0, count: work.count)
+                var lastBytePush = ContinuousClock.now
                 // Concurrency by volume: a same-volume move is an instant metadata
                 // rename → serial. A local APFS copy clones cheaply → every core. But
                 // a NETWORK copy/move (real bytes over one SMB connection) thrashes if
@@ -197,12 +184,35 @@ final class FileTransfer {
                     let (src, dest) = work[i]
                     var okPair: (URL, URL)?
                     var failure: String?
-                    do {
-                        if move { try FileManager.default.moveItem(at: src, to: dest) }
-                        else    { try FileManager.default.copyItem(at: src, to: dest) }
-                        okPair = (src, dest)
-                    } catch {
-                        failure = "\(src.lastPathComponent): \(error.localizedDescription)"
+                    if byteCopy, let total = trackBytes {
+                        switch Self.copyFileCancellable(from: src, to: dest, cancel: flag, onProgress: { thisCopied in
+                            lock.lock()
+                            copiedPerFile[i] = thisCopied
+                            let sum = copiedPerFile.reduce(0, +)
+                            let now = ContinuousClock.now
+                            let push = now - lastBytePush > .milliseconds(80)
+                            if push { lastBytePush = now }
+                            lock.unlock()
+                            if push {
+                                let f = Swift.min(Double(sum) / Double(total), 0.99)
+                                DispatchQueue.main.async { [weak self] in
+                                    guard let self else { return }
+                                    MainActor.assumeIsolated { if !self.jobDone { self.fraction = f } }
+                                }
+                            }
+                        }) {
+                        case .copied:          okPair = (src, dest)
+                        case .cancelled:       break   // Cancel pressed mid-file; partial already removed
+                        case .failed(let msg): failure = "\(src.lastPathComponent): \(msg)"
+                        }
+                    } else {
+                        do {
+                            if move { try FileManager.default.moveItem(at: src, to: dest) }
+                            else    { try FileManager.default.copyItem(at: src, to: dest) }
+                            okPair = (src, dest)
+                        } catch {
+                            failure = "\(src.lastPathComponent): \(error.localizedDescription)"
+                        }
                     }
                     lock.lock()
                     if let okPair { done.append(okPair) }
@@ -221,7 +231,6 @@ final class FileTransfer {
                         }
                     }
                 }
-                pollStop.set()   // stop the byte poller now the copy is finished
                 // If the destination folder was pre-created for expansion but every
                 // child copy failed, the empty stub directory would be orphaned with
                 // no undo record (result.done is empty, so nothing is recorded).
@@ -365,16 +374,47 @@ final class FileTransfer {
         return total > 0 ? total : nil
     }
 
-    /// Logical bytes written to `paths` so far (the destination's EOF), which
-    /// tracks actual copied bytes — the allocated size is preallocated full.
-    nonisolated static func bytesPresent(at paths: [URL]) -> Int64 {
-        var total: Int64 = 0
-        for p in paths {
-            if let v = try? p.resourceValues(forKeys: [.fileSizeKey]) {
-                total += Int64(v.fileSize ?? 0)
+    enum CopyOutcome: Equatable { case copied, cancelled; case failed(String) }
+
+    /// Copy ONE regular file with `copyfile(3)` + a status callback, which gives
+    /// two things FileManager.copyItem can't: live byte progress, and **mid-file
+    /// cancellation** (Cancel did nothing while a big file was copying — #63).
+    /// COPYFILE_CLONE keeps same-volume copies instant; a partial destination is
+    /// removed on cancel/failure. `onProgress` is the cumulative bytes for THIS
+    /// file.
+    nonisolated static func copyFileCancellable(
+        from src: URL, to dst: URL, cancel: CancelFlag,
+        onProgress: @escaping (Int64) -> Void
+    ) -> CopyOutcome {
+        final class Ctx { let cancel: CancelFlag; let onProgress: (Int64) -> Void
+            init(_ c: CancelFlag, _ p: @escaping (Int64) -> Void) { cancel = c; onProgress = p } }
+        let ctx = Ctx(cancel, onProgress)
+        let state = copyfile_state_alloc()
+        defer { copyfile_state_free(state) }
+
+        let cb: @convention(c) (Int32, Int32, copyfile_state_t?,
+                                UnsafePointer<CChar>?, UnsafePointer<CChar>?,
+                                UnsafeMutableRawPointer?) -> Int32 = { what, stage, st, _, _, ctxPtr in
+            guard let ctxPtr else { return COPYFILE_CONTINUE }
+            let ctx = Unmanaged<Ctx>.fromOpaque(ctxPtr).takeUnretainedValue()
+            if ctx.cancel.isSet { return COPYFILE_QUIT }
+            if what == COPYFILE_COPY_DATA, stage == COPYFILE_PROGRESS, let st {
+                var copied: off_t = 0
+                copyfile_state_get(st, UInt32(COPYFILE_STATE_COPIED), &copied)
+                ctx.onProgress(Int64(copied))
             }
+            return COPYFILE_CONTINUE
         }
-        return total
+        copyfile_state_set(state, UInt32(COPYFILE_STATE_STATUS_CB),
+                           unsafeBitCast(cb, to: UnsafeRawPointer.self))
+        copyfile_state_set(state, UInt32(COPYFILE_STATE_STATUS_CTX),
+                           Unmanaged.passUnretained(ctx).toOpaque())
+
+        let r = copyfile(src.path, dst.path, state, copyfile_flags_t(COPYFILE_ALL | COPYFILE_CLONE))
+        if r == 0 { return .copied }
+        let e = String(cString: strerror(errno))
+        try? FileManager.default.removeItem(at: dst)   // drop any partial copy
+        return cancel.isSet ? .cancelled : .failed(e)
     }
 
     /// HUD label: a single item shows its name ("Copying bigfile.zip"); a batch
