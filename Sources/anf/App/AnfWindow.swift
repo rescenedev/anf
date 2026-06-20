@@ -98,6 +98,11 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         // controller still strong-refs it — a double free that segfaults inside
         // the close animation. The controller owns the window's lifetime.
         window.isReleasedWhenClosed = false
+        // anf has its OWN per-window tab strip. macOS automatic window tabbing
+        // (on when the user's "Prefer tabs" setting is Always/Full Screen) would
+        // otherwise merge a second window into a native tab group and overlay its
+        // own tab bar, so the second window's anf tab strip fails to show (#76).
+        window.tabbingMode = .disallowed
 
         let container = NSViewController()
         let base = NSVisualEffectView()
