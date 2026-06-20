@@ -306,8 +306,10 @@ final class GridCollectionView: NSCollectionView {
     weak var coordinator: IconGridView.Coordinator?
 
     override func mouseDown(with event: NSEvent) {
-        coordinator?.focusPaneFromMouse()
+        // super FIRST so focusing the pane can't re-render mid-drag and cancel
+        // it — pane-to-pane drag & drop failed in a split otherwise (issue #73).
         super.mouseDown(with: event)
+        coordinator?.focusPaneFromMouse()
     }
 
     override func rightMouseDown(with event: NSEvent) {

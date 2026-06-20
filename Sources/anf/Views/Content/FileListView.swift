@@ -564,8 +564,12 @@ final class FileTableView: NSTableView {
     weak var coordinator: FileListView.Coordinator?
 
     override func mouseDown(with event: NSEvent) {
-        coordinator?.focusPaneFromMouse()
+        // super FIRST: NSTableView.mouseDown runs the modal select/drag tracking
+        // loop. Focusing the pane before it mutates SwiftUI state (activePane),
+        // whose re-render cancelled the nascent drag — so pane-to-pane drag &
+        // drop silently failed in a split (issue #73). Focus after the drag.
         super.mouseDown(with: event)
+        coordinator?.focusPaneFromMouse()
     }
 
     override func rightMouseDown(with event: NSEvent) {

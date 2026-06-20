@@ -175,8 +175,9 @@ private final class FilmstripCollectionView: NSCollectionView {
     weak var coordinator: FilmstripView.Coordinator?
 
     override func mouseDown(with event: NSEvent) {
-        coordinator?.focusPaneFromMouse()
+        // super FIRST so focusing can't re-render mid-drag and cancel it (#73).
         super.mouseDown(with: event)
+        coordinator?.focusPaneFromMouse()
     }
 
     override func rightMouseDown(with event: NSEvent) {

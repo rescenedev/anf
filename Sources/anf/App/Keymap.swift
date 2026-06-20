@@ -275,15 +275,20 @@ final class Keymap {
     static func openSettingsFile() {
         let url = ensureFileExists()
         migrateMissingSettings(at: url)
-        // ⌘, must always surface the file. A bare open() silently no-ops when no
-        // app is associated with .json, which read as "Settings does nothing".
-        // Fall back to TextEdit, then to revealing it in Finder.
-        if NSWorkspace.shared.open(url) { return }
+        // Open the config in TextEdit, NOT via the .json default-app association.
+        // That association is whatever the user happens to have for .json — which
+        // opened a random *other* app (issue #73: "settings opens a different
+        // application"). TextEdit reliably surfaces the editable text. Power users
+        // can still open ~/.config/anf/keybindings.json in their own editor.
         let textEdit = URL(fileURLWithPath: "/System/Applications/TextEdit.app")
         NSWorkspace.shared.open([url], withApplicationAt: textEdit,
                                 configuration: NSWorkspace.OpenConfiguration()) { _, error in
-            if error != nil {
-                DispatchQueue.main.async { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            guard error != nil else { return }
+            // TextEdit unavailable → last resort: the default handler, then reveal.
+            DispatchQueue.main.async {
+                if !NSWorkspace.shared.open(url) {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
             }
         }
     }
