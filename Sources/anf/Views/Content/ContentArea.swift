@@ -61,13 +61,12 @@ struct ContentArea: View {
                              copy: !NSEvent.modifierFlags.contains(.command))
             return true
         }
-        // Click on empty space clears selection (icon/gallery modes).
+        // Empty-area deselect is handled by the native content views (grid/table).
+        // A SwiftUI tap here also fires through icon cells when their hitTest passes
+        // clicks to the collection view, which immediately cleared selection (#76).
         .background(
             Color.clear.contentShape(Rectangle())
-                .onTapGesture {
-                    onFocus()
-                    model.selection.removeAll()
-                }
+                .onTapGesture { onFocus() }
                 .contextMenu { BackgroundMenu(model: model) }
         )
     }

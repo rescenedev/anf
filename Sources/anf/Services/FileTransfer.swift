@@ -49,19 +49,10 @@ final class FileTransfer {
         let sources = sources.filter { $0.deletingLastPathComponent().path != destination.path || !move }
         guard !sources.isEmpty else { completion(); return }
 
-        // 1) Resolve name conflicts up front, once for the whole batch.
-        let conflicts = sources.filter {
-            FileManager.default.fileExists(
-                atPath: destination.appendingPathComponent($0.lastPathComponent).path)
-        }
-        var policy: ConflictPolicy = .keepBoth
-        if !conflicts.isEmpty {
-            guard let chosen = Self.askConflict(count: conflicts.count,
-                                                first: conflicts[0].lastPathComponent) else {
-                completion(); return   // cancelled
-            }
-            policy = chosen
-        }
+        // 1) Name conflicts auto-rename the incoming copy ("name 2", Finder-style)
+        // instead of prompting — requested default behavior. The plan below routes
+        // each colliding source through uniqueURL; no skip/overwrite prompt.
+        let policy: ConflictPolicy = .keepBoth
 
         // 2) Plan: (src, dest) pairs after applying the policy.
         var plan: [(src: URL, dest: URL)] = []
@@ -281,25 +272,6 @@ final class FileTransfer {
     }
 
     // MARK: - Helpers
-
-    /// One batch-level question, Finder-style.
-    private static func askConflict(count: Int, first: String) -> ConflictPolicy? {
-        let alert = NSAlert()
-        alert.messageText = count == 1
-            ? L("An item named ‘\(first)’ already exists", "‘\(first)’ 항목이 이미 있습니다")
-            : L("\(count) items with the same names already exist", "같은 이름의 항목이 \(count)개 있습니다")
-        alert.informativeText = L("Keep Both numbers the copies. Overwritten items are moved to the Trash.", "둘 다 유지하면 복사본에 번호가 붙습니다. 덮어쓰기한 기존 항목은 휴지통으로 이동합니다.")
-        alert.addButton(withTitle: L("Keep Both", "둘 다 유지"))
-        alert.addButton(withTitle: L("Overwrite", "덮어쓰기"))
-        alert.addButton(withTitle: L("Skip", "건너뛰기"))
-        alert.addButton(withTitle: L("Cancel", "취소"))
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: return .keepBoth
-        case .alertSecondButtonReturn: return .overwrite
-        case .alertThirdButtonReturn: return .skip
-        default: return nil
-        }
-    }
 
     /// Volume identifier for cross-volume move detection (nil on failure). Uses the
     /// device number (`st_dev`) — `URLResourceValues.volumeIdentifier` is an opaque
