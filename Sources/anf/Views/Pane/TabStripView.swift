@@ -26,8 +26,8 @@ struct TabStripView: View {
                     active: i == pane.activeIndex,
                     closable: pane.tabs.count > 1,
                     locked: tab.isLocked,
-                    onSelect: { workspace.focusPane(index); pane.select(i) },
-                    onClose: { pane.closeTab(i) },
+                    onSelect: { workspace.focusPane(index); pane.select(i); workspace.save() },
+                    onClose: { pane.closeTab(i); workspace.save() },
                     onToggleLock: { tab.toggleLock() }
                 )
                 .frame(maxWidth: .infinity)   // equal-width: tabs fill the bar
@@ -41,7 +41,7 @@ struct TabStripView: View {
                 }
             }
             Button {
-                workspace.focusPane(index); pane.newTab()
+                workspace.focusPane(index); pane.newTab(); workspace.save()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
