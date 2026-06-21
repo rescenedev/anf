@@ -818,42 +818,50 @@ final class WorkspaceModel {
         favorites.toggle(active.currentURL)
     }
 
-    /// What ⌃` should do, factored out so it's unit-testable without a live PTY.
-    /// ⌃` is folder-aware: hide only when the visible active tab is a local shell
-    /// for the CURRENT folder; otherwise surface this folder's local shell. So it
-    /// opens a terminal for the current folder even when an SSH/SFTP tab or a
-    /// different folder's terminal is showing, instead of just toggling the drawer
-    /// (#29) — previously it never gave the current folder a shell.
-    enum TerminalToggle: Equatable { case hide, showLocal }
-    static func terminalToggleAction(showing: Bool, activeIsLocalShellForCurrentFolder: Bool) -> TerminalToggle {
-        (showing && activeIsLocalShellForCurrentFolder) ? .hide : .showLocal
+    /// What ⌃` (and the toolbar button) does — pure show/hide so it's unit-testable
+    /// without a live PTY. The terminal carries its OWN tabs now, so toggling no
+    /// longer spawns a per-folder shell; it just reveals or hides the drawer (#76).
+    enum TerminalToggle: Equatable { case hide, show }
+    static func terminalToggleAction(showing: Bool) -> TerminalToggle {
+        showing ? .hide : .show
     }
 
     func toggleTerminal() {
-        let here = active.currentURL.standardizedFileURL
-        let activeIsLocalHere = terminal != nil && terminal?.sshHost == nil
-            && terminal?.startDirectory?.standardizedFileURL == here
-        switch Self.terminalToggleAction(showing: showTerminal,
-                                         activeIsLocalShellForCurrentFolder: activeIsLocalHere) {
-        case .hide:      showTerminal = false
-        case .showLocal: openTerminal(at: active.currentURL)   // focus/create this folder's shell
+        switch Self.terminalToggleAction(showing: showTerminal) {
+        case .hide:
+            showTerminal = false   // keep sessions running; just hide the drawer
+        case .show:
+            // First open: give the drawer one shell so it isn't empty. Started at
+            // the current folder as a convenience, not as a per-folder binding.
+            if terminals.isEmpty { addTerminalTab(.shell(at: active.currentURL)) }
+            showTerminal = true
+            focusActiveTerminal()
         }
-        // When (re)opening, hand keyboard focus to the terminal. The view is
-        // re-inserted by SwiftUI asynchronously, so retry until it's in a window.
-        if showTerminal, let t = terminal {
-            // Retry until the view lands in a window, but STOP once focused —
-            // an unconditional 3-shot stole focus back if the user toggled the
-            // terminal off within 0.2s.
-            func tryFocus(_ remaining: [Double]) {
-                guard showTerminal, terminal === t else { return }
-                if t.view.window != nil { t.focus(); return }
-                guard let next = remaining.first else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + next) {
-                    tryFocus(Array(remaining.dropFirst()))
-                }
+    }
+
+    /// The "+" in the terminal drawer: always open a fresh terminal tab, started at
+    /// the current folder. This is the terminal's own tabbing — independent of the
+    /// file-browser's folder tabs (#76).
+    func newTerminalTab() {
+        addTerminalTab(.shell(at: active.currentURL))
+        showTerminal = true
+        focusActiveTerminal()
+    }
+
+    /// Hand keyboard focus to the active terminal once SwiftUI re-inserts its view
+    /// into a window. Retry briefly, but stop if the drawer closed or the active
+    /// session changed in the meantime (don't steal focus back).
+    private func focusActiveTerminal() {
+        guard let t = terminal else { return }
+        func tryFocus(_ remaining: [Double]) {
+            guard showTerminal, terminal === t else { return }
+            if t.view.window != nil { t.focus(); return }
+            guard let next = remaining.first else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + next) {
+                tryFocus(Array(remaining.dropFirst()))
             }
-            tryFocus([0.0, 0.08, 0.2])
         }
+        tryFocus([0.0, 0.08, 0.2])
     }
 
     /// Mdir-style: copy/move the active pane's selection into the next visible pane.

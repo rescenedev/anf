@@ -14,18 +14,14 @@ func runWorkspacePinTests() {
         for d in [a, b, c] { try? fm.createDirectory(at: d, withIntermediateDirectories: true) }
         defer { try? fm.removeItem(at: dir) }
 
-        T.group("⌃` is folder-aware: opens the current folder's shell (#29)") {
+        T.group("⌃` is a plain show/hide; the terminal owns its tabs now (#76)") {
             typealias A = WorkspaceModel.TerminalToggle
-            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShellForCurrentFolder: false), A.showLocal,
-                    "hidden drawer → show this folder's shell")
-            T.equal(WorkspaceModel.terminalToggleAction(showing: false, activeIsLocalShellForCurrentFolder: true), A.showLocal,
-                    "hidden drawer (this folder's shell exists) → show it")
-            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShellForCurrentFolder: true), A.hide,
-                    "this folder's shell is visible → hide")
-            // Reported cases: an SSH tab OR a DIFFERENT folder's terminal is
-            // visible → ⌃` opens THIS folder's terminal instead of just hiding.
-            T.equal(WorkspaceModel.terminalToggleAction(showing: true, activeIsLocalShellForCurrentFolder: false), A.showLocal,
-                    "another folder's terminal / SSH visible → open this folder's shell")
+            // Decoupled from folder navigation: hidden → show, visible → hide.
+            // New terminals are opened explicitly via the drawer's "+" instead.
+            T.equal(WorkspaceModel.terminalToggleAction(showing: false), A.show,
+                    "hidden drawer → reveal it")
+            T.equal(WorkspaceModel.terminalToggleAction(showing: true), A.hide,
+                    "visible drawer → hide it")
         }
 
         T.group("openPinned in a split navigates only the focused pane") {
