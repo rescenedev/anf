@@ -435,7 +435,7 @@ struct FileListView: NSViewRepresentable {
             if !(op == .on && isDropFolder(item(atRow: row))) {
                 tableView.setDropRow(-1, dropOperation: .above)   // whole-table drop
             }
-            return copyRequested(info) ? .copy : .move
+            return dropOp(info)
         }
 
         func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo,
@@ -464,6 +464,16 @@ struct FileListView: NSViewRepresentable {
         /// ours (Finder's cross-volume convention), not AppKit's move-by-priority.
         private func copyRequested(_ info: NSDraggingInfo) -> Bool {
             !NSEvent.modifierFlags.contains(.command)
+        }
+
+        /// Operation to REPORT to AppKit, clamped to what the (modifier-adjusted)
+        /// source mask allows so the drop is never rejected by an empty
+        /// intersection. Holding ⌘ collapses the mask to `.generic`, so we report
+        /// `.generic` there and still perform the move via `copyRequested` (#76).
+        private func dropOp(_ info: NSDraggingInfo) -> NSDragOperation {
+            let allowed = info.draggingSourceOperationMask
+            let want: NSDragOperation = copyRequested(info) ? .copy : .move
+            return allowed.contains(want) ? want : allowed
         }
 
         // MARK: Inline rename commit

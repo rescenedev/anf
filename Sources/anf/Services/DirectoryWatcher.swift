@@ -43,10 +43,27 @@ final class FSEventDirectoryWatcher: DirectoryWatcher {
 
     /// Boxes the Swift closure so it can ride through the C `info` pointer.
     private final class Box { let fn: @Sendable () -> Void; init(_ f: @escaping @Sendable () -> Void) { fn = f } }
+    /// Last seen content signature — mutated only on `queue` (single-threaded),
+    /// so a content-preserving FSEvent burst doesn't reload the UI forever.
+    private final class SigHolder: @unchecked Sendable { var value = 0 }
 
     func start(_ url: URL, onChange: @escaping @Sendable () -> Void) {
         stop()
-        let info = Unmanaged.passRetained(Box(onChange)).toOpaque()
+        // FSEvents fire for metadata/atime/.DS_Store touches and other background
+        // activity that doesn't change the visible listing. Without a guard, a
+        // folder the system keeps touching (e.g. Desktop) reloads the UI every
+        // 0.2s forever, which cancels in-flight interactions like drag (#76).
+        // Re-list and compare a content signature; only notify on a real change —
+        // the same dedup the polling watcher already does.
+        let sig = SigHolder()
+        sig.value = PollingDirectoryWatcher.signature(of: url)
+        let gate: @Sendable () -> Void = {
+            let now = PollingDirectoryWatcher.signature(of: url)
+            guard now != sig.value else { return }
+            sig.value = now
+            onChange()
+        }
+        let info = Unmanaged.passRetained(Box(gate)).toOpaque()
         var ctx = FSEventStreamContext(
             version: 0, info: info, retain: nil,
             release: { ptr in if let ptr { Unmanaged<Box>.fromOpaque(ptr).release() } },

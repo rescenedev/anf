@@ -131,7 +131,11 @@ struct IconGridView: NSViewRepresentable {
                 }
                 syncState.invalidateItems()   // re-make cells at the new size
             }
-            if syncState.itemsChanged(version: model.itemsVersion) {
+            if isDragging {
+                // Never reload mid-drag — a reloadData rebuilds the items and
+                // cancels the drag session. The pending itemsVersion is picked up
+                // by the next sync once the drag ends (#76).
+            } else if syncState.itemsChanged(version: model.itemsVersion) {
                 cv.reloadData()
                 applySelection(cv, force: true, scroll: false)
             } else {
@@ -288,14 +292,14 @@ struct IconGridView: NSViewRepresentable {
             guard draggingInfo.draggingPasteboard
                     .canReadObject(forClasses: [NSURL.self], options: nil) else { return [] }
             let path = proposedIndexPath.pointee as IndexPath
+            // Drop ON a folder → into it. Anything else → flip to a between-items
+            // drop (whole-pane → current folder). Keep AppKit's proposed index
+            // path untouched; overwriting it with an out-of-range index made the
+            // collection view reject the drop entirely (#76).
             if !(dropOperation.pointee == .on && isDropFolder(itemAt(path))) {
-                // Redirect to a whole-pane drop (between items, at the end) so the
-                // collection view accepts empty-area drops instead of rejecting them.
-                let end = IndexPath(item: collectionView.numberOfItems(inSection: 0), section: 0)
-                proposedIndexPath.pointee = end as NSIndexPath
                 dropOperation.pointee = .before
             }
-            return copyRequested(draggingInfo) ? .copy : .move
+            return dropOp(draggingInfo)
         }
 
         func collectionView(_ collectionView: NSCollectionView,
@@ -324,6 +328,34 @@ struct IconGridView: NSViewRepresentable {
         /// Split-pane drag defaults to COPY; hold ⌘ to MOVE instead (#76).
         private func copyRequested(_ info: NSDraggingInfo) -> Bool {
             !NSEvent.modifierFlags.contains(.command)
+        }
+
+        /// Operation to REPORT to AppKit, clamped to the (modifier-adjusted) source
+        /// mask so an empty intersection never rejects the drop. ⌘ collapses the
+        /// mask to `.generic`; we report that and still move via `copyRequested`.
+        private func dropOp(_ info: NSDraggingInfo) -> NSDragOperation {
+            let allowed = info.draggingSourceOperationMask
+            let want: NSDragOperation = copyRequested(info) ? .copy : .move
+            return allowed.contains(want) ? want : allowed
+        }
+
+        /// True between drag-session begin/end. `sync()` skips its `reloadData`
+        /// while set, so a folder change that lands mid-drag can't rebuild the
+        /// grid and cancel the drag (#76).
+        private(set) var isDragging = false
+
+        func collectionView(_ collectionView: NSCollectionView,
+                            draggingSession session: NSDraggingSession,
+                            willBeginAt screenPoint: NSPoint,
+                            forItemsAt indexPaths: Set<IndexPath>) {
+            isDragging = true
+        }
+
+        func collectionView(_ collectionView: NSCollectionView,
+                            draggingSession session: NSDraggingSession,
+                            endedAt screenPoint: NSPoint,
+                            dragOperation operation: NSDragOperation) {
+            isDragging = false
         }
     }
 }
