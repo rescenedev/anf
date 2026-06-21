@@ -224,7 +224,6 @@ struct IconGridView: NSViewRepresentable {
                                                for: indexPath) as! IconItem
             if let item = itemAt(indexPath) {
                 cell.configure(with: item, iconSide: model.iconSize)
-                cell.onDoubleClick = { [weak self] in self?.model.open(item) }
             }
             return cell
         }
@@ -271,6 +270,11 @@ struct IconGridView: NSViewRepresentable {
                 return FileItemMenu.build(for: it, model: model)
             }
             return FileItemMenu.background(model: model)
+        }
+
+        func openItem(at point: NSPoint, in cv: NSCollectionView) {
+            guard let ip = cv.indexPathForItem(at: point), let item = itemAt(ip) else { return }
+            model.open(item)
         }
 
         // MARK: Drag & drop
@@ -365,9 +369,15 @@ final class GridCollectionView: NSCollectionView {
     weak var coordinator: IconGridView.Coordinator?
 
     override func mouseDown(with event: NSEvent) {
-        // super FIRST so focusing the pane can't re-render mid-drag and cancel
-        // it — pane-to-pane drag & drop failed in a split otherwise (issue #73).
         super.mouseDown(with: event)
+        if event.clickCount == 2 {
+            let pt = convert(event.locationInWindow, from: nil)
+            coordinator?.openItem(at: pt, in: self)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
         coordinator?.focusPaneFromMouse()
     }
 
@@ -396,10 +406,9 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
     private var currentID: FileItem.ID?
     private var renameCommit: ((String) -> Void)?
     private var renameCancel: (() -> Void)?
-    var onDoubleClick: (() -> Void)?
 
     override func loadView() {
-        view = DoubleClickView { [weak self] in self?.onDoubleClick?() }
+        view = IconCellRootView()
 
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -558,18 +567,14 @@ final class GridSectionHeader: NSView {
     func set(_ text: String) { label.stringValue = text }
 }
 
-/// Plain container that forwards double-clicks (single-click selection is
-/// handled by the collection view's own mouse tracking via super).
-private final class DoubleClickView: NSView {
-    private let onDouble: () -> Void
-    init(onDouble: @escaping () -> Void) {
-        self.onDouble = onDouble
-        super.init(frame: .zero)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func mouseDown(with event: NSEvent) {
-        super.mouseDown(with: event)
-        if event.clickCount == 2 { onDouble() }
+/// Item root: pass clicks through to `NSCollectionView` so selection and file
+/// drag use AppKit's normal event path (custom mouse handlers swallow them).
+private final class IconCellRootView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // During inline rename the label must receive clicks.
+        if subviews.contains(where: { ($0 as? NSTextField)?.isEditable == true }) {
+            return super.hitTest(point)
+        }
+        return nil
     }
 }

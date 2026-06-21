@@ -1487,9 +1487,12 @@ final class BrowserModel: Identifiable {
     }
 
     /// Accept dropped file URLs into `destination` (a folder, or the current dir).
-    /// Holding Option copies; default is move — matching Finder same-volume behaviour.
+    /// Split-pane drag defaults to copy; hold ⌘ to move (#76).
     func acceptDrop(_ urls: [URL], into destination: URL, copy: Bool) {
-        let incoming = urls.filter { $0.deletingLastPathComponent().path != destination.path }
+        let destPath = destination.standardizedFileURL.path
+        let incoming = urls.filter {
+            $0.deletingLastPathComponent().standardizedFileURL.path != destPath || copy
+        }
         guard !incoming.isEmpty else { return }
         FileTransfer.shared.transfer(incoming, into: destination, move: !copy) { [weak self] in
             guard let self else { return }

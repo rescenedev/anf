@@ -29,14 +29,10 @@ struct PaneView: View {
                     onFocus: { workspace.focusPane(index) }
                 )
             }
-            // Focus this pane on any interaction without blocking child gestures. A
-            // zero-distance drag fires on mouse-down, so it also catches clicks on
-            // the empty file-list area (an NSTableView swallows plain taps there).
+            // Focus this pane on tap. Do NOT use a zero-distance SwiftUI DragGesture
+            // here — it competes with AppKit file drag in icon/list views and the
+            // drag ghost stops following the cursor (same lesson as DragDividerHandle).
             .simultaneousGesture(TapGesture().onEnded { workspace.focusPane(index) })
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onEnded { _ in workspace.focusPane(index) }
-            )
             if workspace.pathBarVisible {
                 PathBarView(model: pane.current, onFocus: { workspace.focusPane(index) })
             }
