@@ -202,11 +202,11 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         case .moveDown: return moveVertical(1, extend: shift)
         case .moveLeft: return moveHorizontal(-1, extend: shift)
         case .moveRight: return moveHorizontal(1, extend: shift)
-        case .newTab: workspace.activePaneModel.newTab()
+        case .newTab: workspace.activePaneModel.newTab(); workspace.save()
         case .closeTab:
             // Close the current tab → pane → window (Finder/browser order).
             let pane = workspace.activePaneModel
-            if pane.tabs.count > 1 { pane.closeCurrent() }
+            if pane.tabs.count > 1 { pane.closeCurrent(); workspace.save() }
             else if workspace.layout.count > 1 { workspace.closeActivePane() }
             else { NSApp.keyWindow?.performClose(nil) }
         case .commandPalette: palette?.toggle()
