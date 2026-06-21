@@ -54,10 +54,11 @@ struct ContentArea: View {
                 }
             }
         }
-        // Drop files anywhere in the pane → move them into this folder (enables
-        // pane-to-pane and sidebar drops).
+        // Drop files anywhere in the pane → into this folder (enables pane-to-pane
+        // and sidebar drops). Defaults to COPY; hold ⌘ to MOVE (#76).
         .dropDestination(for: URL.self) { urls, _ in
-            model.acceptDrop(urls, into: model.currentURL, copy: false)
+            model.acceptDrop(urls, into: model.currentURL,
+                             copy: !NSEvent.modifierFlags.contains(.command))
             return true
         }
         // Click on empty space clears selection (icon/gallery modes).

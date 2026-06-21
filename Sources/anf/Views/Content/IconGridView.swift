@@ -321,9 +321,9 @@ struct IconGridView: NSViewRepresentable {
             return item.isBrowsableContainer && !item.isParentRef
         }
 
-        /// Option held (or an external drag) narrows the mask to copy; else move.
+        /// Split-pane drag defaults to COPY; hold ⌘ to MOVE instead (#76).
         private func copyRequested(_ info: NSDraggingInfo) -> Bool {
-            info.draggingSourceOperationMask == .copy
+            !NSEvent.modifierFlags.contains(.command)
         }
     }
 }

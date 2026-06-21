@@ -459,10 +459,11 @@ struct FileListView: NSViewRepresentable {
             return item.isBrowsableContainer && !item.isParentRef
         }
 
-        /// Option held narrows the source mask to copy-only (and external drags
-        /// arrive copy-only); otherwise it's a move.
+        /// Split-pane drag defaults to COPY; hold ⌘ to MOVE instead (#76).
+        /// Read the live ⌘ modifier rather than the source mask so the default is
+        /// ours (Finder's cross-volume convention), not AppKit's move-by-priority.
         private func copyRequested(_ info: NSDraggingInfo) -> Bool {
-            info.draggingSourceOperationMask == .copy
+            !NSEvent.modifierFlags.contains(.command)
         }
 
         // MARK: Inline rename commit
