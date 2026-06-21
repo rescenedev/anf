@@ -813,6 +813,14 @@ final class BrowserModel: Identifiable {
     /// clear→re-select cycle visibly flickers. With it preserved, vanished items
     /// just drop out of `selectedItems` (publishItems recomputes it) and nothing
     /// touches `selection`, so no flicker and no focus theft (#47).
+    /// The "reconnecting to network drive" stall is only for a NETWORK volume that
+    /// blipped. A LOCAL path that won't list (a deleted folder, ~/.Trash, or a
+    /// permission-restricted folder) is NOT a network stall — it gets the normal
+    /// empty/access-denied handling. Pure so it's unit-testable without a real mount.
+    static func shouldNetworkStall(reachable: Bool, isLocal: Bool) -> Bool {
+        !reachable && !isLocal
+    }
+
     func reload(preserveSelection: Bool = false) {
         loadToken += 1
         let token = loadToken
@@ -858,7 +866,14 @@ final class BrowserModel: Identifiable {
                     (PathProbe.canListDirectory(url.path), FileManager.default.isReadableFile(atPath: url.path))
                 }.value
                 guard token == loadToken else { return }
-                if !probe.reachable {
+                // The "reconnecting to network drive" stall only makes sense for a
+                // NETWORK volume that blipped. A LOCAL path that won't list (e.g.
+                // ~/.Trash, or a permission-restricted folder) is not a network stall —
+                // falsely showing that card on the Trash was reported. So gate the
+                // stall on a non-local volume; a local failure falls through to the
+                // normal empty/access-denied handling below.
+                if Self.shouldNetworkStall(reachable: probe.reachable,
+                                           isLocal: DirectoryWatcherFactory.isLocalVolume(url)) {
                     // Volume unreachable → hold the last listing + selection, flag the
                     // stall, and retry until it comes back. Don't wipe `allItems`.
                     networkStalled = true

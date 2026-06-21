@@ -1,10 +1,10 @@
 import Foundation
 @testable import anf
 
-/// A reachable-but-empty folder must read as empty, while a folder whose path
-/// vanished mid-session (the local stand-in for a dropped network mount) must
-/// HOLD its last listing and flag a stall — never blank to a misleading
-/// "permission denied". This is the fix for "the network drive is unstable".
+/// A reachable-but-empty folder reads as empty. A NETWORK volume that goes
+/// unreachable holds its last listing and flags a stall (the "reconnecting to
+/// network drive" card). A LOCAL path that won't list (a deleted folder or the
+/// Trash) is NOT a network stall — that false card on the Trash was reported.
 func runNetworkStallTests() {
     MainActor.assumeIsolated {
         let fm = FileManager.default
@@ -24,19 +24,30 @@ func runNetworkStallTests() {
             T.equal(m.fileItems.count, 0, "empty folder shows empty")
         }
 
-        T.group("vanished path holds the listing and flags a stall") {
+        T.group("vanished LOCAL path is not a network stall (Trash fix)") {
+            // A dropped LOCAL folder (or ~/.Trash that won't list) must NOT show the
+            // "reconnecting to network drive" card — that card is only for network
+            // volumes. Reported: clicking the Trash falsely showed the reconnect card.
             let dir = fm.temporaryDirectory.appendingPathComponent("anfstall-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             try? "x".write(to: dir.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
             let m = BrowserModel(start: dir)
             pump(m) { m.fileItems.count == 1 }
-            T.equal(m.fileItems.count, 1, "file loaded before the drop")
-            try? fm.removeItem(at: dir)   // stand-in for the volume going unreachable
+            try? fm.removeItem(at: dir)   // a LOCAL folder vanishes
             m.reload()
-            pump(m) { m.networkStalled }
-            T.expect(m.networkStalled, "a vanished path flags a network stall")
-            T.equal(m.fileItems.count, 1, "the stall holds the last listing instead of blanking")
-            T.expect(!m.accessDenied, "a stall is not surfaced as a permission error")
+            pump(m) { !m.isLoading }
+            T.expect(!m.networkStalled, "a vanished LOCAL path is not flagged as a network stall")
+        }
+
+        T.group("network-stall decision is gated on a non-local volume") {
+            T.expect(BrowserModel.shouldNetworkStall(reachable: false, isLocal: false),
+                     "unreachable network volume → stall")
+            T.expect(!BrowserModel.shouldNetworkStall(reachable: false, isLocal: true),
+                     "unreachable LOCAL path (Trash / deleted folder) → NOT a stall")
+            T.expect(!BrowserModel.shouldNetworkStall(reachable: true, isLocal: false),
+                     "reachable network volume → not a stall")
+            T.expect(!BrowserModel.shouldNetworkStall(reachable: true, isLocal: true),
+                     "reachable local → not a stall")
         }
     }
 }
