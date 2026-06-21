@@ -54,19 +54,19 @@ struct ContentArea: View {
                 }
             }
         }
-        // Drop files anywhere in the pane → move them into this folder (enables
-        // pane-to-pane and sidebar drops).
+        // Drop files anywhere in the pane → into this folder (enables pane-to-pane
+        // and sidebar drops). Defaults to COPY; hold ⌘ to MOVE (#76).
         .dropDestination(for: URL.self) { urls, _ in
-            model.acceptDrop(urls, into: model.currentURL, copy: false)
+            model.acceptDrop(urls, into: model.currentURL,
+                             copy: !NSEvent.modifierFlags.contains(.command))
             return true
         }
-        // Click on empty space clears selection (icon/gallery modes).
+        // Empty-area deselect is handled by the native content views (grid/table).
+        // A SwiftUI tap here also fires through icon cells when their hitTest passes
+        // clicks to the collection view, which immediately cleared selection (#76).
         .background(
             Color.clear.contentShape(Rectangle())
-                .onTapGesture {
-                    onFocus()
-                    model.selection.removeAll()
-                }
+                .onTapGesture { onFocus() }
                 .contextMenu { BackgroundMenu(model: model) }
         )
     }

@@ -164,14 +164,16 @@ enum FileOperations {
         return created
     }
 
-    /// Next available "name", "name 2", "name 3"… in `dir`.
-    static func uniqueURL(for name: String, in dir: URL) -> URL {
+    /// Next available "name", "name 2", "name 3"… in `dir`. `reserved` holds
+    /// lowercased paths already claimed by an in-flight batch so two same-named
+    /// sources don't both resolve to "name 2" and clobber each other (#76).
+    static func uniqueURL(for name: String, in dir: URL, reserved: Set<String> = []) -> URL {
         let fm = FileManager.default
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension
         var url = dir.appendingPathComponent(name)
         var n = 2
-        while fm.fileExists(atPath: url.path) {
+        while fm.fileExists(atPath: url.path) || reserved.contains(url.path.lowercased()) {
             let candidate = ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"
             url = dir.appendingPathComponent(candidate)
             n += 1

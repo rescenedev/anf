@@ -107,6 +107,89 @@ struct IconGridView: NSViewRepresentable {
 
         private func itemAt(_ ip: IndexPath) -> FileItem? { flatIndex(ip).map { items[$0] } }
 
+        /// Is the item at `ip` part of the current model selection? Used by the grid
+        /// to decide whether a plain click should defer its collapse-to-one (#76).
+        func isSelected(_ ip: IndexPath) -> Bool {
+            guard let id = itemAt(ip)?.id else { return false }
+            return model.selection.contains(id)
+        }
+
+        func urls(for indexPaths: Set<IndexPath>) -> [URL] {
+            indexPaths.compactMap { itemAt($0)?.url }
+        }
+
+        func dragSources(for indexPaths: Set<IndexPath>) -> [(IndexPath, URL)] {
+            indexPaths.compactMap { ip in itemAt(ip).map { (ip, $0.url) } }
+        }
+
+        func openItem(at point: NSPoint, in cv: NSCollectionView) {
+            guard let ip = cv.indexPathForItem(at: point), let item = itemAt(ip) else { return }
+            model.open(item)
+        }
+
+        func openItem(at ip: IndexPath) {
+            guard let item = itemAt(ip) else { return }
+            model.open(item)
+        }
+
+        func setDragging(_ dragging: Bool) { isDragging = dragging }
+
+        /// Mouse click selection — AppKit's built-in path breaks with custom item
+        /// views, so we drive model + highlight ourselves.
+        func click(at ip: IndexPath, modifiers: NSEvent.ModifierFlags, in cv: NSCollectionView) {
+            guard let item = itemAt(ip) else { return }
+            let newIDs: Set<FileItem.ID>
+            if modifiers.contains(.command) {
+                newIDs = model.selection.contains(item.id)
+                    ? model.selection.subtracting([item.id])
+                    : model.selection.union([item.id])
+            } else if modifiers.contains(.shift),
+                      let anchor = model.selectionCursorIndex {
+                let lo = min(anchor, flatIndex(ip) ?? anchor)
+                let hi = max(anchor, flatIndex(ip) ?? anchor)
+                newIDs = Set(items[lo...hi].map(\.id))
+            } else {
+                newIDs = [item.id]
+            }
+            applySelection(newIDs, in: cv)
+            if newIDs == [item.id] { model.select(item) }
+        }
+
+        func syncSelectionFromView(_ cv: NSCollectionView) { pushSelection(cv) }
+
+        /// Push an explicit selection into the model and repaint visible cells.
+        /// Don't read `cv.selectionIndexPaths` after `selectItems` — with custom
+        /// item views AppKit often never updates it, which cleared selection (#76).
+        func applySelection(_ ids: Set<FileItem.ID>, in cv: NSCollectionView) {
+            syncState.recordApplied(ids)
+            if ids != model.selection { model.selection = ids }
+            let paths = Set(ids.compactMap { id in model.index(of: id).flatMap { indexPath(forFlat: $0) } })
+            syncState.applying {
+                cv.deselectItems(at: cv.selectionIndexPaths.subtracting(paths))
+                if !paths.isEmpty { cv.selectItems(at: paths, scrollPosition: []) }
+                else { cv.deselectItems(at: cv.selectionIndexPaths) }
+            }
+            refreshSelectionHighlight(in: cv)
+        }
+
+        /// Drive the label backdrop from the model — `isSelected` is unreliable with
+        /// our custom item views, so we paint selection ourselves.
+        func refreshSelectionHighlight(in cv: NSCollectionView) {
+            let selected = model.selection
+            for section in 0..<cv.numberOfSections {
+                for item in 0..<cv.numberOfItems(inSection: section) {
+                    let ip = IndexPath(item: item, section: section)
+                    guard let cell = cv.item(at: ip) as? IconItem,
+                          let file = itemAt(ip) else { continue }
+                    cell.setHighlighted(selected.contains(file.id))
+                }
+            }
+        }
+
+        func indexPaths(for ids: Set<FileItem.ID>) -> Set<IndexPath> {
+            Set(ids.compactMap { id in model.index(of: id).flatMap { indexPath(forFlat: $0) } })
+        }
+
         private func indexPath(forFlat i: Int) -> IndexPath? {
             guard i >= 0, i < items.count else { return nil }
             if !grouped { return IndexPath(item: i, section: 0) }
@@ -131,7 +214,11 @@ struct IconGridView: NSViewRepresentable {
                 }
                 syncState.invalidateItems()   // re-make cells at the new size
             }
-            if syncState.itemsChanged(version: model.itemsVersion) {
+            if isDragging {
+                // Never reload mid-drag — a reloadData rebuilds the items and
+                // cancels the drag session. The pending itemsVersion is picked up
+                // by the next sync once the drag ends (#76).
+            } else if syncState.itemsChanged(version: model.itemsVersion) {
                 cv.reloadData()
                 applySelection(cv, force: true, scroll: false)
             } else {
@@ -153,15 +240,22 @@ struct IconGridView: NSViewRepresentable {
         }
 
         private func applySelection(_ cv: NSCollectionView, force: Bool = false, scroll: Bool) {
-            guard syncState.selectionChanged(model.selection, force: force) else { return }
+            guard syncState.selectionChanged(model.selection, force: force) else {
+                refreshSelectionHighlight(in: cv)
+                return
+            }
             let want = Set(model.selection.compactMap { id in
                 model.index(of: id).flatMap { indexPath(forFlat: $0) }
             })
-            guard want != cv.selectionIndexPaths else { return }
+            guard want != cv.selectionIndexPaths else {
+                refreshSelectionHighlight(in: cv)
+                return
+            }
             syncState.applying {
                 cv.deselectItems(at: cv.selectionIndexPaths)
                 cv.selectItems(at: want, scrollPosition: [])
             }
+            refreshSelectionHighlight(in: cv)
             if scroll {
                 // Follow the moving cursor (the growing edge of a shift-select),
                 // not the topmost item — otherwise shift+↓ / shift+PgDn never
@@ -220,7 +314,10 @@ struct IconGridView: NSViewRepresentable {
                                                for: indexPath) as! IconItem
             if let item = itemAt(indexPath) {
                 cell.configure(with: item, iconSide: model.iconSize)
-                cell.onDoubleClick = { [weak self] in self?.model.open(item) }
+                cell.setHighlighted(model.selection.contains(item.id))
+            }
+            if let root = cell.view as? IconCellRootView {
+                root.grid = collectionView as? GridCollectionView
             }
             return cell
         }
@@ -228,6 +325,12 @@ struct IconGridView: NSViewRepresentable {
         func collectionView(_ collectionView: NSCollectionView,
                             viewForSupplementaryElementOfKind kind: String,
                             at indexPath: IndexPath) -> NSView {
+            // During a drag the flow layout asks for an inter-item gap indicator.
+            // We don't draw one, and dequeuing it with the section-header identifier
+            // threw NSInternalInconsistencyException mid-drag — which silently
+            // cancelled EVERY grid drag, so dragged icons never moved (#76). Only
+            // the section header is ours; hand back an empty view for anything else.
+            guard kind == NSCollectionView.elementKindSectionHeader else { return NSView() }
             let header = collectionView.makeSupplementaryView(
                 ofKind: kind, withIdentifier: GridSectionHeader.reuseID, for: indexPath) as! GridSectionHeader
             if grouped, indexPath.section < model.groupRanges.count {
@@ -245,19 +348,35 @@ struct IconGridView: NSViewRepresentable {
 
         func collectionView(_ collectionView: NSCollectionView,
                             didSelectItemsAt indexPaths: Set<IndexPath>) {
-            pushSelection(collectionView)
+            guard !syncState.isSyncing else { return }
+            guard !indexPaths.isEmpty else {
+                refreshSelectionHighlight(in: collectionView)
+                return
+            }
+            let ids = Set(indexPaths.compactMap { itemAt($0)?.id })
+            syncState.recordApplied(ids)
+            if ids != model.selection { model.selection = ids }
+            refreshSelectionHighlight(in: collectionView)
         }
 
         func collectionView(_ collectionView: NSCollectionView,
                             didDeselectItemsAt indexPaths: Set<IndexPath>) {
             pushSelection(collectionView)
+            refreshSelectionHighlight(in: collectionView)
         }
 
         private func pushSelection(_ cv: NSCollectionView) {
             guard !syncState.isSyncing else { return }
             let ids = Set(cv.selectionIndexPaths.compactMap { itemAt($0)?.id })
+            // Custom item views often leave selectionIndexPaths empty even after
+            // selectItems — never push that back into the model (#76).
+            guard !ids.isEmpty || model.selection.isEmpty else {
+                refreshSelectionHighlight(in: cv)
+                return
+            }
             syncState.recordApplied(ids)
             if ids != model.selection { model.selection = ids }
+            refreshSelectionHighlight(in: cv)
         }
 
         // MARK: Context menu (shared with the list view)
@@ -276,40 +395,209 @@ struct IconGridView: NSViewRepresentable {
             (itemAt(indexPath)?.url).map { $0 as NSURL }
         }
 
+        // A registered drop destination that rejects everything SWALLOWS the drag
+        // (the SwiftUI fallback behind it never fires), so pane-to-pane copy/move
+        // silently failed in ICON mode while it worked in list mode (#73 follow-up).
+        // Drop ON a folder → into that folder; anywhere else → into the current
+        // folder (whole-pane drop), mirroring FileListView.
         func collectionView(_ collectionView: NSCollectionView,
                             validateDrop draggingInfo: NSDraggingInfo,
                             proposedIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>,
                             dropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>) -> NSDragOperation {
-            // Only "drop ON a folder" is meaningful here; pane-level drops are
-            // handled by the SwiftUI dropDestination in ContentArea.
+            guard draggingInfo.draggingPasteboard
+                    .canReadObject(forClasses: [NSURL.self], options: nil) else { return [] }
             let path = proposedIndexPath.pointee as IndexPath
-            guard dropOperation.pointee == .on, itemAt(path)?.isBrowsableContainer == true else { return [] }
-            return .move
+            // Drop ON a folder → into it. Anything else → flip to a between-items
+            // drop (whole-pane → current folder). Keep AppKit's proposed index
+            // path untouched; overwriting it with an out-of-range index made the
+            // collection view reject the drop entirely (#76).
+            if !(dropOperation.pointee == .on && isDropFolder(itemAt(path))) {
+                dropOperation.pointee = .before
+            }
+            return dropOp(draggingInfo)
         }
 
         func collectionView(_ collectionView: NSCollectionView,
                             acceptDrop draggingInfo: NSDraggingInfo,
                             indexPath: IndexPath,
                             dropOperation: NSCollectionView.DropOperation) -> Bool {
-            guard let target = itemAt(indexPath),
-                  let urls = draggingInfo.draggingPasteboard
-                      .readObjects(forClasses: [NSURL.self]) as? [URL],
+            guard let urls = draggingInfo.draggingPasteboard
+                      .readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
                   !urls.isEmpty else { return false }
-            model.acceptDrop(urls, into: target.url, copy: false)
+            let dropFolder = (dropOperation == .on && isDropFolder(itemAt(indexPath)))
+                ? itemAt(indexPath) : nil
+            let into: URL = dropFolder?.url ?? model.currentURL
+            // Drop the valid items; silently skip only a folder dropped onto itself
+            // or into its own subtree (rejecting the whole batch lost the good items
+            // too). standardizedFileURL closes the symlink/trailing-slash hole.
+            let intoPath = into.standardizedFileURL.path
+            let valid = urls.filter {
+                let p = $0.standardizedFileURL.path
+                return intoPath != p && !intoPath.hasPrefix(p + "/")
+            }
+            guard !valid.isEmpty else { return false }
+            model.acceptDrop(valid, into: into, copy: copyRequested(draggingInfo))
             return true
+        }
+
+        /// A folder that accepts a drop INTO it — never the synthetic ".." row.
+        private func isDropFolder(_ item: FileItem?) -> Bool {
+            guard let item else { return false }
+            return item.isBrowsableContainer && !item.isParentRef
+        }
+
+        /// Default COPY; ⌘ requests MOVE — but never move a copy-only source (a drag
+        /// from another app whose mask is .copy), which would delete its original.
+        /// Only honor move when the source actually permits move/generic, so the
+        /// performed op can't diverge from the copy badge dropOp() reports (#76).
+        private func copyRequested(_ info: NSDraggingInfo) -> Bool {
+            let mask = info.draggingSourceOperationMask
+            guard NSEvent.modifierFlags.contains(.command),
+                  mask.contains(.move) || mask.contains(.generic) else { return true }
+            return false
+        }
+
+        /// Operation to REPORT to AppKit, clamped to the (modifier-adjusted) source
+        /// mask so an empty intersection never rejects the drop. ⌘ collapses the
+        /// mask to `.generic`; we report that and still move via `copyRequested`.
+        private func dropOp(_ info: NSDraggingInfo) -> NSDragOperation {
+            let allowed = info.draggingSourceOperationMask
+            let want: NSDragOperation = copyRequested(info) ? .copy : .move
+            return allowed.contains(want) ? want : allowed
+        }
+
+        /// True between drag-session begin/end. `sync()` skips its `reloadData`
+        /// while set, so a folder change that lands mid-drag can't rebuild the
+        /// grid and cancel the drag (#76).
+        private(set) var isDragging = false
+
+        func collectionView(_ collectionView: NSCollectionView,
+                            draggingSession session: NSDraggingSession,
+                            willBeginAt screenPoint: NSPoint,
+                            forItemsAt indexPaths: Set<IndexPath>) {
+            isDragging = true
+        }
+
+        func collectionView(_ collectionView: NSCollectionView,
+                            draggingSession session: NSDraggingSession,
+                            endedAt screenPoint: NSPoint,
+                            dragOperation operation: NSDragOperation) {
+            isDragging = false
         }
     }
 }
 
-/// Collection view that routes right-clicks to the shared menus.
+/// Collection view: manual file drag (custom item views break AppKit's built-in
+/// collection drag — only rubber-band selection fires). Drops still use delegate.
 final class GridCollectionView: NSCollectionView {
     weak var coordinator: IconGridView.Coordinator?
 
-    override func mouseDown(with event: NSEvent) {
-        // super FIRST so focusing the pane can't re-render mid-drag and cancel
-        // it — pane-to-pane drag & drop failed in a split otherwise (issue #73).
-        super.mouseDown(with: event)
+    private var dragAnchor: NSPoint?
+    private var dragIndexPaths: Set<IndexPath>?
+    private var fileDragStarted = false
+    /// A plain click on an already-selected item in a multi-selection defers its
+    /// collapse-to-one until mouse-up, so a drag can move the whole selection (#76).
+    private var pendingCollapseIP: IndexPath?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// Item-cell click — index path comes from the item, not hit-test (which
+    /// breaks when the event is forwarded from IconCellRootView).
+    func itemMouseDown(at ip: IndexPath, event: NSEvent) {
+        let pt = convert(event.locationInWindow, from: nil)
+        dragAnchor = pt
+        fileDragStarted = false
+        pendingCollapseIP = nil
+
+        if event.clickCount == 2 {
+            coordinator?.openItem(at: ip)
+            dragIndexPaths = nil
+            return
+        }
+
+        let mods = event.modifierFlags.intersection([.command, .shift])
+        if let coord = coordinator, mods.isEmpty,
+           coord.isSelected(ip), coord.model.selection.count > 1 {
+            // Plain click on an already-selected item within a multi-selection: keep
+            // the whole selection so a drag moves them all, and defer the collapse to
+            // a single item until mouse-up (Finder / NSTableView behavior) (#76).
+            dragIndexPaths = coord.indexPaths(for: coord.model.selection)
+            pendingCollapseIP = ip
+        } else {
+            coordinator?.click(at: ip, modifiers: event.modifierFlags, in: self)
+            if let coord = coordinator {
+                let paths = coord.indexPaths(for: coord.model.selection)
+                dragIndexPaths = paths.isEmpty ? [ip] : paths
+            } else {
+                dragIndexPaths = [ip]
+            }
+        }
+    }
+
+    func itemMouseDragged(with event: NSEvent) {
+        trackItemDrag(with: event)
+    }
+
+    func itemMouseUp(with event: NSEvent) {
+        // No drag happened — complete the deferred collapse to the clicked item.
+        if !fileDragStarted, let ip = pendingCollapseIP {
+            coordinator?.click(at: ip, modifiers: [], in: self)
+        }
+        dragAnchor = nil
+        dragIndexPaths = nil
+        fileDragStarted = false
+        pendingCollapseIP = nil
         coordinator?.focusPaneFromMouse()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let pt = convert(event.locationInWindow, from: nil)
+        // Clicks on cells are handled by IconCellRootView → itemMouseDown.
+        if let ip = indexPathForItem(at: pt) {
+            itemMouseDown(at: ip, event: event)
+            return
+        }
+
+        dragAnchor = pt
+        fileDragStarted = false
+        dragIndexPaths = nil
+        pendingCollapseIP = nil
+        if !event.modifierFlags.contains(.shift) {
+            coordinator?.applySelection([], in: self)
+        }
+        super.mouseDown(with: event)   // rubber-band on empty area only
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if trackItemDrag(with: event) { return }
+        super.mouseDragged(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        dragAnchor = nil
+        dragIndexPaths = nil
+        fileDragStarted = false
+        pendingCollapseIP = nil
+        super.mouseUp(with: event)
+        coordinator?.focusPaneFromMouse()
+    }
+
+    /// Returns true when a file drag session started (caller should skip super).
+    @discardableResult
+    private func trackItemDrag(with event: NSEvent) -> Bool {
+        guard !fileDragStarted, let anchor = dragAnchor, let paths = dragIndexPaths, !paths.isEmpty else {
+            return false
+        }
+        let pt = convert(event.locationInWindow, from: nil)
+        let dx = pt.x - anchor.x, dy = pt.y - anchor.y
+        if dx * dx + dy * dy >= 36, beginFileDrag(indexPaths: paths, event: event) {
+            fileDragStarted = true
+            dragAnchor = nil
+            dragIndexPaths = nil
+            pendingCollapseIP = nil   // a drag started — don't collapse on mouse-up
+            return true
+        }
+        return false
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -320,6 +608,51 @@ final class GridCollectionView: NSCollectionView {
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         return coordinator?.menu(at: point, in: self)
+    }
+
+    @discardableResult
+    private func beginFileDrag(indexPaths: Set<IndexPath>, event: NSEvent) -> Bool {
+        guard let coord = coordinator else { return false }
+        let sources = coord.dragSources(for: indexPaths)
+        guard !sources.isEmpty else { return false }
+        let anchor = convert(event.locationInWindow, from: nil)
+        var draggingItems: [NSDraggingItem] = []
+        for (ip, url) in sources {
+            let di = NSDraggingItem(pasteboardWriter: url as NSURL)
+            // EVERY selected URL must reach the pasteboard regardless of scroll
+            // position — item(at:) is nil for recycled/off-screen cells, and dropping
+            // only the visible ones silently lost part of a multi-selection (#76 data
+            // loss, worse on move). The cell snapshot is purely the drag image; the
+            // frame is in THIS view's coords so it follows the cursor.
+            if let cell = item(at: ip) {
+                let cellView = cell.view
+                let frame = cellView.convert(cellView.bounds, to: self)
+                di.setDraggingFrame(frame, contents: cellView.dragSnapshot())
+            } else {
+                di.setDraggingFrame(NSRect(x: anchor.x, y: anchor.y, width: 1, height: 1), contents: nil)
+            }
+            draggingItems.append(di)
+        }
+        guard !draggingItems.isEmpty else { return false }
+        let session = beginDraggingSession(with: draggingItems, event: event, source: self)
+        session.draggingFormation = NSDraggingFormation.pile
+        session.animatesToStartingPositionsOnCancelOrFail = true
+        coord.setDragging(true)
+        return true
+    }
+
+    override func draggingSession(_ session: NSDraggingSession,
+                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        switch context {
+        case .outsideApplication: return .copy
+        default:
+            return NSEvent.modifierFlags.contains(.command) ? [.move, .generic] : [.copy, .move, .generic]
+        }
+    }
+
+    override func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
+                         operation: NSDragOperation) {
+        coordinator?.setDragging(false)
     }
 }
 
@@ -337,10 +670,9 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
     private var currentID: FileItem.ID?
     private var renameCommit: ((String) -> Void)?
     private var renameCancel: (() -> Void)?
-    var onDoubleClick: (() -> Void)?
 
     override func loadView() {
-        view = DoubleClickView { [weak self] in self?.onDoubleClick?() }
+        view = IconCellRootView()
 
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -418,20 +750,31 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
         applySelectionStyle()
     }
 
+    private var highlighted = false
+
     override var isSelected: Bool {
-        didSet { applySelectionStyle() }
+        didSet {
+            // Visual selection comes from setHighlighted(_:) driven by the model.
+            // AppKit's isSelected is unreliable with our custom item views (#76).
+        }
+    }
+
+    func setHighlighted(_ on: Bool) {
+        highlighted = on
+        labelBackdrop.layer?.backgroundColor = on
+            ? NSColor.controlAccentColor.cgColor : NSColor.clear.cgColor
+        label.textColor = on ? .white : .labelColor
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         currentID = nil
+        highlighted = false
         endRenameUI()
     }
 
     private func applySelectionStyle() {
-        labelBackdrop.layer?.backgroundColor = isSelected
-            ? NSColor.controlAccentColor.cgColor : NSColor.clear.cgColor
-        label.textColor = isSelected ? .white : .labelColor
+        setHighlighted(highlighted)
     }
 
     // MARK: Inline rename
@@ -499,18 +842,82 @@ final class GridSectionHeader: NSView {
     func set(_ text: String) { label.stringValue = text }
 }
 
-/// Plain container that forwards double-clicks (single-click selection is
-/// handled by the collection view's own mouse tracking via super).
-private final class DoubleClickView: NSView {
-    private let onDouble: () -> Void
-    init(onDouble: @escaping () -> Void) {
-        self.onDouble = onDouble
-        super.init(frame: .zero)
+/// Claim the whole cell for hit-testing and forward mouse to the grid.
+private final class IconCellRootView: NSView {
+    weak var grid: GridCollectionView?
+
+    private var isRenaming: Bool {
+        subviews.contains(where: { ($0 as? NSTextField)?.isEditable == true })
     }
-    required init?(coder: NSCoder) { fatalError() }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        wireGridIfNeeded()
+    }
+
+    private func wireGridIfNeeded() {
+        guard grid == nil else { return }
+        var v: NSView? = self
+        while let cur = v {
+            if let g = cur as? GridCollectionView { grid = g; return }
+            v = cur.superview
+        }
+    }
+
+    private func forwardingGrid() -> GridCollectionView? {
+        if let grid { return grid }
+        wireGridIfNeeded()
+        return grid
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if isRenaming { return super.hitTest(point) }
+        // `point` arrives in the SUPERVIEW's coordinate system, not ours. Testing
+        // it against local `bounds` (origin 0,0) only matched cells near the
+        // collection-view origin; every other cell returned nil, so its click fell
+        // through to the collection view, which couldn't map the point to an item
+        // → click selection and drag were dead in grid mode (#76). Convert first.
+        guard let superview else { return bounds.contains(point) ? self : nil }
+        return bounds.contains(convert(point, from: superview)) ? self : nil
+    }
+
+    private func owningItem() -> IconItem? {
+        var r: NSResponder? = self
+        while let cur = r {
+            if let item = cur as? IconItem { return item }
+            r = cur.nextResponder
+        }
+        return nil
+    }
 
     override func mouseDown(with event: NSEvent) {
-        super.mouseDown(with: event)
-        if event.clickCount == 2 { onDouble() }
+        if isRenaming { super.mouseDown(with: event); return }
+        guard let grid = forwardingGrid(), let item = owningItem(), let ip = grid.indexPath(for: item) else { return }
+        grid.itemMouseDown(at: ip, event: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if isRenaming { super.mouseDragged(with: event); return }
+        forwardingGrid()?.itemMouseDragged(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if isRenaming { super.mouseUp(with: event); return }
+        forwardingGrid()?.itemMouseUp(with: event)
+    }
+}
+
+private extension NSView {
+    /// A bitmap snapshot of the view, used as the drag image so the icon follows
+    /// the cursor during a file drag (#76).
+    func dragSnapshot() -> NSImage? {
+        guard bounds.width > 0, bounds.height > 0,
+              let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
+        cacheDisplay(in: bounds, to: rep)
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(rep)
+        return image
     }
 }

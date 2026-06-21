@@ -1487,9 +1487,16 @@ final class BrowserModel: Identifiable {
     }
 
     /// Accept dropped file URLs into `destination` (a folder, or the current dir).
-    /// Holding Option copies; default is move — matching Finder same-volume behaviour.
+    /// Split-pane drag defaults to copy; hold ⌘ to move (#76).
     func acceptDrop(_ urls: [URL], into destination: URL, copy: Bool) {
-        let incoming = urls.filter { $0.deletingLastPathComponent().path != destination.path }
+        let destPath = destination.standardizedFileURL.path
+        // A drop of items already living in `destination` is a no-op for BOTH copy
+        // and move — an accidental nudge of a selected item onto its own folder must
+        // never fabricate a "name 2" duplicate (#76 regression). anf reserves no
+        // gesture for an in-place duplicate; ⌘ is move, plain is copy-across.
+        let incoming = urls.filter {
+            $0.deletingLastPathComponent().standardizedFileURL.path != destPath
+        }
         guard !incoming.isEmpty else { return }
         FileTransfer.shared.transfer(incoming, into: destination, move: !copy) { [weak self] in
             guard let self else { return }
@@ -1558,5 +1565,31 @@ final class BrowserModel: Identifiable {
                                        message: L("Enter or paste a path:", "경로를 입력하거나 붙여넣기:"),
                                        defaultValue: currentURL.path, action: L("Go", "이동")) else { return }
         navigateToTypedPath(raw)
+    }
+
+    /// Mount a network share (smb://…, afp://…, nfs://…) from inside anf so a
+    /// disconnected volume can be reconnected without bouncing to Finder (#76).
+    /// macOS shows its own auth sheet; on success the active pane opens the mount.
+    func connectToServerPrompt() {
+        guard let raw = TextPrompt.run(
+            title: L("Connect to Server", "서버에 연결"),
+            message: L("Enter a server address (e.g. smb://host/share):",
+                       "서버 주소를 입력하세요 (예: smb://host/share):"),
+            defaultValue: "smb://", action: L("Connect", "연결")) else { return }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard NetworkMount.isMountable(trimmed), let url = URL(string: trimmed) else {
+            NSSound.beep(); return
+        }
+        NetworkMount.mount(url) { [weak self] mountPoint, error in
+            guard let self else { return }
+            if let mountPoint {
+                self.navigate(to: mountPoint)
+            } else if let error, !error.isEmpty {
+                let alert = NSAlert()
+                alert.messageText = L("Connection Failed", "연결 실패")
+                alert.informativeText = error
+                alert.runModal()
+            }
+        }
     }
 }

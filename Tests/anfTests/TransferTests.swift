@@ -66,6 +66,43 @@ func runTransferTests() {
                     "byteTrackTotal uses logical size, so the fraction reaches 100%")
         }
 
+        T.group("same-named sources from different folders both survive (#76)") {
+            // Two report.txt from different parents (as a Recents/search view yields)
+            // must not collapse onto one dest path and race — that silently lost one.
+            let a = base.appendingPathComponent("srcA")
+            let b = base.appendingPathComponent("srcB")
+            let into = base.appendingPathComponent("collide")
+            for d in [a, b, into] { try? fm.createDirectory(at: d, withIntermediateDirectories: true) }
+            let ra = a.appendingPathComponent("report.txt")
+            let rb = b.appendingPathComponent("report.txt")
+            try? "AAA".write(to: ra, atomically: true, encoding: .utf8)
+            try? "BBB".write(to: rb, atomically: true, encoding: .utf8)
+
+            var done = false
+            FileTransfer.shared.transfer([ra, rb], into: into, move: false) { done = true }
+            var deadline = Date().addingTimeInterval(10)
+            while !done && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+            T.expect(done, "batch transfer completed")
+
+            let names = (try? fm.contentsOfDirectory(atPath: into.path)) ?? []
+            T.equal(names.count, 2, "both same-named sources landed as two distinct files")
+            let contents = Set(names.compactMap {
+                try? String(contentsOf: into.appendingPathComponent($0), encoding: .utf8) })
+            T.expect(contents == ["AAA", "BBB"], "both source contents survive (neither overwritten)")
+
+            // A third same-named drop into the now-occupied dir → three distinct files.
+            let c = base.appendingPathComponent("srcC")
+            try? fm.createDirectory(at: c, withIntermediateDirectories: true)
+            let rc = c.appendingPathComponent("report.txt")
+            try? "CCC".write(to: rc, atomically: true, encoding: .utf8)
+            var done2 = false
+            FileTransfer.shared.transfer([rc], into: into, move: false) { done2 = true }
+            deadline = Date().addingTimeInterval(10)
+            while !done2 && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+            let names2 = (try? fm.contentsOfDirectory(atPath: into.path)) ?? []
+            T.equal(names2.count, 3, "a third same-named drop into an occupied dir makes three distinct files")
+        }
+
         T.group("copyFileCancellable: correct copy + clean failure (#63)") {
             // NOTE: live progress and mid-file cancellation only happen on a REAL
             // data copy (cross-volume) — a same-volume copy here is an instant
