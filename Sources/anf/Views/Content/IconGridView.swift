@@ -276,27 +276,54 @@ struct IconGridView: NSViewRepresentable {
             (itemAt(indexPath)?.url).map { $0 as NSURL }
         }
 
+        // A registered drop destination that rejects everything SWALLOWS the drag
+        // (the SwiftUI fallback behind it never fires), so pane-to-pane copy/move
+        // silently failed in ICON mode while it worked in list mode (#73 follow-up).
+        // Drop ON a folder → into that folder; anywhere else → into the current
+        // folder (whole-pane drop), mirroring FileListView.
         func collectionView(_ collectionView: NSCollectionView,
                             validateDrop draggingInfo: NSDraggingInfo,
                             proposedIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>,
                             dropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>) -> NSDragOperation {
-            // Only "drop ON a folder" is meaningful here; pane-level drops are
-            // handled by the SwiftUI dropDestination in ContentArea.
+            guard draggingInfo.draggingPasteboard
+                    .canReadObject(forClasses: [NSURL.self], options: nil) else { return [] }
             let path = proposedIndexPath.pointee as IndexPath
-            guard dropOperation.pointee == .on, itemAt(path)?.isBrowsableContainer == true else { return [] }
-            return .move
+            if !(dropOperation.pointee == .on && isDropFolder(itemAt(path))) {
+                // Redirect to a whole-pane drop (between items, at the end) so the
+                // collection view accepts empty-area drops instead of rejecting them.
+                let end = IndexPath(item: collectionView.numberOfItems(inSection: 0), section: 0)
+                proposedIndexPath.pointee = end as NSIndexPath
+                dropOperation.pointee = .before
+            }
+            return copyRequested(draggingInfo) ? .copy : .move
         }
 
         func collectionView(_ collectionView: NSCollectionView,
                             acceptDrop draggingInfo: NSDraggingInfo,
                             indexPath: IndexPath,
                             dropOperation: NSCollectionView.DropOperation) -> Bool {
-            guard let target = itemAt(indexPath),
-                  let urls = draggingInfo.draggingPasteboard
-                      .readObjects(forClasses: [NSURL.self]) as? [URL],
+            guard let urls = draggingInfo.draggingPasteboard
+                      .readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
                   !urls.isEmpty else { return false }
-            model.acceptDrop(urls, into: target.url, copy: false)
+            let dropFolder = (dropOperation == .on && isDropFolder(itemAt(indexPath)))
+                ? itemAt(indexPath) : nil
+            let into: URL = dropFolder?.url ?? model.currentURL
+            // Never drop a folder into itself or its own subtree.
+            guard !urls.contains(where: { into.path == $0.path || into.path.hasPrefix($0.path + "/") })
+            else { return false }
+            model.acceptDrop(urls, into: into, copy: copyRequested(draggingInfo))
             return true
+        }
+
+        /// A folder that accepts a drop INTO it — never the synthetic ".." row.
+        private func isDropFolder(_ item: FileItem?) -> Bool {
+            guard let item else { return false }
+            return item.isBrowsableContainer && !item.isParentRef
+        }
+
+        /// Option held (or an external drag) narrows the mask to copy; else move.
+        private func copyRequested(_ info: NSDraggingInfo) -> Bool {
+            info.draggingSourceOperationMask == .copy
         }
     }
 }
