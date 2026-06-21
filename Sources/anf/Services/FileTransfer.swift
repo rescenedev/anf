@@ -54,24 +54,36 @@ final class FileTransfer {
         // each colliding source through uniqueURL; no skip/overwrite prompt.
         let policy: ConflictPolicy = .keepBoth
 
-        // 2) Plan: (src, dest) pairs after applying the policy.
+        // 2) Plan: (src, dest) pairs after applying the policy. Dedup against
+        // destinations already claimed in THIS batch (not just the live filesystem):
+        // two sources sharing a name — e.g. report.txt from two folders in a Recents
+        // or search view — must each get a distinct dest, or they race onto one path
+        // and one is silently lost (#76 data loss).
         var plan: [(src: URL, dest: URL)] = []
         var overwriteVictims: [URL] = []
+        var claimed = Set<String>()
+        let planFM = FileManager.default
+        func isTaken(_ url: URL) -> Bool {
+            planFM.fileExists(atPath: url.path) || claimed.contains(url.path.lowercased())
+        }
         for src in sources {
             let plain = destination.appendingPathComponent(src.lastPathComponent)
-            if FileManager.default.fileExists(atPath: plain.path) {
+            let dest: URL
+            if isTaken(plain) {
                 switch policy {
                 case .skip: continue
                 case .keepBoth:
-                    plan.append((src, FileOperations.uniqueURL(for: src.lastPathComponent,
-                                                               in: destination)))
+                    dest = FileOperations.uniqueURL(for: src.lastPathComponent,
+                                                    in: destination, reserved: claimed)
                 case .overwrite:
                     overwriteVictims.append(plain)
-                    plan.append((src, plain))
+                    dest = plain
                 }
             } else {
-                plan.append((src, plain))
+                dest = plain
             }
+            claimed.insert(dest.path.lowercased())
+            plan.append((src, dest))
         }
         guard !plan.isEmpty else { completion(); return }
 

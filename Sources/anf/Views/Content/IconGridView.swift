@@ -107,6 +107,13 @@ struct IconGridView: NSViewRepresentable {
 
         private func itemAt(_ ip: IndexPath) -> FileItem? { flatIndex(ip).map { items[$0] } }
 
+        /// Is the item at `ip` part of the current model selection? Used by the grid
+        /// to decide whether a plain click should defer its collapse-to-one (#76).
+        func isSelected(_ ip: IndexPath) -> Bool {
+            guard let id = itemAt(ip)?.id else { return false }
+            return model.selection.contains(id)
+        }
+
         func urls(for indexPaths: Set<IndexPath>) -> [URL] {
             indexPaths.compactMap { itemAt($0)?.url }
         }
@@ -420,10 +427,16 @@ struct IconGridView: NSViewRepresentable {
             let dropFolder = (dropOperation == .on && isDropFolder(itemAt(indexPath)))
                 ? itemAt(indexPath) : nil
             let into: URL = dropFolder?.url ?? model.currentURL
-            // Never drop a folder into itself or its own subtree.
-            guard !urls.contains(where: { into.path == $0.path || into.path.hasPrefix($0.path + "/") })
-            else { return false }
-            model.acceptDrop(urls, into: into, copy: copyRequested(draggingInfo))
+            // Drop the valid items; silently skip only a folder dropped onto itself
+            // or into its own subtree (rejecting the whole batch lost the good items
+            // too). standardizedFileURL closes the symlink/trailing-slash hole.
+            let intoPath = into.standardizedFileURL.path
+            let valid = urls.filter {
+                let p = $0.standardizedFileURL.path
+                return intoPath != p && !intoPath.hasPrefix(p + "/")
+            }
+            guard !valid.isEmpty else { return false }
+            model.acceptDrop(valid, into: into, copy: copyRequested(draggingInfo))
             return true
         }
 
@@ -433,9 +446,15 @@ struct IconGridView: NSViewRepresentable {
             return item.isBrowsableContainer && !item.isParentRef
         }
 
-        /// Split-pane drag defaults to COPY; hold ⌘ to MOVE instead (#76).
+        /// Default COPY; ⌘ requests MOVE — but never move a copy-only source (a drag
+        /// from another app whose mask is .copy), which would delete its original.
+        /// Only honor move when the source actually permits move/generic, so the
+        /// performed op can't diverge from the copy badge dropOp() reports (#76).
         private func copyRequested(_ info: NSDraggingInfo) -> Bool {
-            !NSEvent.modifierFlags.contains(.command)
+            let mask = info.draggingSourceOperationMask
+            guard NSEvent.modifierFlags.contains(.command),
+                  mask.contains(.move) || mask.contains(.generic) else { return true }
+            return false
         }
 
         /// Operation to REPORT to AppKit, clamped to the (modifier-adjusted) source
@@ -476,6 +495,9 @@ final class GridCollectionView: NSCollectionView {
     private var dragAnchor: NSPoint?
     private var dragIndexPaths: Set<IndexPath>?
     private var fileDragStarted = false
+    /// A plain click on an already-selected item in a multi-selection defers its
+    /// collapse-to-one until mouse-up, so a drag can move the whole selection (#76).
+    private var pendingCollapseIP: IndexPath?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -485,6 +507,7 @@ final class GridCollectionView: NSCollectionView {
         let pt = convert(event.locationInWindow, from: nil)
         dragAnchor = pt
         fileDragStarted = false
+        pendingCollapseIP = nil
 
         if event.clickCount == 2 {
             coordinator?.openItem(at: ip)
@@ -492,12 +515,22 @@ final class GridCollectionView: NSCollectionView {
             return
         }
 
-        coordinator?.click(at: ip, modifiers: event.modifierFlags, in: self)
-        if let coord = coordinator {
-            let paths = coord.indexPaths(for: coord.model.selection)
-            dragIndexPaths = paths.isEmpty ? [ip] : paths
+        let mods = event.modifierFlags.intersection([.command, .shift])
+        if let coord = coordinator, mods.isEmpty,
+           coord.isSelected(ip), coord.model.selection.count > 1 {
+            // Plain click on an already-selected item within a multi-selection: keep
+            // the whole selection so a drag moves them all, and defer the collapse to
+            // a single item until mouse-up (Finder / NSTableView behavior) (#76).
+            dragIndexPaths = coord.indexPaths(for: coord.model.selection)
+            pendingCollapseIP = ip
         } else {
-            dragIndexPaths = [ip]
+            coordinator?.click(at: ip, modifiers: event.modifierFlags, in: self)
+            if let coord = coordinator {
+                let paths = coord.indexPaths(for: coord.model.selection)
+                dragIndexPaths = paths.isEmpty ? [ip] : paths
+            } else {
+                dragIndexPaths = [ip]
+            }
         }
     }
 
@@ -506,9 +539,14 @@ final class GridCollectionView: NSCollectionView {
     }
 
     func itemMouseUp(with event: NSEvent) {
+        // No drag happened — complete the deferred collapse to the clicked item.
+        if !fileDragStarted, let ip = pendingCollapseIP {
+            coordinator?.click(at: ip, modifiers: [], in: self)
+        }
         dragAnchor = nil
         dragIndexPaths = nil
         fileDragStarted = false
+        pendingCollapseIP = nil
         coordinator?.focusPaneFromMouse()
     }
 
@@ -523,6 +561,7 @@ final class GridCollectionView: NSCollectionView {
         dragAnchor = pt
         fileDragStarted = false
         dragIndexPaths = nil
+        pendingCollapseIP = nil
         if !event.modifierFlags.contains(.shift) {
             coordinator?.applySelection([], in: self)
         }
@@ -538,6 +577,7 @@ final class GridCollectionView: NSCollectionView {
         dragAnchor = nil
         dragIndexPaths = nil
         fileDragStarted = false
+        pendingCollapseIP = nil
         super.mouseUp(with: event)
         coordinator?.focusPaneFromMouse()
     }
@@ -554,6 +594,7 @@ final class GridCollectionView: NSCollectionView {
             fileDragStarted = true
             dragAnchor = nil
             dragIndexPaths = nil
+            pendingCollapseIP = nil   // a drag started — don't collapse on mouse-up
             return true
         }
         return false
@@ -574,17 +615,22 @@ final class GridCollectionView: NSCollectionView {
         guard let coord = coordinator else { return false }
         let sources = coord.dragSources(for: indexPaths)
         guard !sources.isEmpty else { return false }
+        let anchor = convert(event.locationInWindow, from: nil)
         var draggingItems: [NSDraggingItem] = []
         for (ip, url) in sources {
-            guard let cell = item(at: ip) else { continue }
             let di = NSDraggingItem(pasteboardWriter: url as NSURL)
-            // Frame in THIS view's coordinates (the drag source) with a snapshot of
-            // the cell as the image, so the icon follows the cursor. Previously the
-            // frame was in SCREEN coords and contents was nil → only the + cursor
-            // showed and nothing visibly moved (#76).
-            let cellView = cell.view
-            let frame = cellView.convert(cellView.bounds, to: self)
-            di.setDraggingFrame(frame, contents: cellView.dragSnapshot())
+            // EVERY selected URL must reach the pasteboard regardless of scroll
+            // position — item(at:) is nil for recycled/off-screen cells, and dropping
+            // only the visible ones silently lost part of a multi-selection (#76 data
+            // loss, worse on move). The cell snapshot is purely the drag image; the
+            // frame is in THIS view's coords so it follows the cursor.
+            if let cell = item(at: ip) {
+                let cellView = cell.view
+                let frame = cellView.convert(cellView.bounds, to: self)
+                di.setDraggingFrame(frame, contents: cellView.dragSnapshot())
+            } else {
+                di.setDraggingFrame(NSRect(x: anchor.x, y: anchor.y, width: 1, height: 1), contents: nil)
+            }
             draggingItems.append(di)
         }
         guard !draggingItems.isEmpty else { return false }

@@ -55,8 +55,14 @@ final class FSEventDirectoryWatcher: DirectoryWatcher {
         // 0.2s forever, which cancels in-flight interactions like drag (#76).
         // Re-list and compare a content signature; only notify on a real change —
         // the same dedup the polling watcher already does.
+        // Seed the baseline to a sentinel (0) rather than the current signature, so
+        // the FIRST fs event always fires exactly one reconciling reload. This closes
+        // the race where a change lands between the displayed listing being read and
+        // the watcher starting — otherwise that change's signature would already be
+        // the baseline and the listing would stay permanently stale (#76). After the
+        // first event the cached signature dedups the rest, so no storm returns.
         let sig = SigHolder()
-        sig.value = PollingDirectoryWatcher.signature(of: url)
+        sig.value = 0
         let gate: @Sendable () -> Void = {
             let now = PollingDirectoryWatcher.signature(of: url)
             guard now != sig.value else { return }

@@ -11,6 +11,10 @@ final class ViewMenuController: NSObject, NSMenuItemValidation {
         AppController.newWindow()
     }
 
+    @objc func connectToServer(_ sender: Any?) {
+        workspace?.active.connectToServerPrompt()
+    }
+
     @objc func toggleStatusBar(_ sender: Any?) {
         workspace?.pathBarVisible.toggle()
         workspace?.save()
@@ -220,6 +224,13 @@ enum MainMenu {
         newWin.target = ViewMenuController.shared
         // No ⌘W here: KeyboardController owns ⌘W contextually (close tab → pane →
         // window), and its monitor consumes the event before the menu sees it.
+        fileMenu.addItem(.separator())
+        // Connect to Server (#76): ⌘K is already the command palette, so use ⌘⇧K.
+        let connect = fileMenu.addItem(withTitle: L("Connect to Server…", "서버에 연결…"),
+                                       action: #selector(ViewMenuController.connectToServer(_:)),
+                                       keyEquivalent: "k")
+        connect.keyEquivalentModifierMask = [.command, .shift]
+        connect.target = ViewMenuController.shared
 
         // Edit menu (standard responder-chain selectors)
         let editItem = NSMenuItem()

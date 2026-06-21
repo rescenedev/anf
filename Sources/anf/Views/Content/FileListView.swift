@@ -445,10 +445,16 @@ struct FileListView: NSViewRepresentable {
                   !urls.isEmpty else { return false }
             let dropFolder = (op == .on && isDropFolder(item(atRow: row))) ? item(atRow: row) : nil
             let into: URL = dropFolder?.url ?? model.currentURL
-            // Never drop a folder into itself or its own subtree.
-            guard !urls.contains(where: { into.path == $0.path || into.path.hasPrefix($0.path + "/") })
-            else { return false }
-            model.acceptDrop(urls, into: into, copy: copyRequested(info))
+            // Drop the valid items; silently skip only a folder dropped onto itself
+            // or into its own subtree (rejecting the whole batch lost the good items
+            // too). standardizedFileURL closes the symlink/trailing-slash hole.
+            let intoPath = into.standardizedFileURL.path
+            let valid = urls.filter {
+                let p = $0.standardizedFileURL.path
+                return intoPath != p && !intoPath.hasPrefix(p + "/")
+            }
+            guard !valid.isEmpty else { return false }
+            model.acceptDrop(valid, into: into, copy: copyRequested(info))
             return true
         }
 
@@ -459,11 +465,15 @@ struct FileListView: NSViewRepresentable {
             return item.isBrowsableContainer && !item.isParentRef
         }
 
-        /// Split-pane drag defaults to COPY; hold ⌘ to MOVE instead (#76).
-        /// Read the live ⌘ modifier rather than the source mask so the default is
-        /// ours (Finder's cross-volume convention), not AppKit's move-by-priority.
+        /// Default COPY; ⌘ requests MOVE — but never move a copy-only source (a drag
+        /// from another app whose mask is .copy), which would delete its original.
+        /// Only honor move when the source actually permits move/generic, so the
+        /// performed op can't diverge from the copy badge dropOp() reports (#76).
         private func copyRequested(_ info: NSDraggingInfo) -> Bool {
-            !NSEvent.modifierFlags.contains(.command)
+            let mask = info.draggingSourceOperationMask
+            guard NSEvent.modifierFlags.contains(.command),
+                  mask.contains(.move) || mask.contains(.generic) else { return true }
+            return false
         }
 
         /// Operation to REPORT to AppKit, clamped to what the (modifier-adjusted)
