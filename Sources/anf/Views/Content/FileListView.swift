@@ -296,6 +296,15 @@ struct FileListView: NSViewRepresentable {
                 // moved off it, which is why a second Enter did nothing.
                 table.window?.makeFirstResponder(table)
                 table.editColumn(0, row: row, with: nil, select: true)
+                // Select only the basename (exclude the extension), like Finder and
+                // the icon grid — `select: true` highlighted the whole "report.pdf",
+                // so the first keystroke wiped the extension (extension-loss foot-gun).
+                let name = self.items[idx].name
+                let len = RenameSelection.basenameLength(name)
+                if len < (name as NSString).length,
+                   let editor = table.window?.fieldEditor(false, for: nil) {
+                    editor.selectedRange = NSRange(location: 0, length: len)
+                }
             }
         }
 
