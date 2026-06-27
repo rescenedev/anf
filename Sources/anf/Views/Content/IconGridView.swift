@@ -785,10 +785,8 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
         label.isEditable = true
         view.window?.makeFirstResponder(label)
         if let editor = label.currentEditor() {
-            let ns = label.stringValue as NSString
-            let extLen = (ns.pathExtension as NSString).length
-            let baseLen = extLen > 0 ? ns.length - extLen - 1 : ns.length
-            editor.selectedRange = NSRange(location: 0, length: max(0, baseLen))
+            let len = RenameSelection.basenameLength(label.stringValue)
+            editor.selectedRange = NSRange(location: 0, length: len)
         }
     }
 

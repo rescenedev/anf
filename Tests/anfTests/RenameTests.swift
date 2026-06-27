@@ -40,6 +40,16 @@ func runRenameTests() {
                 "no extension stays bare")
     }
 
+    T.group("RenameSelection highlights the basename, not the extension") {
+        // Regression: the list view selected the whole "report.pdf", so the first
+        // keystroke replaced the extension. Highlight only the basename.
+        T.equal(RenameSelection.basenameLength("report.pdf"), 6, "report.pdf → 'report'")
+        T.equal(RenameSelection.basenameLength("archive.tar.gz"), 11, "drops only the last extension")
+        T.equal(RenameSelection.basenameLength("Makefile"), 8, "no extension → whole name")
+        T.equal(RenameSelection.basenameLength(".gitignore"), 10, "dotfile is not an extension → whole name")
+        T.equal(RenameSelection.basenameLength("notes"), 5, "bare name → whole name")
+    }
+
     T.group("SmartRename.isLazy rejects junk names") {
         T.expect(SmartRename.isLazy("Screenshot_2026.png", ext: "png"),
                  "generic 'screenshot' name is lazy")
