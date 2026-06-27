@@ -8,6 +8,12 @@ final class XtermTerminalView: NSView {
     private let pty = PTYProcess()
     private var ready = false
     private var pendingFontSize: CGFloat?
+    /// PTY bytes that arrived before xterm.js finished loading (the shell prompt,
+    /// an SSH/SFTP banner, MOTD). termWrite doesn't exist yet, so buffer and flush
+    /// on pageReady instead of dropping them. Capped so a never-loading page can't
+    /// grow it without bound.
+    private var pendingOutput = Data()
+    private let pendingOutputCap = 256 * 1024
 
     var onTitleChange: ((String) -> Void)?
     var onExit: (() -> Void)?
@@ -99,6 +105,11 @@ final class XtermTerminalView: NSView {
         // prove xterm resources load from the SHIPPED bundle, not the dev tree.
         NotificationCenter.default.post(name: .init("anf.terminal.pageReady"), object: nil)
         if let size = pendingFontSize { setFontSize(size); pendingFontSize = nil }
+        if !pendingOutput.isEmpty {                  // flush bytes that arrived pre-load
+            let buffered = pendingOutput
+            pendingOutput = Data()
+            writeToTerminal(buffered)
+        }
         // Give WKWebView first-responder status so keyboard and scroll events arrive.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.focus()
@@ -114,6 +125,17 @@ final class XtermTerminalView: NSView {
     }
 
     private func send(data: Data) {
+        guard ready else {
+            // xterm.js (termWrite) isn't defined yet — buffer instead of dropping.
+            if pendingOutput.count < pendingOutputCap {
+                pendingOutput.append(data.prefix(pendingOutputCap - pendingOutput.count))
+            }
+            return
+        }
+        writeToTerminal(data)
+    }
+
+    private func writeToTerminal(_ data: Data) {
         // Base64-encode binary PTY output so JSON doesn't break on control chars
         let b64 = data.base64EncodedString()
         webView.evaluateJavaScript(
