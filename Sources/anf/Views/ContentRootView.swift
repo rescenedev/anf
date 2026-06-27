@@ -51,7 +51,9 @@ private struct UpdateBanner: View {
                 Text(L("anf \(v) is out — ", "anf \(v) 출시 — ")).font(.system(size: 12))
                     + Text("brew upgrade --cask anf").font(.system(size: 12, design: .monospaced))
                 Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/rescenedev/anf/releases/latest")!)
+                    if let url = URL(string: "https://github.com/rescenedev/anf/releases/latest") {
+                        NSWorkspace.shared.open(url)
+                    }
                 } label: { Text(L("Release Notes", "릴리즈 노트")).font(.system(size: 12)) }
                 .buttonStyle(.link)
                 Button {
