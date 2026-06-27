@@ -259,11 +259,18 @@ enum VaultService {
     /// store lives in `.anf_vault/.git` but tracks the parent folder as its work
     /// tree; for a plain vault `-C folder` is enough.
     private static func base(_ folder: URL) -> [String] {
+        // `core.quotePath=false`: by default git C-quotes any path byte >0x7F
+        // (octal escapes wrapped in quotes), so `ls-tree`/`status` emit
+        // `"\355\225\234…"` for a Korean/accented/emoji filename. deletedSince then
+        // can't match it on disk (every non-ASCII file looked "deleted") and
+        // restore checked out a quoted path that doesn't exist — recovery was
+        // broken for every non-ASCII name. Emitting paths verbatim fixes both.
+        let quoting = ["-c", "core.quotePath=false"]
         if isVaultIsolated(folder) {
-            return ["--git-dir", folder.appendingPathComponent("\(isolatedDir)/.git").path,
-                    "--work-tree", folder.path, "-C", folder.path]
+            return quoting + ["--git-dir", folder.appendingPathComponent("\(isolatedDir)/.git").path,
+                              "--work-tree", folder.path, "-C", folder.path]
         }
-        return ["-C", folder.path]
+        return quoting + ["-C", folder.path]
     }
 
     private static func run(_ args: [String], folder: URL) -> [String]? {
