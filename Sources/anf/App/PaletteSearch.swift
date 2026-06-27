@@ -7,10 +7,32 @@ enum PaletteSearch {
         guard let fd = ExternalTools.path("fd") else { return nil }
         let lines = ExternalTools.run(fd, [
             "--color=never", "--absolute-path", "--no-ignore",
-            "--fixed-strings", "--type", "f", "--type", "d",
-            "--max-results", "\(cap)", needle, root.path
-        ], maxLines: cap)
+            "--type", "f", "--type", "d",
+            "--max-results", "\(cap)"] + fdMatcherArgs(needle) + [root.path],
+            maxLines: cap)
         return lines.map { URL(fileURLWithPath: $0) }
+    }
+
+    /// fd takes a SINGLE pattern. For an ASCII needle a literal (`--fixed-strings`)
+    /// is fastest and exact. But a Korean needle from the IME is NFC while many
+    /// macOS filenames are stored NFD — a byte-literal NFC match silently misses
+    /// them. When the two normalizations differ, OR both forms as a regex
+    /// alternation (rgContent already does the equivalent with `-e`). Pure → tested.
+    static func fdMatcherArgs(_ needle: String) -> [String] {
+        let variants = normalizationVariants(needle)
+        if variants.count == 1 { return ["--fixed-strings", variants[0]] }
+        return [variants.map(regexEscapeLiteral).joined(separator: "|")]
+    }
+
+    /// Escape the regex metacharacters in a literal so the alternation matches the
+    /// needle verbatim (Korean has none, but a needle can contain ., (, +, …).
+    static func regexEscapeLiteral(_ s: String) -> String {
+        var out = ""
+        for ch in s {
+            if "\\.+*?()|[]{}^$".contains(ch) { out.append("\\") }
+            out.append(ch)
+        }
+        return out
     }
 
     // MARK: - mdfind fallback (Spotlight, scoped to the folder via -onlyin)
