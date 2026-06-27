@@ -56,14 +56,20 @@ enum AISecret {
         if let fromDefaults = defaults.string(forKey: legacyDefaultsKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines), !fromDefaults.isEmpty {
             if !hasKey { setKey(fromDefaults) }
-            defaults.removeObject(forKey: legacyDefaultsKey)
+            // Erase the plaintext ONLY once the key is safely in the Keychain.
+            // setKey can fail (locked keychain at early launch); scrubbing anyway
+            // would destroy the user's only copy of the key. hasKey re-reads the
+            // cache setKey just refreshed, so it's true only on a successful write.
+            if hasKey { defaults.removeObject(forKey: legacyDefaultsKey) }
         }
         // 2) The settings file itself.
         guard let text = try? String(contentsOf: settingsFile, encoding: .utf8) else { return }
         if let value = jsonStringValue(of: "aiApiKey", in: text), !value.isEmpty {
             if !hasKey { setKey(value) }
-            let scrubbed = scrub(key: "aiApiKey", in: text)
-            if scrubbed != text { try? scrubbed.write(to: settingsFile, atomically: true, encoding: .utf8) }
+            if hasKey {   // only scrub the file once the key is safely in the Keychain
+                let scrubbed = scrub(key: "aiApiKey", in: text)
+                if scrubbed != text { try? scrubbed.write(to: settingsFile, atomically: true, encoding: .utf8) }
+            }
         }
     }
 
