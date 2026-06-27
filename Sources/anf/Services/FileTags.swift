@@ -29,13 +29,17 @@ enum FileTags {
         try? (url as NSURL).setResourceValue(tags as NSArray, forKey: .tagNamesKey)
     }
 
-    /// Toggle one standard colour tag on/off.
-    static func toggle(_ tag: String, on url: URL) {
+    /// Toggle one standard colour tag on/off. `setTags` makes a synchronous
+    /// DesktopServices/Spotlight XPC round-trip, so callers toggling a SELECTION
+    /// must run this OFF the main thread (it otherwise beachballs the UI). Pass
+    /// `reindex: false` for a batch and call `reindex(allURLs)` once at the end,
+    /// instead of spawning one `mdimport` process per file.
+    static func toggle(_ tag: String, on url: URL, reindex doReindex: Bool = true) {
         var current = tags(of: url)
         if let i = current.firstIndex(of: tag) { current.remove(at: i) }
         else { current.append(tag) }
         setTags(current, on: url)
-        reindex([url])   // reflect in Finder/Spotlight immediately
+        if doReindex { reindex([url]) }   // reflect in Finder/Spotlight immediately
     }
 
     // Per-listing tag cache: the list draws per row on every scroll frame, and a
