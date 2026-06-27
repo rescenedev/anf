@@ -32,12 +32,19 @@ final class ThumbnailProvider {
 
     private func acquire() async {
         if running < maxConcurrent { running += 1; return }
+        // Resumed by release() which HANDS OFF its slot without decrementing, so the
+        // slot is already counted — don't increment again here.
         await withCheckedContinuation { waiters.append($0) }
-        running += 1
     }
     private func release() {
-        running -= 1
-        if !waiters.isEmpty { waiters.removeFirst().resume() }
+        // Transfer the slot directly to a waiter rather than decrement-then-let-the-
+        // resumed-waiter-reincrement: resume() only schedules the continuation, so in
+        // that gap a fresh acquire() could see the lowered count and overshoot the cap.
+        if !waiters.isEmpty {
+            waiters.removeFirst().resume()
+        } else {
+            running -= 1
+        }
     }
 
     private func key(_ url: URL, _ side: CGFloat) -> NSString {
