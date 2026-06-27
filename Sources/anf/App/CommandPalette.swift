@@ -669,7 +669,17 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             guard let self, self.query == q else { return }
             self.nameTargets = ranked.map { Self.target(for: $0, content: false) }
             self.mergeDeep()
-            self.startContentSearch(q, root: root)
+            // The recursive content sweep (ripgrep + doc extraction + OCR + geocode)
+            // is bounded to 2+ chars, as the class header documents: a single
+            // character matches almost everything and fired a cold rg/OCR pass per
+            // keystroke. Filename results (above) still show for 1 char.
+            if q.count >= 2 {
+                self.startContentSearch(q, root: root)
+            } else {
+                self.searching = false
+                self.contentScanning = false
+                self.updatePlaceholder()
+            }
         }
     }
 
@@ -916,7 +926,11 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         guard hasQuery else {
             deepTask?.cancel(); contentTask?.cancel()
             nameTargets = []; contentTargets = []
-            if !deepResults.isEmpty { deepResults = []; recompute() }
+            // Clear the content-scan flag too, or the "내용 검색 중 · <dir>" footer
+            // ticker kept animating over the empty-state list after the box cleared.
+            contentScanning = false
+            deepResults = []
+            recompute()
             return
         }
         // Debounce the fd/ripgrep work so we don't spawn one per keystroke.
