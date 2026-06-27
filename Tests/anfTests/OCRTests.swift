@@ -82,6 +82,16 @@ func runOCRTests() {
         T.expect(ImageClassifier.matches(query: "dog", labels: labels), "English query direct")
         T.expect(ImageClassifier.matches(query: "retriever", labels: labels), "substring of a label")
         T.expect(!ImageClassifier.matches(query: "고양이", labels: labels), "고양이 ≠ dog image")
+        // The most common Korean words for cat/dog must POSITIVELY match their own
+        // labels — regression for the particle stripper mangling "고양이"→"고양"
+        // (and "멍멍이"→"멍멍") before the alias lookup, so the search returned
+        // nothing for the very word that is an explicit alias key.
+        let catLabels = ["cat", "kitten", "feline", "domestic animal"]
+        T.expect(ImageClassifier.matches(query: "고양이", labels: catLabels), "고양이 → cat labels")
+        T.expect(ImageClassifier.matches(query: "고양이 사진", labels: ["cat"]), "'고양이 사진' → cat")
+        T.expect(ImageClassifier.matches(query: "고양이가", labels: ["cat"]), "particle on an alias ('고양이가') still → cat")
+        T.expect(ImageClassifier.matches(query: "멍멍이", labels: ["dog"]), "멍멍이 → dog")
+        T.equal(ImageClassifier.contentTokens("고양이"), ["고양이"], "alias word kept whole, not particle-stripped")
         T.expect(!ImageClassifier.matches(query: "강아지", labels: []), "no labels → no match")
         T.expect(ImageClassifier.matches(query: "음식", labels: ["food", "dish"]), "음식 → food")
         T.expect(ImageClassifier.matches(query: "문서", labels: ["document", "text"]), "문서 → document")
