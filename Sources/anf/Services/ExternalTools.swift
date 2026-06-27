@@ -42,9 +42,16 @@ enum ExternalTools {
             }
             return cached
         }
-        let dirs = queryLoginShellPath()
-        UserDefaults.standard.set(dirs, forKey: pathCacheKey)
-        return dirs
+        // First launch (no cache): NEVER block the UI on `$SHELL -lc`. searchDirs is
+        // first evaluated on the main thread (first ⌘K / first index build), so a
+        // heavy-dotfile shell would hitch launch. Query in the background to seed the
+        // cache for the NEXT launch; this launch uses the standard prefixes only
+        // (homebrew/cargo/nix/macports already covered above).
+        DispatchQueue.global(qos: .utility).async {
+            let dirs = queryLoginShellPath()
+            if !dirs.isEmpty { UserDefaults.standard.set(dirs, forKey: pathCacheKey) }
+        }
+        return []
     }
 
     private static func queryLoginShellPath() -> [String] {
