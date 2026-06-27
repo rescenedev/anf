@@ -1130,10 +1130,20 @@ final class BrowserModel: Identifiable {
     }
 
     /// Toggle a colour tag on every selected item, then refresh so the swatch
-    /// updates in the list.
+    /// updates in the list. The tag write is a synchronous DesktopServices XPC
+    /// call, so do it OFF the main thread (it beachballed a large selection), with
+    /// ONE batched `mdimport` instead of one process per file; reload on the main
+    /// actor once the writes land.
     func toggleTag(_ tag: String) {
-        for item in selectedItems { FileTags.toggle(tag, on: item.url) }
-        reload()
+        let urls = selectedItems.map(\.url)
+        guard !urls.isEmpty else { return }
+        Task { @MainActor [weak self] in
+            await Task.detached(priority: .userInitiated) {
+                for url in urls { FileTags.toggle(tag, on: url, reindex: false) }
+                FileTags.reindex(urls)   // one batched mdimport for the whole selection
+            }.value
+            self?.reload()
+        }
     }
 
     // MARK: - Vault
