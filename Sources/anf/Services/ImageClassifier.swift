@@ -56,6 +56,12 @@ enum ImageClassifier {
     }
 
     private nonisolated static func stripParticle(_ w: String) -> String {
+        // Never strip a word that is ITSELF a known content term. "고양이"(cat) and
+        // "멍멍이"(dog) end in what looks like the subject particle "이", so blind
+        // stripping mangled them into "고양"/"멍멍" — which miss their alias entries,
+        // so searching the most common Korean word for cat returned nothing. A real
+        // particle on top of an alias ("고양이가") still strips down to the alias.
+        if koreanAliases[w] != nil { return w }
         for p in ["에서", "에게", "으로", "까지", "부터", "보다", "에", "의", "을", "를",
                   "은", "는", "이", "가", "로", "와", "과", "도", "만"] where w.hasSuffix(p) && w.count > p.count + 1 {
             return String(w.dropLast(p.count))
