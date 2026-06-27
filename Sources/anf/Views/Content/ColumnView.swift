@@ -74,7 +74,10 @@ private struct ColumnList: View {
             }
             .padding(.vertical, 4)
         }
-        .task(id: directory) {
+        // Re-run when Sort By or Show Hidden changes, not only on directory change:
+        // the task read model.sort / model.showHidden but keyed only on `directory`,
+        // so toggling either left every already-shown column on the old order.
+        .task(id: "\(directory.path)|\(String(describing: model.sort))|\(model.showHidden)") {
             // contentsFast = getattrlistbulk (no per-item stat) — the slow
             // resourceValues path took 1s+ for a 26k-entry column.
             items = fs.sorted(await fs.contentsFast(of: directory, showHidden: model.showHidden),
