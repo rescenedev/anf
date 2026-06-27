@@ -17,12 +17,12 @@ enum DocumentText {
         if ext == "pdf" { return extractPDF(url) }
         guard canExtract(ext),
               FileManager.default.isExecutableFile(atPath: "/usr/bin/unzip") else { return nil }
+        if ext == "xlsx" { return extractXLSX(url) }
         let pattern: String
         switch ext {
         case "hwpx": pattern = "Contents/*.xml"
         case "docx": pattern = "word/document.xml"
         case "pptx": pattern = "ppt/slides/*.xml"
-        case "xlsx": pattern = "xl/sharedStrings.xml"
         default:     pattern = "*.xml"
         }
         let cmd = "unzip -p \(shq(url.path)) \(shq(pattern)) 2>/dev/null"
@@ -45,6 +45,99 @@ enum DocumentText {
         }
         let joined = parts.joined(separator: "\n")
         return joined.isEmpty ? nil : joined
+    }
+
+    // MARK: - xlsx (spreadsheet body)
+
+    /// Reconstruct an xlsx body cell-by-cell in row order, resolving shared-string
+    /// indices against xl/sharedStrings.xml. The old path dumped ONLY sharedStrings
+    /// with no separators, so every cell glued into one run-on line and numeric /
+    /// inline-string sheets showed nothing. Internal so unit tests can drive it.
+    static func extractXLSX(_ url: URL) -> String? {
+        let shared = xlsxSharedStrings(url)
+        var lines: [String] = []
+        let sheetCap = 8
+        for sheet in unzipList(url, glob: "xl/worksheets/sheet*.xml").sorted().prefix(sheetCap) {
+            guard let xml = unzipEntry(url, sheet) else { continue }
+            for row in xlsxFragments(xml, tag: "row") {
+                let cells = xlsxFragments(row.body, tag: "c").map { xlsxCellValue(attrs: $0.attrs, body: $0.body, shared: shared) }
+                let line = cells.joined(separator: "\t")
+                if !line.trimmingCharacters(in: .whitespaces).isEmpty { lines.append(line) }
+            }
+        }
+        // Couldn't read a worksheet (unusual layout) but have strings → at least
+        // show them one per line, still readable (no glue).
+        if lines.isEmpty, !shared.isEmpty { lines = shared.filter { !$0.isEmpty } }
+        let body = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return body.isEmpty ? nil : body
+    }
+
+    private static func xlsxSharedStrings(_ url: URL) -> [String] {
+        guard let xml = unzipEntry(url, "xl/sharedStrings.xml") else { return [] }
+        // A shared string may be several rich-text runs: <si><r><t>a</t></r><r><t>b</t></r></si>.
+        return xlsxFragments(xml, tag: "si").map { xlsxTexts(in: $0.body).joined() }
+    }
+
+    private static func xlsxCellValue(attrs: String, body: String, shared: [String]) -> String {
+        switch xlsxAttr("t", in: attrs) {
+        case "s":   // shared-string index
+            let v = xlsxFirstTag("v", in: body).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let i = Int(v), i >= 0, i < shared.count { return shared[i] }
+            return ""
+        case "inlineStr":
+            return xlsxTexts(in: body).joined()
+        default:    // "str" formula result, or numeric / boolean / date serial
+            return decodeXMLEntities(xlsxFirstTag("v", in: body))
+        }
+    }
+
+    /// `<tag …>body</tag>` fragments (attrs + body), self-closing tags skipped.
+    private static func xlsxFragments(_ xml: String, tag: String) -> [(attrs: String, body: String)] {
+        guard let re = try? NSRegularExpression(pattern: "<\(tag)(\\s[^>]*)?>(.*?)</\(tag)>",
+                                                options: [.dotMatchesLineSeparators]) else { return [] }
+        let ns = xml as NSString
+        return re.matches(in: xml, range: NSRange(location: 0, length: ns.length)).map { m in
+            let a = m.range(at: 1).location != NSNotFound ? ns.substring(with: m.range(at: 1)) : ""
+            return (a, ns.substring(with: m.range(at: 2)))
+        }
+    }
+
+    private static func xlsxTexts(in xml: String) -> [String] {
+        xlsxFragments(xml, tag: "t").map { decodeXMLEntities($0.body) }
+    }
+
+    private static func xlsxFirstTag(_ tag: String, in body: String) -> String {
+        xlsxFragments(body, tag: tag).first?.body ?? ""
+    }
+
+    private static func xlsxAttr(_ name: String, in attrs: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: "\\b\(name)=\"([^\"]*)\"") else { return "" }
+        let ns = attrs as NSString
+        if let m = re.firstMatch(in: attrs, range: NSRange(location: 0, length: ns.length)) {
+            return ns.substring(with: m.range(at: 1))
+        }
+        return ""
+    }
+
+    private static func unzipEntry(_ url: URL, _ entry: String) -> String? {
+        let cmd = "unzip -p \(shq(url.path)) \(shq(entry)) 2>/dev/null"
+        let raw = ExternalTools.run("/bin/sh", ["-c", cmd], maxLines: 200_000, timeout: 8).joined(separator: "\n")
+        return raw.isEmpty ? nil : raw
+    }
+
+    private static func unzipList(_ url: URL, glob: String) -> [String] {
+        let cmd = "unzip -Z1 \(shq(url.path)) \(shq(glob)) 2>/dev/null"
+        return ExternalTools.run("/bin/sh", ["-c", cmd], maxLines: 1000, timeout: 8).filter { !$0.isEmpty }
+    }
+
+    /// XML entity decode, `&amp;` LAST so "&amp;lt;" doesn't collapse to "<".
+    private static func decodeXMLEntities(_ s: String) -> String {
+        var t = s
+        for (k, v) in [("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&apos;", "'"),
+                       ("&#10;", "\n"), ("&#9;", "\t"), ("&amp;", "&")] {
+            t = t.replacingOccurrences(of: k, with: v)
+        }
+        return t
     }
 
     /// Internal (not private) so unit tests can exercise tag/entity stripping.

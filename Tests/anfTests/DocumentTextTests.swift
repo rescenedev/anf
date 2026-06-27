@@ -47,6 +47,66 @@ func runDocumentTextTests() {
         T.expect(DocumentTextCache.shared.text(for: url)?.contains("두번째") == true,
                  "mtime change invalidates the cached body")
     }
+
+    T.group("TextDecoding: detect CP949 / UTF-16 instead of UTF-8 mojibake") {
+        let cp949 = String.Encoding(rawValue:
+            CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.dosKorean.rawValue)))
+        // UTF-8 round-trips.
+        T.equal(TextDecoding.string(from: Data("한글 hello".utf8)), "한글 hello", "utf-8 decodes")
+        // CP949 (Windows Korean) — the bug: decoded as UTF-8 it was all U+FFFD.
+        if let d = "한글 문서".data(using: cp949) {
+            T.expect(Array(d) != Array("한글 문서".utf8), "precondition: CP949 bytes ≠ UTF-8 bytes")
+            T.equal(TextDecoding.string(from: d), "한글 문서", "CP949 detected, not mojibake")
+        } else { T.expect(false, "CP949 encoding available") }
+        // UTF-16 with BOM.
+        if let d = "한글".data(using: .utf16) {
+            T.equal(TextDecoding.string(from: d), "한글", "UTF-16 BOM detected")
+        } else { T.expect(false, "UTF-16 encoding available") }
+        // A valid UTF-8 buffer cut mid-codepoint (the 512KB preview cap) must stay
+        // on the UTF-8 path, NOT get misrouted to CP949 and mangled.
+        let full = Data("한글".utf8)                      // 6 bytes, 3 per char
+        let cut = full.prefix(full.count - 1)            // drops 1 byte of '글'
+        let decoded = TextDecoding.string(from: cut)
+        T.equal(decoded, "한", "truncated UTF-8 keeps the valid prefix, no replacement chars")
+        T.expect(!decoded.contains("\u{FFFD}"), "no U+FFFD from a mid-codepoint cut")
+    }
+
+    T.group("DocumentText.extractXLSX: cells in row order, shared + numeric + inline") {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("anfxlsx-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        try? fm.createDirectory(at: dir.appendingPathComponent("xl/worksheets"), withIntermediateDirectories: true)
+        let shared = """
+        <?xml version="1.0"?><sst xmlns="x">\
+        <si><t>Name</t></si><si><t>나이</t></si><si><t>박성일</t></si>\
+        </sst>
+        """
+        let sheet = """
+        <?xml version="1.0"?><worksheet><sheetData>\
+        <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>\
+        <row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>42</v></c>\
+        <c r="C2" t="inlineStr"><is><t>메모</t></is></c></row>\
+        </sheetData></worksheet>
+        """
+        try? shared.write(to: dir.appendingPathComponent("xl/sharedStrings.xml"), atomically: true, encoding: .utf8)
+        try? sheet.write(to: dir.appendingPathComponent("xl/worksheets/sheet1.xml"), atomically: true, encoding: .utf8)
+        let xlsx = dir.appendingPathComponent("book.xlsx")
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        p.arguments = ["-q", "-r", xlsx.path, "xl"]
+        p.currentDirectoryURL = dir
+        try? p.run(); p.waitUntilExit()
+
+        guard let body = DocumentText.extractXLSX(xlsx) else {
+            T.expect(false, "extractXLSX returned a body"); return
+        }
+        T.expect(body.contains("Name") && body.contains("나이") && body.contains("박성일"),
+                 "shared strings resolved")
+        T.expect(body.contains("42"), "numeric cell shown (old bug: dropped)")
+        T.expect(body.contains("메모"), "inline-string cell shown (old bug: dropped)")
+        T.expect(body.contains("Name\t나이"), "cells in row order, tab-separated (not glued)")
+        T.expect(body.split(separator: "\n").count >= 2, "rows on separate lines, no run-on")
+    }
 }
 
 /// Draws one page of text into a real PDF via Core Graphics + Core Text.
