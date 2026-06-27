@@ -1138,7 +1138,9 @@ final class BrowserModel: Identifiable {
         let targets = selectedItems.isEmpty
             ? (FileItem(url: currentURL).map { [$0] } ?? [])
             : selectedItems
-        for item in targets.prefix(8) { GetInfoPanel.show(for: item) }
+        for item in targets.prefix(8) {
+            GetInfoPanel.show(for: item) { [weak self] in self?.reload() }
+        }
     }
 
     /// Toggle a colour tag on every selected item, then refresh so the swatch
