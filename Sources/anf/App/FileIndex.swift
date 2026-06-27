@@ -224,7 +224,10 @@ final class FileIndex {
         let cap = 300_000
         guard let fd = ExternalTools.path("fd") else { return ([], []) }
         let lines = ExternalTools.run(fd, [
-            "--color=never", "--absolute-path", "--type", "f", "--type", "d",
+            // --no-ignore so the persistent index matches the live fdNames fallback
+            // (which also passes it). Without it, a file under any .gitignore'd path
+            // was findable by name before the index built, then vanished once it did.
+            "--color=never", "--absolute-path", "--no-ignore", "--type", "f", "--type", "d",
             "--exclude", "Library", "--exclude", ".Trash",
             "--exclude", "node_modules", "--exclude", ".git",
             "--exclude", "target", "--exclude", ".build", "--exclude", "build",
