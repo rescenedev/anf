@@ -101,5 +101,24 @@ func runGridSelectionTests() {
             model.moveSelection(by: -1, extend: true)
             T.equal(names(), ["f03.txt", "f04.txt"], "shift+↑ retracts the run")
         }
+
+        T.group("grouped icon grid: ↑/↓ respect per-group rows, not a uniform stride") {
+            // cols=4. A:[0..6) rows [0-3][4-5]; B:[6..11) rows [6-9][10]; C:[11..13).
+            // A uniform +cols stride lands on the wrong column across a group break.
+            let groups = [FileGroup(title: "A", range: 0..<6),
+                          FileGroup(title: "B", range: 6..<11),
+                          FileGroup(title: "C", range: 11..<13)]
+            func down(_ i: Int) -> Int { BrowserModel.groupAwareRowTarget(current: i, down: true,  cols: 4, groups: groups, itemCount: 13) }
+            func up(_ i: Int)   -> Int { BrowserModel.groupAwareRowTarget(current: i, down: false, cols: 4, groups: groups, itemCount: 13) }
+            T.equal(down(1), 5,  "within group: row0→row1 same col")
+            T.equal(down(5), 7,  "A row1 col1 → B row0 col1 (not uniform +4 = 9)")
+            T.equal(down(7), 10, "B row0 col1 → B's partial row1 last item")
+            T.equal(down(10), 11, "B row1 col0 → C row0 col0")
+            T.equal(down(12), 12, "last group, last item → clamp")
+            T.equal(up(5), 1,    "within group: row1→row0 same col")
+            T.equal(up(7), 5,    "B row0 col1 → A's last row, col1 (symmetric with down(5))")
+            T.equal(up(11), 10,  "C row0 col0 → B's last row col0")
+            T.equal(up(0), 0,    "first group, first item → clamp")
+        }
     }
 }

@@ -619,7 +619,7 @@ final class WorkspaceModel {
             let pane = panes[i]
             let models = validTabs.map { ts -> BrowserModel in
                 let m = BrowserModel(start: URL(fileURLWithPath: ts.path))
-                if let vm = ViewMode(rawValue: ts.viewMode) { m.viewMode = vm }
+                if let vm = ViewMode(rawValue: ts.viewMode) { m.setRestoredViewMode(vm) }
                 if let lp = ts.locked { m.lockedURL = URL(fileURLWithPath: lp) }   // restore tab pin (#29)
                 return m
             }
@@ -659,7 +659,7 @@ final class WorkspaceModel {
             guard !validTabs.isEmpty else { continue }
             let models = validTabs.map { ts -> BrowserModel in
                 let m = BrowserModel(start: URL(fileURLWithPath: ts.path))
-                if let vm = ViewMode(rawValue: ts.viewMode) { m.viewMode = vm }
+                if let vm = ViewMode(rawValue: ts.viewMode) { m.setRestoredViewMode(vm) }
                 return m
             }
             panes[i].replaceTabs(models, activeIndex: min(paneState.activeIndex, models.count - 1))

@@ -363,6 +363,18 @@ final class BrowserModel: Identifiable {
         applyingFolderViewMode = false
     }
 
+    /// Apply a tab's view mode saved in a Workspace/session snapshot WITHOUT
+    /// recording it as a user preference. Plain `m.viewMode = vm` ran the didSet,
+    /// which wrote it to ViewModePrefs and DELETED that folder's whole subtree of
+    /// per-folder prefs — so restoring a Workspace clobbered the user's saved
+    /// view-mode choices. The snapshot mode is authoritative for THIS tab only.
+    func setRestoredViewMode(_ vm: ViewMode) {
+        guard vm != viewMode else { return }
+        applyingFolderViewMode = true
+        viewMode = vm
+        applyingFolderViewMode = false
+    }
+
     // MARK: - Derived
 
     /// Rebuild the cached `items` from `allItems` applying the current filter and
@@ -1222,12 +1234,21 @@ final class BrowserModel: Identifiable {
         }()
         let current = tracked ?? items.firstIndex { selection.contains($0.id) }
         if tracked == nil { selAnchor = current }
-        var effective = delta
-        if rowJump, !extend, let cur = current, cur + delta < 0 || cur + delta > n - 1 {
-            let step = delta > 0 ? 1 : -1          // no row that way → adjacent item
-            if cur + step >= 0, cur + step <= n - 1 { effective = step }
+        let cursor: Int
+        if rowJump, viewMode == .icons, grouped, let cur = current {
+            // Grouped icon grid: each group is its own section starting on a fresh
+            // row, so a uniform `cols` stride crosses group boundaries at the wrong
+            // column. Use group-aware geometry instead.
+            cursor = Self.groupAwareRowTarget(current: cur, down: delta > 0,
+                                              cols: gridColumns, groups: groupRanges, itemCount: n)
+        } else {
+            var effective = delta
+            if rowJump, !extend, let cur = current, cur + delta < 0 || cur + delta > n - 1 {
+                let step = delta > 0 ? 1 : -1          // no row that way → adjacent item
+                if cur + step >= 0, cur + step <= n - 1 { effective = step }
+            }
+            cursor = min(max((current ?? (effective >= 0 ? -1 : n)) + effective, 0), n - 1)
         }
-        let cursor = min(max((current ?? (effective >= 0 ? -1 : n)) + effective, 0), n - 1)
 
         if !extend {
             selAnchor = cursor
@@ -1238,7 +1259,7 @@ final class BrowserModel: Identifiable {
         let anchor = selAnchor ?? (current ?? cursor)
         selAnchor = anchor
         selCursor = cursor
-        if viewMode == .icons {
+        if viewMode == .icons, !grouped {
             // Icon grid: rectangular block with the anchor and cursor as
             // opposite corners (spreadsheet-style). Backtracking shrinks it.
             let cols = max(1, gridColumns)
@@ -1252,9 +1273,49 @@ final class BrowserModel: Identifiable {
             }
             selection = sel
         } else {
-            // List/columns/gallery: contiguous reading-order range.
+            // List/columns/gallery — and the GROUPED icon grid, whose per-section
+            // grids make a single rectangle undefined: contiguous reading-order range.
             let lo = min(anchor, cursor), hi = max(anchor, cursor)
             selection = Set(items[lo...hi].map(\.id))
+        }
+    }
+
+    /// Vertical (↑/↓) target index in the GROUPED icon grid, where each group is
+    /// its own section starting on a fresh row — so a uniform `cols` stride lands on
+    /// the wrong column across a group boundary (and can jump a header into the next
+    /// group's interior). Stays in the current group's column, then drops into the
+    /// adjacent group's first/last row at the same column. Pure → unit-tested.
+    nonisolated static func groupAwareRowTarget(current: Int, down: Bool, cols rawCols: Int,
+                                                groups: [FileGroup], itemCount: Int) -> Int {
+        let cols = max(1, rawCols)
+        guard let gi = groups.firstIndex(where: { $0.range.contains(current) }) else {
+            return min(max(current + (down ? cols : -cols), 0), max(0, itemCount - 1))
+        }
+        let g = groups[gi].range
+        let col = (current - g.lowerBound) % cols
+        let rowInGroup = (current - g.lowerBound) / cols
+        if down {
+            let below = g.lowerBound + (rowInGroup + 1) * cols + col
+            if below < g.upperBound { return below }                 // cell directly below exists
+            if g.lowerBound + (rowInGroup + 1) * cols < g.upperBound {
+                return g.upperBound - 1                               // partial row below has no col c → its last item
+            }
+            if gi + 1 < groups.count {                               // next group's first row, same col
+                let h = groups[gi + 1].range
+                return min(h.lowerBound + col, h.upperBound - 1)
+            }
+            return g.upperBound - 1                                   // last group → clamp to its end
+        } else {
+            if rowInGroup > 0 {
+                return g.lowerBound + (rowInGroup - 1) * cols + col   // cell above (a full row) always has col c
+            }
+            if gi > 0 {                                              // previous group's last row, same col
+                let h = groups[gi - 1].range
+                let rows = (h.count + cols - 1) / cols
+                let lastRowStart = h.lowerBound + (rows - 1) * cols
+                return min(lastRowStart + col, h.upperBound - 1)
+            }
+            return g.lowerBound                                       // first group → clamp to its start
         }
     }
 
