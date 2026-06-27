@@ -23,4 +23,14 @@ func runPathProbeTests() {
         T.expect(!PathProbe.canListDirectory(file.path), "a file can't be opendir'd")
         T.expect(!PathProbe.canListDirectory(missing.path), "missing path → false")
     }
+
+    T.group("existingDirectories (concurrent, one timeout window)") {
+        let got = PathProbe.existingDirectories([dir.path, file.path, missing.path])
+        T.expect(got.contains(dir.path), "existing dir included")
+        T.expect(!got.contains(file.path), "a file is not a directory")
+        T.expect(!got.contains(missing.path), "missing path excluded")
+        T.equal(PathProbe.existingDirectories([]).count, 0, "empty input → empty set")
+        // Duplicates collapse and don't double-count.
+        T.equal(PathProbe.existingDirectories([dir.path, dir.path]), [dir.path], "dedups paths")
+    }
 }
