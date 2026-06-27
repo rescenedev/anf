@@ -21,5 +21,18 @@ func runTerminalLauncherTests() {
             T.equal(TerminalLauncher.target(for: "com.googlecode.iterm2"),
                     .bundle("com.googlecode.iterm2"), "a bundle id ('.', no '/') → bundle target")
         }
+
+        T.group("sanitizedHost defuses ssh-host injection") {
+            T.equal(TerminalLauncher.sanitizedHost("user@host.example.com"),
+                    "user@host.example.com", "a real host is unchanged")
+            T.equal(TerminalLauncher.sanitizedHost("server-1_test:2222"),
+                    "server-1_test:2222", "alias with port is unchanged")
+            let evil = TerminalLauncher.sanitizedHost("h\"; rm -rf ~ #")
+            for bad in ["\"", ";", " ", "~", "#"] {
+                T.expect(!evil.contains(bad), "strips '\(bad)' from a crafted alias")
+            }
+            T.expect(!TerminalLauncher.sanitizedHost("\"; rm -rf /; \"").contains("/"),
+                     "no path separator survives")
+        }
     }
 }
