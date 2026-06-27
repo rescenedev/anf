@@ -80,4 +80,28 @@ func runVaultTests() {
         T.equal(try? String(contentsOf: fileA, encoding: .utf8), "version two",
                 "restored content matches the snapshot")
     }
+
+    T.group("Vault recovery for non-ASCII filenames (Korean / accented / emoji)") {
+        // Regression: git C-quotes any path byte >0x7F by default, so ls-tree
+        // emitted "\355\225\234…" for these names — deletedSince never matched them
+        // on disk and restore checked out a quoted path that didn't exist, so
+        // recovery was BROKEN for every non-ASCII filename (the Korean audience).
+        let names = ["한글파일.txt", "café.txt", "résumé.txt", "사진📷.txt"]
+        for n in names { try? "keepme".write(to: dir.appendingPathComponent(n), atomically: true, encoding: .utf8) }
+        T.expect(VaultService.snapshot(at: dir, label: "i18n"), "snapshot captures non-ASCII files")
+        let snap = VaultService.snapshots(at: dir).first!
+
+        for n in names { try? fm.removeItem(at: dir.appendingPathComponent(n)) }
+        let deleted = VaultService.deletedSince(snap, at: dir)
+        // git's own path bytes round-trip through Swift's canonical String compare.
+        for n in names {
+            T.expect(deleted.contains(n), "deletedSince lists non-ASCII file \(n)")
+        }
+        // Restore using the exact name git reported, then confirm it's back.
+        for n in names {
+            let gitName = deleted.first { $0 == n } ?? n
+            T.expect(VaultService.restore(gitName, from: snap, at: dir), "restore non-ASCII \(n)")
+            T.expect(fm.fileExists(atPath: dir.appendingPathComponent(n).path), "\(n) is back on disk")
+        }
+    }
 }
