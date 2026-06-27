@@ -62,15 +62,28 @@ enum TerminalLauncher {
 
     /// Open a new terminal that immediately `ssh`'s into `host`.
     static func ssh(_ host: String) {
+        // `host` comes from ~/.ssh/config or a user-added target. The Terminal.app
+        // fallback runs it through `do script` (a shell), so an alias containing a
+        // quote or shell metacharacter could break or inject commands. A real SSH
+        // host / alias / user@host:port only needs a small charset — restrict to it.
+        let safe = sanitizedHost(host)
+        guard !safe.isEmpty else { return }
         if hasGhostty {
-            run(["-na", ghosttyPath, "--args", "-e", "ssh", host])
+            run(["-na", ghosttyPath, "--args", "-e", "ssh", safe])
         } else {
-            // Terminal.app via an AppleScript `do script`.
-            let script = "tell application \"Terminal\" to do script \"ssh \(host)\""
+            let script = "tell application \"Terminal\" to do script \"ssh \(safe)\""
             if let appleScript = NSAppleScript(source: script) {
                 appleScript.executeAndReturnError(nil)
             }
         }
+    }
+
+    /// Strip everything but the characters a real SSH host / alias / user@host:port
+    /// needs, defusing shell/AppleScript injection via a crafted ~/.ssh/config
+    /// alias or custom target. Pure → unit-tested.
+    static func sanitizedHost(_ host: String) -> String {
+        let allowed = Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._@:-")
+        return String(host.filter { allowed.contains($0) })
     }
 
     private static func run(_ args: [String]) {
