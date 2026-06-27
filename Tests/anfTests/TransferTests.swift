@@ -103,6 +103,45 @@ func runTransferTests() {
             T.equal(names2.count, 3, "a third same-named drop into an occupied dir makes three distinct files")
         }
 
+        T.group("buildPlan conflict policies: keep both / replace / skip") {
+            let root = base.appendingPathComponent("policy-\(UUID().uuidString)")
+            let from = root.appendingPathComponent("from")
+            let into = root.appendingPathComponent("into")
+            for d in [from, into] { try? fm.createDirectory(at: d, withIntermediateDirectories: true) }
+            let s1 = from.appendingPathComponent("a.txt")   // collides with into/a.txt
+            let s2 = from.appendingPathComponent("b.txt")   // no collision
+            try? "new".write(to: s1, atomically: true, encoding: .utf8)
+            try? "b".write(to: s2, atomically: true, encoding: .utf8)
+            try? "old".write(to: into.appendingPathComponent("a.txt"), atomically: true, encoding: .utf8)
+
+            let kb = FileTransfer.buildPlan(sources: [s1, s2], destination: into, policy: .keepBoth)
+            T.equal(kb.plan.count, 2, "keepBoth plans both sources")
+            T.equal(kb.victims.count, 0, "keepBoth trashes nothing")
+            T.expect(kb.plan.contains { $0.dest.lastPathComponent == "a 2.txt" }, "colliding a.txt → 'a 2.txt'")
+            T.expect(kb.plan.contains { $0.dest.lastPathComponent == "b.txt" }, "non-colliding b.txt kept as-is")
+
+            let ow = FileTransfer.buildPlan(sources: [s1, s2], destination: into, policy: .overwrite)
+            T.equal(ow.victims.map(\.lastPathComponent), ["a.txt"], "overwrite marks existing a.txt as victim")
+            T.expect(ow.plan.contains { $0.dest.lastPathComponent == "a.txt" }, "overwrite reuses the original name")
+            T.equal(ow.plan.count, 2, "overwrite still plans the non-colliding source too")
+
+            let sk = FileTransfer.buildPlan(sources: [s1, s2], destination: into, policy: .skip)
+            T.equal(sk.plan.count, 1, "skip drops the colliding source")
+            T.equal(sk.plan.first?.src, s2, "skip keeps only the non-colliding source")
+            T.equal(sk.victims.count, 0, "skip trashes nothing")
+
+            // Within-batch duplicates keep both even under .overwrite (#76 must hold).
+            let c = root.appendingPathComponent("c"); try? fm.createDirectory(at: c, withIntermediateDirectories: true)
+            let d = root.appendingPathComponent("d"); try? fm.createDirectory(at: d, withIntermediateDirectories: true)
+            let into2 = root.appendingPathComponent("into2"); try? fm.createDirectory(at: into2, withIntermediateDirectories: true)
+            let dup1 = c.appendingPathComponent("r.txt"); try? "C".write(to: dup1, atomically: true, encoding: .utf8)
+            let dup2 = d.appendingPathComponent("r.txt"); try? "D".write(to: dup2, atomically: true, encoding: .utf8)
+            let ov = FileTransfer.buildPlan(sources: [dup1, dup2], destination: into2, policy: .overwrite)
+            T.equal(ov.plan.count, 2, "two same-named sources both planned under overwrite (#76)")
+            T.equal(Set(ov.plan.map { $0.dest.lastPathComponent }).count, 2, "...onto two distinct dest names")
+            T.equal(ov.victims.count, 0, "no on-disk victim for a within-batch dup into an empty dir")
+        }
+
         T.group("copyFileCancellable: correct copy + clean failure (#63)") {
             // NOTE: live progress and mid-file cancellation only happen on a REAL
             // data copy (cross-volume) — a same-volume copy here is an instant
