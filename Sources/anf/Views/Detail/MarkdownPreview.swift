@@ -118,7 +118,7 @@ struct MarkdownPreview: View {
                     return ([], false)
                 }
                 let slice = data.prefix(cap)
-                let text = String(decoding: slice, as: UTF8.self)
+                let text = TextDecoding.string(from: slice)
                 return (MarkdownBlocks.parse(text), data.count > cap)
             }.value
             blocks = loaded.0

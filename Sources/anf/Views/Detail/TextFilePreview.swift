@@ -46,7 +46,7 @@ struct TextFilePreview: View {
                     return ("", nil, false)
                 }
                 let slice = data.prefix(cap)
-                let s = String(decoding: slice, as: UTF8.self)
+                let s = TextDecoding.string(from: slice)
                 return (s, CodeHighlight.highlight(s, ext: ext, fontSize: size), data.count > cap)
             }.value
             text = loaded.0
