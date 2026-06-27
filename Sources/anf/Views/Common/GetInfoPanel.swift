@@ -7,12 +7,12 @@ import AppKit
 final class GetInfoPanel: NSObject {
     private static var open: [String: GetInfoPanel] = [:]
 
-    static func show(for item: FileItem) {
+    static func show(for item: FileItem, onChange: @escaping () -> Void = {}) {
         if let existing = open[item.url.path] {
             existing.window.makeKeyAndOrderFront(nil)
             return
         }
-        let panel = GetInfoPanel(item: item)
+        let panel = GetInfoPanel(item: item, onChange: onChange)
         open[item.url.path] = panel
         panel.window.makeKeyAndOrderFront(nil)
         // Make the window itself first responder so Esc reaches EscPanel instead
@@ -23,9 +23,12 @@ final class GetInfoPanel: NSObject {
     private let item: FileItem
     private let window: NSPanel
     private let sizeLabel = NSTextField(labelWithString: "—")
+    /// Called after a tag edit so the browser can refresh the row swatches.
+    private let onChange: () -> Void
 
-    private init(item: FileItem) {
+    private init(item: FileItem, onChange: @escaping () -> Void) {
         self.item = item
+        self.onChange = onChange
         let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 460),
                          styleMask: [.titled, .closable, .utilityWindow],
                          backing: .buffered, defer: false)
@@ -159,6 +162,12 @@ final class GetInfoPanel: NSObject {
         FileTags.toggle(name, on: item.url)
         let now = Set(FileTags.tags(of: item.url))
         sender.image = swatch(FileTags.color(for: name) ?? .gray, filled: now.contains(name))
+        // The list/icon/column swatches read a path-keyed colour cache cleared only
+        // on reload; without this a tag changed here stayed stale until an unrelated
+        // reload (the FSEvents watcher can't catch it — a tag write bumps ctime, not
+        // mtime). Invalidate the cache and let the browser refresh.
+        FileTags.clearColorCache()
+        onChange()
     }
 
     private func permissions() -> String {
