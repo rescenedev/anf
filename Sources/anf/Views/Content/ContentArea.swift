@@ -26,6 +26,12 @@ struct ContentArea: View {
             case .gallery: GalleryView(model: model, onFocus: onFocus)
             }
 
+            // These overlays describe ONLY currentURL (the deepest folder). In
+            // Miller-column mode the user is looking at several columns at once, so a
+            // centered "Empty Folder" / loading state for an empty leaf would be drawn
+            // over the populated ancestor columns. Columns render their own per-column
+            // state, so suppress the whole-view overlays there.
+            if model.viewMode != .columns {
             if model.networkStalled {
                 // The volume blipped — the (possibly stale) listing stays visible
                 // behind this card, which refreshes itself when the mount returns.
@@ -53,6 +59,7 @@ struct ContentArea: View {
                     EmptyState(filtered: !model.filterText.isEmpty)
                 }
             }
+            }   // end: suppress whole-view overlays in column mode
         }
         // Drop files anywhere in the pane → into this folder (enables pane-to-pane
         // and sidebar drops). Defaults to COPY; hold ⌘ to MOVE (#76).
