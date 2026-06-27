@@ -105,8 +105,14 @@ final class PTYProcess {
     private func watchExit() {
         let p = pid
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let code = pty_wait(p)
-            DispatchQueue.main.async { self?.onExit?(code) }
+            let code = pty_wait(p)   // reaps the child
+            DispatchQueue.main.async {
+                // The child has been reaped — clear pid BEFORE onExit so a later
+                // kill() (e.g. closing the already-exited tab) can't SIGTERM a pid
+                // the OS may have recycled for an unrelated process.
+                self?.pid = -1
+                self?.onExit?(code)
+            }
         }
     }
 
