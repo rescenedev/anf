@@ -32,6 +32,40 @@ enum PathProbe {
         } ?? false
     }
 
+    /// Concurrently test many paths, returning the subset that are existing
+    /// directories answering within a SINGLE `timeout` window. Session restore on
+    /// relaunch validates every saved tab; probing them one-at-a-time summed a
+    /// blocking 1.5s per dead-mount tab (a quad Workspace parked on an offline NAS
+    /// froze launch for seconds). Probing concurrently bounds the whole restore to
+    /// one timeout, and a deleted LOCAL folder still resolves instantly.
+    static func existingDirectories(_ paths: [String], timeout: TimeInterval = 1.5) -> Set<String> {
+        let unique = Set(paths)
+        guard !unique.isEmpty else { return [] }
+        let box = SetBox()
+        let group = DispatchGroup()
+        let q = DispatchQueue.global(qos: .userInitiated)
+        for path in unique {
+            group.enter()
+            q.async {
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
+                    box.insert(path)
+                }
+                group.leave()
+            }
+        }
+        // Abandon any still-blocked (dead-mount) probes after the window, like run().
+        _ = group.wait(timeout: .now() + timeout)
+        return box.snapshot()
+    }
+
+    private final class SetBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var set = Set<String>()
+        func insert(_ s: String) { lock.lock(); set.insert(s); lock.unlock() }
+        func snapshot() -> Set<String> { lock.lock(); defer { lock.unlock() }; return set }
+    }
+
     /// Run `work` on a background queue, returning its result, or `nil` if it
     /// didn't finish within `timeout`. On timeout the worker thread is abandoned
     /// (not cancelled) — it unblocks on its own when the mount finally times out,

@@ -591,11 +591,15 @@ final class WorkspaceModel {
         if let th = state.terminalHeight { terminalHeight = Self.clampTerminalHeight(CGFloat(th)) }
         if let u = state.terminalHeightUserSet { terminalHeightUserSet = u }
 
+        // `PathProbe` (not `fm.fileExists`): a folder on a now-unreachable network
+        // share blocks the main thread for the mount's full timeout, beachballing
+        // relaunch when a saved folder lived on that share. Probe EVERY saved tab
+        // path across all panes concurrently in one timeout window, not one blocking
+        // probe per tab (which summed to seconds for a multi-tab NAS Workspace).
+        let validPaths = PathProbe.existingDirectories(
+            state.panes.prefix(panes.count).flatMap { $0.tabs.map(\.path) })
         for (i, paneState) in state.panes.enumerated() where i < layout.count && i < panes.count {
-            // `PathProbe` (not `fm.fileExists`): a folder on a now-unreachable
-            // network share blocks the main thread for the mount's full timeout,
-            // beachballing relaunch when the last folder lived on that share.
-            let validTabs = paneState.tabs.filter { PathProbe.isDirectory($0.path) }
+            let validTabs = paneState.tabs.filter { validPaths.contains($0.path) }
             guard !validTabs.isEmpty else { continue }
             let pane = panes[i]
             let models = validTabs.map { ts -> BrowserModel in
@@ -633,8 +637,10 @@ final class WorkspaceModel {
         if let l = PaneLayout(rawValue: snap.layout) { layout = l }
         splitRatioH = Self.clampSplitRatio(CGFloat(snap.splitRatioH))
         splitRatioV = Self.clampSplitRatio(CGFloat(snap.splitRatioV))
+        let validPaths = PathProbe.existingDirectories(
+            snap.panes.prefix(panes.count).flatMap { $0.tabs.map(\.path) })
         for (i, paneState) in snap.panes.enumerated() where i < panes.count {
-            let validTabs = paneState.tabs.filter { PathProbe.isDirectory($0.path) }
+            let validTabs = paneState.tabs.filter { validPaths.contains($0.path) }
             guard !validTabs.isEmpty else { continue }
             let models = validTabs.map { ts -> BrowserModel in
                 let m = BrowserModel(start: URL(fileURLWithPath: ts.path))
