@@ -862,8 +862,14 @@ final class BrowserModel: Identifiable {
                 // `canListDirectory` (opendir), not `isDirectory` (stat): a dropped
                 // mount's ROOT still stats from cache, so stat would miss a stall at
                 // the share root — opendir actually contacts the server.
-                let probe = await Task.detached(priority: .utility) { () -> (reachable: Bool, readable: Bool) in
-                    (PathProbe.canListDirectory(url.path), FileManager.default.isReadableFile(atPath: url.path))
+                // `isLocalVolume` ALSO blocks on a stalled mount (it reads
+                // `volumeIsLocalKey`), so it must run in this same detached probe —
+                // not on the main actor — or it would beachball on exactly the
+                // network stall this branch exists to detect.
+                let probe = await Task.detached(priority: .utility) { () -> (reachable: Bool, readable: Bool, isLocal: Bool) in
+                    (PathProbe.canListDirectory(url.path),
+                     FileManager.default.isReadableFile(atPath: url.path),
+                     DirectoryWatcherFactory.isLocalVolume(url))
                 }.value
                 guard token == loadToken else { return }
                 // The "reconnecting to network drive" stall only makes sense for a
