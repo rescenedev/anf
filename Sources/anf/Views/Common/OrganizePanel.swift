@@ -105,11 +105,23 @@ private final class OrganizeState: ObservableObject {
                 ContentOrganizer.move(groups: groups, into: folder)
             }.value
             FolderAITools.recordOrganizeUndo(result.pairs)   // make the bulk move ⌘Z-able
+            // Mark a row done ONLY if its file actually moved; the rest failed
+            // (permission denied, name collision, read-only volume) and must not be
+            // shown as succeeded — the panel previously marked every row done and
+            // closed silently, so failures looked like successes.
+            let movedSrcs = Set(result.pairs.map { $0.from.path })
             for i in rows.indices where rows[i].enabled && rows[i].phase == .ready {
-                rows[i].phase = .done
+                rows[i].phase = movedSrcs.contains(rows[i].url.path) ? .done : .failed
             }
             if result.moved > 0 { onDone() }
-            close()
+            if result.failed > 0 {
+                FileOperations.presentFailures(
+                    L("Couldn’t organize \(result.failed) item(s)", "\(result.failed)개 항목을 정리하지 못했습니다"),
+                    [L("They were left in place — check permissions or a name conflict.",
+                       "해당 항목은 원래 자리에 그대로 있습니다 — 권한이나 이름 충돌을 확인하세요.")])
+            } else {
+                close()   // clean run dismisses; keep the panel open to show failures
+            }
         }
     }
 }
