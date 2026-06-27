@@ -43,6 +43,10 @@ struct CustomSSHHost: Codable, Identifiable, Hashable {
 @MainActor
 @Observable
 final class CustomSSHStore {
+    /// Shared across all windows (see FavoritesStore.shared) so per-window
+    /// instances can't go stale or overwrite each other's saved SSH hosts.
+    static let shared = CustomSSHStore()
+
     private(set) var hosts: [CustomSSHHost]
     private let key = "anf.ssh.custom.v2"
 

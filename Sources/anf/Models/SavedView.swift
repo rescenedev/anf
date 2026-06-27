@@ -29,6 +29,10 @@ struct SavedView: Codable, Identifiable, Hashable {
 @MainActor
 @Observable
 final class SavedViewsStore {
+    /// Shared across all windows (see FavoritesStore.shared) so per-window
+    /// instances can't go stale or overwrite each other's saved views.
+    static let shared = SavedViewsStore()
+
     private static let key = "anf.savedViews.v1"
     private(set) var views: [SavedView]
 

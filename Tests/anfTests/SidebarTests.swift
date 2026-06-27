@@ -27,4 +27,14 @@ func runSidebarTests() {
         // Distinct ids (paths) — duplicates would break NSOutlineView identity.
         T.equal(Set(favs.map(\.id)).count, favs.count, "favorite ids are unique")
     }
+
+    T.group("only real file locations are favoritable") {
+        // ⌘⇧D / the toolbar star reach virtual + remote locations too; favoriting
+        // one persisted a garbage path that broke after relaunch.
+        T.expect(FavoritesStore.isFavoritable(URL(fileURLWithPath: "/Users/me/Documents")),
+                 "a real folder is favoritable")
+        T.expect(!FavoritesStore.isFavoritable(URL(string: "anf://recents")!), "anf:// virtual location is not")
+        T.expect(!FavoritesStore.isFavoritable(URL(string: "anf://smartfolder/abc")!), "smart folder is not")
+        T.expect(!FavoritesStore.isFavoritable(URL(string: "sftp://host/dir")!), "remote sftp:// is not")
+    }
 }

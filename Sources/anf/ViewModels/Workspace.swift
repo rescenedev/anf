@@ -8,6 +8,13 @@ import Observation
 @MainActor
 @Observable
 final class FavoritesStore {
+    /// One store shared by every window — each window used to build its own
+    /// instance over the SAME UserDefaults key, so a favorite added in window A
+    /// went stale in window B and B's next whole-array save silently overwrote
+    /// A's addition (data loss). A single @Observable instance keeps all windows
+    /// in sync, matching the smartFolders singleton.
+    static let shared = FavoritesStore()
+
     private(set) var items: [URL]
     private let key = "anf.favorites.v1"
 
@@ -84,8 +91,14 @@ final class FavoritesStore {
         if contains(url) { remove(url) } else { add(url) }
     }
 
+    /// Only real on-disk locations can be favorited. ⌘⇧D / the toolbar star are
+    /// available on virtual (anf://recents, smart folders) and remote (sftp://)
+    /// locations too — favoriting one persisted a garbage path that became a
+    /// broken favorite after relaunch.
+    nonisolated static func isFavoritable(_ url: URL) -> Bool { url.isFileURL && !url.path.isEmpty }
+
     func add(_ url: URL) {
-        guard !contains(url) else { return }
+        guard Self.isFavoritable(url), !contains(url) else { return }
         items.append(url); persist()
     }
 
@@ -279,9 +292,11 @@ final class WorkspaceModel {
     }
     /// First-launch shortcut cheat sheet (reopenable from the View menu).
     var showWelcome = !UserDefaults.standard.bool(forKey: "anf.welcomed.v1")
-    let favorites = FavoritesStore()
-    let customSSH = CustomSSHStore()
-    let savedViews = SavedViewsStore()
+    // Shared across all windows so a favorite / SSH host / saved view added in one
+    // window is visible in the others and no window's save clobbers another's.
+    var favorites: FavoritesStore { .shared }
+    var customSSH: CustomSSHStore { .shared }
+    var savedViews: SavedViewsStore { .shared }
     /// App-wide saved searches (singleton); exposed here so the sidebar can observe
     /// and list them alongside the per-window stores.
     var smartFolders: SmartFoldersStore { .shared }
