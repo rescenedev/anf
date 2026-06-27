@@ -49,42 +49,27 @@ final class FileTransfer {
         let sources = sources.filter { $0.deletingLastPathComponent().path != destination.path || !move }
         guard !sources.isEmpty else { completion(); return }
 
-        // 1) Name conflicts auto-rename the incoming copy ("name 2", Finder-style)
-        // instead of prompting — requested default behavior. The plan below routes
-        // each colliding source through uniqueURL; no skip/overwrite prompt.
-        let policy: ConflictPolicy = .keepBoth
+        // 1) Resolve name conflicts with EXISTING items at the destination. Only a
+        // real on-disk collision prompts (Keep Both / Replace / Skip); the choice
+        // then governs the whole batch. No collision → no prompt, plain keep-both.
+        let conflictFM = FileManager.default
+        let conflicts = sources.filter {
+            conflictFM.fileExists(atPath: destination.appendingPathComponent($0.lastPathComponent).path)
+        }
+        let policy: ConflictPolicy
+        if conflicts.isEmpty {
+            policy = .keepBoth
+        } else if let chosen = askConflictPolicy(conflictCount: conflicts.count,
+                                                 firstName: conflicts[0].lastPathComponent) {
+            policy = chosen
+        } else {
+            completion(); return   // user cancelled the whole transfer
+        }
 
-        // 2) Plan: (src, dest) pairs after applying the policy. Dedup against
-        // destinations already claimed in THIS batch (not just the live filesystem):
-        // two sources sharing a name — e.g. report.txt from two folders in a Recents
-        // or search view — must each get a distinct dest, or they race onto one path
-        // and one is silently lost (#76 data loss).
-        var plan: [(src: URL, dest: URL)] = []
-        var overwriteVictims: [URL] = []
-        var claimed = Set<String>()
-        let planFM = FileManager.default
-        func isTaken(_ url: URL) -> Bool {
-            planFM.fileExists(atPath: url.path) || claimed.contains(url.path.lowercased())
-        }
-        for src in sources {
-            let plain = destination.appendingPathComponent(src.lastPathComponent)
-            let dest: URL
-            if isTaken(plain) {
-                switch policy {
-                case .skip: continue
-                case .keepBoth:
-                    dest = FileOperations.uniqueURL(for: src.lastPathComponent,
-                                                    in: destination, reserved: claimed)
-                case .overwrite:
-                    overwriteVictims.append(plain)
-                    dest = plain
-                }
-            } else {
-                dest = plain
-            }
-            claimed.insert(dest.path.lowercased())
-            plan.append((src, dest))
-        }
+        // 2) Build the (src, dest) plan + any overwrite victims. Within-batch
+        // same-name sources always keep both (#76), independent of `policy`.
+        let (plan, overwriteVictims) = Self.buildPlan(sources: sources,
+                                                      destination: destination, policy: policy)
         guard !plan.isEmpty else { completion(); return }
 
         // Overwrite = trash the existing items first so the destination slot is
@@ -284,6 +269,76 @@ final class FileTransfer {
     }
 
     // MARK: - Helpers
+
+    /// Plan (src, dest) pairs for the batch under a conflict `policy`, plus the
+    /// existing items a `.overwrite` should trash first. Two distinct concerns:
+    ///  • collision with an EXISTING on-disk item → governed by `policy`.
+    ///  • collision with a name already claimed by an earlier source in THIS batch
+    ///    (e.g. report.txt from two folders in a Recents/search view) → ALWAYS keep
+    ///    both, independent of `policy`, or one is silently lost (#76 data loss).
+    /// Pure planning (no IO mutation) so it is unit-tested directly across policies.
+    static func buildPlan(sources: [URL], destination: URL, policy: ConflictPolicy)
+        -> (plan: [(src: URL, dest: URL)], victims: [URL]) {
+        var plan: [(src: URL, dest: URL)] = []
+        var victims: [URL] = []
+        var claimed = Set<String>()
+        let fm = FileManager.default
+        for src in sources {
+            let plain = destination.appendingPathComponent(src.lastPathComponent)
+            let claimedInBatch = claimed.contains(plain.path.lowercased())
+            let existsOnDisk = fm.fileExists(atPath: plain.path)
+            let dest: URL
+            if claimedInBatch {
+                // Within-batch duplicate: keep both no matter the policy (#76).
+                dest = FileOperations.uniqueURL(for: src.lastPathComponent, in: destination, reserved: claimed)
+            } else if existsOnDisk {
+                switch policy {
+                case .skip: continue
+                case .overwrite:
+                    victims.append(plain)
+                    dest = plain
+                case .keepBoth:
+                    dest = FileOperations.uniqueURL(for: src.lastPathComponent, in: destination, reserved: claimed)
+                }
+            } else {
+                dest = plain
+            }
+            claimed.insert(dest.path.lowercased())
+            plan.append((src, dest))
+        }
+        return (plan, victims)
+    }
+
+    /// Ask how to resolve name collisions for the batch. `nil` = the user cancelled
+    /// the whole transfer. Headless (tests/self-tests) can't show a modal, so it
+    /// defaults to the safe, non-destructive Keep Both.
+    private func askConflictPolicy(conflictCount: Int, firstName: String) -> ConflictPolicy? {
+        guard NSApplication.shared.isRunning else { return .keepBoth }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = conflictCount == 1
+            ? L("An item named “\(firstName)” already exists here.",
+                "“\(firstName)” 항목이 이미 있습니다.")
+            : L("\(conflictCount) items already exist here.",
+                "이미 있는 항목이 \(conflictCount)개입니다.")
+        alert.informativeText = conflictCount == 1
+            ? L("Keep both, replace the existing item, or skip it?",
+                "둘 다 두기, 기존 항목 덮어쓰기, 또는 건너뛰기를 선택하세요.")
+            : L("Apply to all \(conflictCount) conflicting items: keep both, replace, or skip.",
+                "겹치는 \(conflictCount)개 항목 모두에 적용: 둘 다 두기 · 덮어쓰기 · 건너뛰기.")
+        // Keep Both is the default (safest, no data loss). Replace trashes the
+        // existing item (recoverable); Skip leaves it untouched.
+        alert.addButton(withTitle: L("Keep Both", "둘 다 두기"))   // .alertFirstButtonReturn
+        alert.addButton(withTitle: L("Replace", "덮어쓰기"))       // .alertSecondButtonReturn
+        alert.addButton(withTitle: L("Skip", "건너뛰기"))          // .alertThirdButtonReturn
+        alert.addButton(withTitle: L("Cancel", "취소"))
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:  return .keepBoth
+        case .alertSecondButtonReturn: return .overwrite
+        case .alertThirdButtonReturn:  return .skip
+        default:                       return nil   // Cancel
+        }
+    }
 
     /// Volume identifier for cross-volume move detection (nil on failure). Uses the
     /// device number (`st_dev`) — `URLResourceValues.volumeIdentifier` is an opaque
