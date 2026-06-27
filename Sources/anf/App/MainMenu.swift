@@ -128,11 +128,17 @@ final class AIMenuController: NSObject, NSMenuItemValidation {
 
     @objc func setAPIKey(_ sender: Any?) {
         let replacing = AISecret.hasKey
-        let msg = replacing
+        // Disclose the cloud transmission at the point of consent: for a
+        // privacy-first app, the user should know that enabling Claude uploads file
+        // text (and OCR'd image/screenshot text) to Anthropic before pasting a key.
+        let cloudNote = L("When you use AI features, the selected file’s text (and OCR’d image text) is sent to Anthropic.",
+                          "AI 기능 사용 시 선택한 파일의 텍스트(및 이미지에서 인식한 텍스트)가 Anthropic으로 전송됩니다.")
+        let msg = (replacing
             ? L("Replace the key stored in your macOS Keychain. Get one at console.anthropic.com (sk-ant-api03-…).",
                 "macOS 키체인에 저장된 키를 교체합니다. console.anthropic.com에서 발급 (sk-ant-api03-…).")
             : L("Pasted keys are saved to the macOS Keychain — never to a file. Get one at console.anthropic.com (sk-ant-api03-…).",
                 "붙여넣은 키는 파일이 아니라 macOS 키체인에 저장됩니다. console.anthropic.com에서 발급 (sk-ant-api03-…).")
+            ) + "\n\n" + cloudNote
         guard let key = TextPrompt.runSecure(
             title: L("Anthropic API Key", "Anthropic API 키"),
             message: msg, placeholder: "sk-ant-api03-…",
