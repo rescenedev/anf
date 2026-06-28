@@ -343,6 +343,13 @@ final class WorkspaceModel {
         didSet { terminals.forEach { $0.applyFontSize(terminalFontSize) } }
     }
 
+    /// User-chosen terminal body font (the "terminalFont" setting, #83), mirrored
+    /// to UserDefaults by Keymap from the settings file. Empty = built-in default.
+    var terminalFontFamily: String {
+        (UserDefaults.standard.string(forKey: "anf.terminalFont") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Clamp the drawer height. When `available` (the content height) is known the
     /// drawer may grow up to 80% of it; otherwise a generous absolute cap applies.
     static func clampTerminalHeight(_ h: CGFloat, available: CGFloat? = nil) -> CGFloat {
@@ -391,6 +398,8 @@ final class WorkspaceModel {
     /// running in its own tab) instead of replacing the drawer's only session.
     private func addTerminalTab(_ s: TerminalSession) {
         s.applyFontSize(terminalFontSize)
+        let font = terminalFontFamily
+        if !font.isEmpty { s.applyFontFamily(font) }
         terminals.append(s)
         activeTerminalIndex = terminals.count - 1
     }

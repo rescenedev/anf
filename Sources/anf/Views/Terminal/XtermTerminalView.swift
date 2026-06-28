@@ -8,6 +8,7 @@ final class XtermTerminalView: NSView {
     private let pty = PTYProcess()
     private var ready = false
     private var pendingFontSize: CGFloat?
+    private var pendingFontFamily: String?
     /// PTY bytes that arrived before xterm.js finished loading (the shell prompt,
     /// an SSH/SFTP banner, MOTD). termWrite doesn't exist yet, so buffer and flush
     /// on pageReady instead of dropping them. Capped so a never-loading page can't
@@ -79,6 +80,18 @@ final class XtermTerminalView: NSView {
         }
     }
 
+    /// Set the terminal body font (terminalFont setting, #83). The fallback chain
+    /// for Nerd Font icons / CJK / emoji is preserved on the JS side.
+    func setFontFamily(_ family: String) {
+        if ready {
+            let escaped = family.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "")
+            webView.evaluateJavaScript("window.termSetFontFamily(\"\(escaped)\")")
+        } else {
+            pendingFontFamily = family
+        }
+    }
+
     func focus() { webView.window?.makeFirstResponder(webView) }
 
     func terminate() { pty.kill() }
@@ -105,6 +118,7 @@ final class XtermTerminalView: NSView {
         // prove xterm resources load from the SHIPPED bundle, not the dev tree.
         NotificationCenter.default.post(name: .init("anf.terminal.pageReady"), object: nil)
         if let size = pendingFontSize { setFontSize(size); pendingFontSize = nil }
+        if let family = pendingFontFamily { setFontFamily(family); pendingFontFamily = nil }
         if !pendingOutput.isEmpty {                  // flush bytes that arrived pre-load
             let buffered = pendingOutput
             pendingOutput = Data()

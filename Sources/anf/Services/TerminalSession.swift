@@ -58,6 +58,11 @@ final class TerminalSession: NSObject, Identifiable {
         view.setFontSize(size)
     }
 
+    /// Apply the user's terminal body font (terminalFont setting, #83).
+    func applyFontFamily(_ family: String) {
+        view.setFontFamily(family)
+    }
+
     func focus() {
         view.window?.makeFirstResponder(view)
         view.focus()

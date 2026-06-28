@@ -15,15 +15,18 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
 <body>
 <div id="terminal"></div>
 <script>
+// The user-facing body font goes first; the rest is a per-glyph fallback for
+// Powerline/Nerd Font icons — powerlevel10k and friends draw private-use glyphs
+// the body font lacks. "MesloLGS NF" is what `p10k configure` installs; the rest
+// cover the other popular Nerd Fonts. Then CJK system fonts (Apple SD Gothic Neo
+// / Hiragino / PingFang) so Korean·Japanese·Chinese output renders instead of
+// tofu boxes — Menlo carries no CJK glyphs, which made Hangul look broken. Apple
+// Color Emoji catches actual emoji last. The body font is user-settable
+// (terminalFont) via window.termSetFontFamily; the fallback is always kept (#83).
+const FONT_FALLBACK = '"MesloLGS NF", "MesloLGS Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "Symbols Nerd Font", "Apple SD Gothic Neo", "Hiragino Sans", "PingFang SC", "Apple Color Emoji", "Courier New", monospace';
+const DEFAULT_PRIMARY = 'Menlo, Monaco';
 const term = new Terminal({
-  // Menlo first (body text), then per-glyph fallback for Powerline/Nerd Font
-  // icons — powerlevel10k and friends draw private-use glyphs Menlo lacks.
-  // "MesloLGS NF" is what `p10k configure` installs; the rest cover the other
-  // popular Nerd Fonts. Then CJK system fonts (Apple SD Gothic Neo / Hiragino /
-  // PingFang) so Korean·Japanese·Chinese output renders instead of tofu boxes —
-  // Menlo carries no CJK glyphs, which made Hangul filenames/output look broken.
-  // Apple Color Emoji catches actual emoji last.
-  fontFamily: 'Menlo, Monaco, "MesloLGS NF", "MesloLGS Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "Symbols Nerd Font", "Apple SD Gothic Neo", "Hiragino Sans", "PingFang SC", "Apple Color Emoji", "Courier New", monospace',
+  fontFamily: DEFAULT_PRIMARY + ', ' + FONT_FALLBACK,
   fontSize: 13,
   lineHeight: 1.2,
   cursorBlink: true,
@@ -73,6 +76,14 @@ function fit() {
 window.termResize = function(cols, rows) { term.resize(cols, rows); };
 window.termSetFontSize = function(size) {
   term.options.fontSize = size;
+  requestAnimationFrame(fit);
+};
+// Set the body font (terminalFont). Empty restores the default; the Nerd Font /
+// CJK / emoji fallback chain is always appended so icons and Hangul still render.
+window.termSetFontFamily = function(family) {
+  const f = (family || '').trim();
+  const primary = f ? '"' + f.replace(/"/g, '') + '"' : DEFAULT_PRIMARY;
+  term.options.fontFamily = primary + ', ' + FONT_FALLBACK;
   requestAnimationFrame(fit);
 };
 
