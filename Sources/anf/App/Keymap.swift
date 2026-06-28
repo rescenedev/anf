@@ -139,7 +139,7 @@ final class Keymap {
         let dict = Self.settingsDict(fileAt: Self.fileURL)
         // NOTE: aiApiKey is deliberately NOT mirrored — the key lives only in the
         // macOS Keychain. Migrate any leftover plaintext key out of the file/defaults.
-        for key in ["aiProvider", "aiEndpoint", "aiModel", "openWithApp", "terminalApp"] {
+        for key in ["aiProvider", "aiEndpoint", "aiModel", "openWithApp", "terminalApp", "terminalFont"] {
             if let s = dict[key] as? String {
                 UserDefaults.standard.set(s, forKey: "anf.\(key)")
             }
@@ -323,6 +323,7 @@ final class Keymap {
         appendKey("aiModel", "\"\"")
         appendKey("openWithApp", "\"\"")
         appendKey("terminalApp", "\"\"")
+        appendKey("terminalFont", "\"\"")
         appendKey("favorites", "[]")
         appendKey("workspaces", "[]")
         try? out.write(to: url, atomically: true, encoding: .utf8)
@@ -360,6 +361,7 @@ final class Keymap {
             "aiModel — override the model, e.g. 'claude-opus-4-8' or 'llama3.2'. Empty uses the provider default.",
             "openWithApp — app for the 'Open With' action (name, path, or bundle id), e.g. 'Typora'. The shortcut is the 'openWith' keybinding below (default F4).",
             "terminalApp — terminal for 'Open Terminal Here'. 'ghostty', 'iterm', 'terminal', or a custom app name/path/bundle id (e.g. 'Warp'). Empty/'auto' uses Ghostty if installed, else Terminal.",
+            "terminalFont — body font for the BUILT-IN terminal, e.g. 'JetBrains Mono', 'Hack', 'D2Coding'. Empty uses Menlo. Nerd Font icons / CJK / emoji always fall back automatically. Reopen a terminal tab to apply.",
             "favorites / pinned — paths to pin in the sidebar, e.g. ['~/Code', '~/Documents/Work']. Each imported once (great for migrating to a new Mac).",
             "workspaces — saved window arrangements (use Tools → Copy Pins & Workspaces to generate this).",
             "locationSearch — find photos by place in ⌘K (e.g. 'find photos in Paris'). Reads EXIF GPS locally but geocodes the place name online, so it's off by default. true/false."
@@ -371,6 +373,7 @@ final class Keymap {
           "aiModel": "",
           "openWithApp": "",
           "terminalApp": "",
+          "terminalFont": "",
           "locationSearch": false,
           "favorites": [],
           "workspaces": [],
