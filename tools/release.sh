@@ -37,7 +37,12 @@ echo "▸ Info.plist 버전 → $VERSION"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Resources/Info.plist
 
 echo "▸ 테스트"
-swift run anfTests
+# FileTagsTests writes a real Finder tag via a SYNCHRONOUS DesktopServices/Metadata
+# XPC call. In a non-interactive context (the launchd nightly job, or a headless
+# agent) the metadata daemon doesn't answer and that call blocks forever — hanging
+# the whole release at the test step. Skip just that test here; it's still run by
+# an interactive `swift run anfTests` and in CI. (See the nightly hang of 1.5.33.)
+ANF_SKIP_TAGS=1 swift run anfTests
 
 echo "▸ 빌드"
 ./build.sh
