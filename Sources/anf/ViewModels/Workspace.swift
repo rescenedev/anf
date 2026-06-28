@@ -860,6 +860,21 @@ final class WorkspaceModel {
         }
     }
 
+    /// Toolbar terminal button (#76): open — or focus — a shell for the CURRENT
+    /// folder tab, so each folder tab gets its own terminal at its own location.
+    /// Pressing again while that folder's terminal is already the visible, active
+    /// session hides the drawer, so the one button still toggles.
+    func openTerminalForActiveFolder() {
+        let target = active.currentURL.standardizedFileURL
+        if showTerminal, let t = terminal, t.sshHost == nil,
+           t.startDirectory?.standardizedFileURL == target {
+            showTerminal = false   // keep the PTY running; just hide the drawer
+            return
+        }
+        openTerminal(at: active.currentURL)
+        focusActiveTerminal()
+    }
+
     /// The "+" in the terminal drawer: always open a fresh terminal tab, started at
     /// the current folder. This is the terminal's own tabbing — independent of the
     /// file-browser's folder tabs (#76).

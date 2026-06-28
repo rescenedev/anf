@@ -89,8 +89,8 @@ struct ToolbarTrailingView: View {
                     }
                 }
             }
-            ToolbarIconButton(symbol: "terminal", help: L("Terminal (⌃`)", "터미널 (⌃`)")) {
-                workspace.toggleTerminal()
+            ToolbarIconButton(symbol: "terminal", help: L("Terminal for this folder (⌃`)", "이 폴더의 터미널 (⌃`)")) {
+                workspace.openTerminalForActiveFolder()
             }
             ToolbarIconButton(symbol: "sidebar.trailing", help: L("Inspector (⌘I)", "인스펙터 (⌘I)")) {
                 workspace.inspectorVisible.toggle()
