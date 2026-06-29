@@ -131,6 +131,15 @@ final class DividerDragRouter {
         case .leftMouseDown:
             guard let window = event.window else { return event }
             let p = event.locationInWindow
+            // Never hijack a click on a scrollbar. The grab zones below extend each
+            // divider's thin frame by 12pt, which overlaps a pane's edge scrollers
+            // (the right scrollbar sits just inside the pane↔pane divider; the bottom
+            // scroller just above the terminal drawer divider). That overlap was
+            // swallowing scrollbar drags (#76), so let any click on an NSScroller
+            // fall through to the scroller untouched.
+            if let hit = window.contentView?.hitTest(p), hit is NSScroller {
+                return event
+            }
             for (key, entry) in entries {
                 guard let anchor = entry.anchor, anchor.window === window else {
                     if entry.anchor == nil { entries.removeValue(forKey: key) }
