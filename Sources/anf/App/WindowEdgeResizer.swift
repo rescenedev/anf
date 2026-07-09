@@ -33,6 +33,14 @@ final class WindowEdgeResizer: NSView {
     var topCornerMargin: CGFloat = 24
     var bottomEdgeMargin: CGFloat = 6
 
+    // A visible scroll bar under the pointer beats the resize band: with
+    // "Show scroll bars: Always" the legacy scroller is a ~15 pt strip flush
+    // against the right window edge — entirely inside `edgeMargin` — so without
+    // this exception the overlay swallows every scrollbar hover/click (#87).
+    // The outermost few points keep resizing, like the system band does over a
+    // scroller in native windows.
+    private static let scrollerGrip: CGFloat = 3
+
     private var dragEdges: Edges = []
     private var startFrame: NSRect = .zero
     private var startMouse: NSPoint = .zero
@@ -82,7 +90,8 @@ final class WindowEdgeResizer: NSView {
                     }
                     let local = self.convert(event.locationInWindow, from: nil)
                     guard !self.edges(at: local).isEmpty,
-                          !self.overlapsWindowControl(local) else { return event }
+                          !self.overlapsWindowControl(local),
+                          !self.overlapsScroller(local) else { return event }
                     Trace.log("edge: down consumed at \(local)")
                     self.mouseDown(with: event)
                     return nil
@@ -111,7 +120,7 @@ final class WindowEdgeResizer: NSView {
         }
         let local = convert(event.locationInWindow, from: nil)
         let e = edges(at: local)
-        let inZone = !e.isEmpty && !overlapsWindowControl(local)
+        let inZone = !e.isEmpty && !overlapsWindowControl(local) && !overlapsScroller(local)
         if inZone != wasInZone {
             Trace.log("edge: \(event.type == .cursorUpdate ? "cursorUpdate" : "mouseMoved") inZone=\(inZone) at \(local)")
         }
@@ -134,6 +143,7 @@ final class WindowEdgeResizer: NSView {
         let local = convert(point, from: superview)
         guard !edges(at: local).isEmpty else { return nil }
         if overlapsWindowControl(local) { return nil }
+        if overlapsScroller(local) { return nil }
         return self
     }
 
@@ -142,7 +152,41 @@ final class WindowEdgeResizer: NSView {
     /// to guard that the bottom path-bar strip stays click-through — the
     /// edge-resizer overlay must NOT swallow clicks meant for the breadcrumbs.
     func isResizeZoneForTest(at p: NSPoint) -> Bool { !edges(at: p).isEmpty }
+
+    /// Test seam: stands in for the contentView hit-test when there's no window,
+    /// so the scrollbar pass-through (#87) is testable headless.
+    var scrollerProbeForTest: ((NSPoint) -> Bool)?
+
+    /// Test seam: the full consume decision (edge zone minus window-control and
+    /// scroller exceptions) — what the event monitor and hitTest actually use.
+    func wouldConsumeForTest(at p: NSPoint) -> Bool {
+        !edges(at: p).isEmpty && !overlapsWindowControl(p) && !overlapsScroller(p)
+    }
     #endif
+
+    /// True when the resize band should yield to a scroll bar under `p`:
+    /// a visible NSScroller is there and `p` isn't in the outermost grip strip.
+    private func overlapsScroller(_ p: NSPoint) -> Bool {
+        let b = bounds
+        let edgeDist = Swift.min(p.x - b.minX, b.maxX - p.x, p.y - b.minY, b.maxY - p.y)
+        guard edgeDist > Self.scrollerGrip else { return false }
+        return visibleScrollerUnder(p)
+    }
+
+    private func visibleScrollerUnder(_ p: NSPoint) -> Bool {
+        #if DEBUG
+        if let probe = scrollerProbeForTest { return probe(p) }
+        #endif
+        // The overlay fills the frame view, so `p` is already in frame-view
+        // coords — the coordinate space `contentView.hitTest` expects.
+        guard let content = window?.contentView else { return false }
+        var v = content.hitTest(p)
+        while let view = v {
+            if let s = view as? NSScroller { return !s.isHidden && s.alphaValue > 0.01 }
+            v = view.superview
+        }
+        return false
+    }
 
     private func overlapsWindowControl(_ p: NSPoint) -> Bool {
         guard let window else { return false }
