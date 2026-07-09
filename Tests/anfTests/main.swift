@@ -76,6 +76,7 @@ MainActor.assumeIsolated { runNetworkStallTests() }
 MainActor.assumeIsolated { runPathEditTests() }
 MainActor.assumeIsolated { runTabTitleTests() }
 MainActor.assumeIsolated { runPathBarClickTests() }
+runEdgeScrollerTests()
 MainActor.assumeIsolated { runParentRowTests() }
 MainActor.assumeIsolated { runPostActionFocusTests() }
 MainActor.assumeIsolated { runNavHistoryTests() }
