@@ -226,7 +226,7 @@ private final class FilmstripItem: NSCollectionViewItem {
 
     func configure(with item: FileItem) {
         currentID = item.id
-        name.stringValue = item.name
+        name.stringValue = item.displayName
         thumb.image = ThumbnailProvider.shared.cached(for: item, side: 144)
             ?? IconProvider.shared.icon(for: item)
         if item.supportsThumbnail,

@@ -77,6 +77,7 @@ MainActor.assumeIsolated { runPathEditTests() }
 MainActor.assumeIsolated { runTabTitleTests() }
 MainActor.assumeIsolated { runPathBarClickTests() }
 runEdgeScrollerTests()
+runIconFileTests()
 MainActor.assumeIsolated { runParentRowTests() }
 MainActor.assumeIsolated { runPostActionFocusTests() }
 MainActor.assumeIsolated { runNavHistoryTests() }

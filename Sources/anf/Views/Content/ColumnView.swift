@@ -94,7 +94,7 @@ private struct ColumnRow: View {
         HStack(spacing: 7) {
             IconImage(image: IconProvider.shared.icon(for: item))
                 .frame(width: 16, height: 16)
-            Text(item.name).lineLimit(1).font(.system(size: 13))
+            Text(item.displayName).lineLimit(1).font(.system(size: 13))
             Spacer(minLength: 0)
             if let tag = FileTags.primaryColor(of: item.url) {
                 Circle().fill(Color(nsColor: tag)).frame(width: 8, height: 8)
