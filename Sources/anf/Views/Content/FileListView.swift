@@ -723,7 +723,7 @@ private final class NameCell: NSTableCellView {
         }
         icon.contentTintColor = nil
         icon.image = IconProvider.shared.icon(for: item)
-        label.stringValue = item.name
+        label.stringValue = item.displayName
         label.font = .systemFont(ofSize: fontSize)
         label.isEditable = true   // rename starts via editColumn; clicks won't edit
         self.onToggle = onToggle

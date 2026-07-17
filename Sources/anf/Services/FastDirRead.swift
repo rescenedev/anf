@@ -102,7 +102,7 @@ enum FastDirRead {
                         name: name,
                         isDir: objType == VTYPE_DIR,
                         isSymlink: objType == VTYPE_LNK,
-                        isHidden: name.hasPrefix("."),
+                        isHidden: name.hasPrefix(".") || FileItem.isCustomIconFile(name),
                         size: size, modified: modified, created: created))
                 }
                 p = entryStart.advanced(by: Int(length))

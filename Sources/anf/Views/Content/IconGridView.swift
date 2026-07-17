@@ -726,7 +726,7 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
 
     func configure(with item: FileItem, iconSide: Double) {
         currentID = item.id
-        label.stringValue = item.name
+        label.stringValue = item.displayName
         iconW?.constant = iconSide
         iconH?.constant = iconSide
         // One cache lookup, not two (this runs per cell on every scroll frame).

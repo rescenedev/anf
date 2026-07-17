@@ -108,6 +108,22 @@ struct FileItem: Identifiable, Hashable, Sendable {
             || t.conforms(to: .presentation)
     }
 
+    /// The legacy custom-folder-icon file `Icon\r` (its icon data lives in the
+    /// resource fork, hence 0 bytes). Finder always hides it via the
+    /// Finder-invisible flag, which the bulk-read path never sees — so the
+    /// name-based hidden checks must special-case it.
+    static func isCustomIconFile(_ name: String) -> Bool { name == "Icon\r" }
+
+    /// Name safe for single-line labels. Control characters — e.g. the trailing
+    /// carriage return in `Icon\r` — render as a second line inside an
+    /// NSTextField, shoving the visible text out of its row.
+    var displayName: String {
+        guard name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        else { return name }
+        return String(String.UnicodeScalarView(
+            name.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
+    }
+
     static let resourceKeys: Set<URLResourceKey> = [
         .isDirectoryKey, .isPackageKey, .isApplicationKey, .isSymbolicLinkKey,
         .isHiddenKey, .fileSizeKey, .totalFileAllocatedSizeKey,
@@ -145,7 +161,8 @@ struct FileItem: Identifiable, Hashable, Sendable {
             : UTType(filenameExtension: (name as NSString).pathExtension.lowercased())
         return FileItem(
             url: url, name: name, isDirectory: isDir, isPackage: false,
-            isApplication: false, isSymlink: isSymlink, isHidden: name.hasPrefix("."),
+            isApplication: false, isSymlink: isSymlink,
+            isHidden: name.hasPrefix(".") || FileItem.isCustomIconFile(name),
             size: size, modified: modified, created: modified,
             contentType: type, isCloudPlaceholder: false)
     }
