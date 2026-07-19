@@ -37,18 +37,31 @@ func runVolumeDetectionTests() {
 
     // The actual N-006 requirement: a DIFFERENT mounted volume must get a
     // different id, so a cross-volume (local↔network) move is detected and
-    // parallelized. Machine-independent: scan /Volumes for any mount whose id
-    // differs from root; skip if the machine has no second volume.
+    // parallelized. Deliberately NOT scanning /Volumes: statting every external/
+    // network mount fires a TCC removable-volume prompt per disk, and the rebuilt
+    // test binary re-asks on every run. A tiny attached disk image is a real
+    // second volume with no TCC prompt — and unlike the old scan (which silently
+    // skipped single-volume machines), it exists everywhere.
     T.group("FileTransfer.volumeID — cross-volume detection") {
+        let img = tmp.appendingPathComponent("anf-vol-\(UUID().uuidString).dmg")
+        defer { try? fm.removeItem(at: img) }
+        ExternalTools.run("/usr/bin/hdiutil",
+                          ["create", "-size", "4m", "-fs", "HFS+J",
+                           "-volname", "anf-test-vol", "-quiet", img.path],
+                          timeout: 30)
+        // Attach output: "/dev/diskN <tab> Apple_HFS <tab> /Volumes/anf-test-vol"
+        let mount = ExternalTools.run("/usr/bin/hdiutil",
+                                      ["attach", img.path, "-nobrowse"], timeout: 30)
+            .compactMap { $0.components(separatedBy: "\t").last?
+                .trimmingCharacters(in: .whitespaces) }
+            .last { $0.hasPrefix("/Volumes/") }
+        guard let mount else { return }   // hdiutil unavailable — skip, not a failure
+        defer { ExternalTools.run("/usr/bin/hdiutil", ["detach", mount, "-quiet"], timeout: 30) }
+
         let rootID = FileTransfer.volumeID(of: URL(fileURLWithPath: "/"))
-        let mounts = (try? fm.contentsOfDirectory(atPath: "/Volumes")) ?? []
-        let other = mounts
-            .map { FileTransfer.volumeID(of: URL(fileURLWithPath: "/Volumes/\($0)")) }
-            .first { $0 != nil && $0 != rootID }
-        if let other {
-            T.expect(other != rootID,
-                     "a separate volume gets a distinct id (⇒ cross-volume move parallelizes, N-006)")
-        }
-        // else: single-volume machine — nothing to compare, not a failure.
+        let otherID = FileTransfer.volumeID(of: URL(fileURLWithPath: mount))
+        T.notNil(otherID, "attached image volume gets an id")
+        T.expect(otherID != rootID,
+                 "a separate volume gets a distinct id (⇒ cross-volume move parallelizes, N-006)")
     }
 }
