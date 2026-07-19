@@ -92,6 +92,8 @@ MainActor.assumeIsolated { runTerminalLauncherTests() }
 runDirectoryWatcherTests()
 MainActor.assumeIsolated { runExternalRefreshTests() }
 MainActor.assumeIsolated { runWorkspacePersistenceTests() }
+MainActor.assumeIsolated { runWorkspaceSplitMemoryTests() }
+MainActor.assumeIsolated { runCursorSurvivalTests() }
 runFixVerificationTests()
 
 print("")
