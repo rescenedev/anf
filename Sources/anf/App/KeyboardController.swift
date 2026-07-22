@@ -241,6 +241,7 @@ final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPan
         case .quickLook: toggleQuickLook()
         case .rename: model.beginRename()
         case .trash: model.trashSelection()
+        case .emptyTrash: ArchiveService.emptyTrash { [weak self] in self?.model.reload() }
         case .openWith: openWithPresetApp()
         case .openSettings: Keymap.openSettingsFile()
         }
