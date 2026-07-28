@@ -51,7 +51,15 @@ enum ClaudeLLM {
     static var isConfigured: Bool { apiKey != nil }
 
     /// Why the last call failed (HTTP status + Anthropic error message), for UI.
-    nonisolated(unsafe) static var lastError: String?
+    /// Lock-guarded: `generate` writes from whatever executor the await resumed
+    /// on while the UI reads from the main thread — an unprotected String there
+    /// is a torn-read data race when two panes fire AI calls at once.
+    static var lastError: String? {
+        get { lastErrorLock.withLock { lastErrorStorage } }
+        set { lastErrorLock.withLock { lastErrorStorage = newValue } }
+    }
+    private static let lastErrorLock = NSLock()
+    private nonisolated(unsafe) static var lastErrorStorage: String?
 
     static func generate(instructions: String, prompt: String, maxTokens: Int) async -> String? {
         lastError = nil

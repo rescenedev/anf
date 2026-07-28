@@ -11,9 +11,11 @@ final class SidebarDividerResizer: NSView {
 
     private var monitorDragging = false
     private var eventMonitor: Any?
+    private var resizeObserver: (any NSObjectProtocol)?
 
     deinit {
         if let m = eventMonitor { NSEvent.removeMonitor(m) }
+        if let o = resizeObserver { NotificationCenter.default.removeObserver(o) }
     }
 
     @discardableResult
@@ -25,7 +27,7 @@ final class SidebarDividerResizer: NSView {
         frameView.addSubview(overlay, positioned: .above, relativeTo: nil)
         OverlayKeeper.keepOnTop(overlay, in: window)
         overlay.installEventMonitor(window: window)
-        NotificationCenter.default.addObserver(
+        overlay.resizeObserver = NotificationCenter.default.addObserver(
             forName: NSSplitView.didResizeSubviewsNotification, object: splitView,
             queue: .main) { [weak overlay] _ in
             MainActor.assumeIsolated { overlay?.refreshCursorRects() }
