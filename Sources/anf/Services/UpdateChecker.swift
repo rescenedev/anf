@@ -33,7 +33,7 @@ final class UpdateChecker {
 
         Task { [weak self] in
             guard let latest = await Self.fetchLatest() else { return }
-            await self?.applyAuto(latest)
+            self?.applyAuto(latest)   // same actor — no hop, so no `await`
         }
     }
 

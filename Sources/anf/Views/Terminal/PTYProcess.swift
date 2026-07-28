@@ -74,7 +74,7 @@ final class PTYProcess {
         guard masterFD >= 0 else { return }
         var ws = winsize()
         ws.ws_col = UInt16(cols); ws.ws_row = UInt16(rows)
-        ioctl(masterFD, TIOCSWINSZ, &ws)
+        _ = ioctl(masterFD, TIOCSWINSZ, &ws)
     }
 
     func kill() {

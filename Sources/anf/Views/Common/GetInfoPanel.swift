@@ -159,15 +159,24 @@ final class GetInfoPanel: NSObject {
 
     @objc private func toggleTag(_ sender: NSButton) {
         guard let name = sender.identifier?.rawValue else { return }
-        FileTags.toggle(name, on: item.url)
-        let now = Set(FileTags.tags(of: item.url))
-        sender.image = swatch(FileTags.color(for: name) ?? .gray, filled: now.contains(name))
-        // The list/icon/column swatches read a path-keyed colour cache cleared only
-        // on reload; without this a tag changed here stayed stale until an unrelated
-        // reload (the FSEvents watcher can't catch it — a tag write bumps ctime, not
-        // mtime). Invalidate the cache and let the browser refresh.
-        FileTags.clearColorCache()
-        onChange()
+        let url = item.url
+        // The tag write is a synchronous DesktopServices XPC round-trip (see
+        // FileTags.toggle) — off the main thread, or a busy mds / network volume
+        // stalls the whole UI on a button click. The swatch updates on return.
+        Task { @MainActor [weak self] in
+            let now = await Task.detached(priority: .userInitiated) {
+                FileTags.toggle(name, on: url)
+                return Set(FileTags.tags(of: url))
+            }.value
+            guard let self else { return }
+            sender.image = self.swatch(FileTags.color(for: name) ?? .gray, filled: now.contains(name))
+            // The list/icon/column swatches read a path-keyed colour cache cleared only
+            // on reload; without this a tag changed here stayed stale until an unrelated
+            // reload (the FSEvents watcher can't catch it — a tag write bumps ctime, not
+            // mtime). Invalidate the cache and let the browser refresh.
+            FileTags.clearColorCache()
+            self.onChange()
+        }
     }
 
     private func permissions() -> String {

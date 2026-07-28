@@ -7,7 +7,7 @@ import WebKit
 /// style) and avoids fighting the SwiftUI ⇄ AppKit responder chain. While a text
 /// field is being edited, everything passes straight through so typing works.
 @MainActor
-final class KeyboardController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+final class KeyboardController: NSObject, @preconcurrency QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     /// The workspace of the window the user is actually in — resolved per event
     /// so one shared monitor drives every window correctly. `nil` only between
     /// the last window closing and the app quitting.

@@ -72,8 +72,13 @@ final class WindowEdgeResizer: NSView {
             matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .mouseMoved, .cursorUpdate]
         ) { [weak self, weak window] event in
             guard let self, let window, event.window === window else { return event }
-            return MainActor.assumeIsolated {
-                if InputGate.modalActive { return event }
+            // Local monitors fire on the main thread; NSEvent just isn't Sendable,
+            // so only the consume/pass DECISION crosses the assumeIsolated
+            // boundary (Bool) — returning the event from inside would be a
+            // non-Sendable result and a Swift 6 error.
+            nonisolated(unsafe) let event = event
+            let consumed = MainActor.assumeIsolated { () -> Bool in
+                if InputGate.modalActive { return false }
                 // Keep the overlay matched to the frame view: when the window is
                 // resized (e.g. moved to a larger external display) a stale bounds
                 // would put the "edge" zones in the middle and swallow clicks there
@@ -81,32 +86,33 @@ final class WindowEdgeResizer: NSView {
                 if let sv = self.superview, self.frame != sv.bounds { self.frame = sv.bounds }
                 switch event.type {
                 case .mouseMoved, .cursorUpdate:
-                    return self.handleMouseMoved(event, window: window)
+                    return self.handleMouseMoved(event, window: window) == nil
                 case .leftMouseDown:
                     guard window.styleMask.contains(.resizable),
                           !window.styleMask.contains(.fullScreen) else {
                         Trace.log("edge: down rejected styleMask=\(window.styleMask.rawValue)")
-                        return event
+                        return false
                     }
                     let local = self.convert(event.locationInWindow, from: nil)
                     guard !self.edges(at: local).isEmpty,
                           !self.overlapsWindowControl(local),
-                          !self.overlapsScroller(local) else { return event }
+                          !self.overlapsScroller(local) else { return false }
                     Trace.log("edge: down consumed at \(local)")
                     self.mouseDown(with: event)
-                    return nil
+                    return true
                 case .leftMouseDragged:
-                    guard !self.dragEdges.isEmpty else { return event }
+                    guard !self.dragEdges.isEmpty else { return false }
                     self.mouseDragged(with: event)
-                    return nil
+                    return true
                 case .leftMouseUp:
-                    guard !self.dragEdges.isEmpty else { return event }
+                    guard !self.dragEdges.isEmpty else { return false }
                     self.mouseUp(with: event)
-                    return nil
+                    return true
                 default:
-                    return event
+                    return false
                 }
             }
+            return consumed ? nil : event
         }
     }
 

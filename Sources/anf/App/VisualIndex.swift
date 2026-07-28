@@ -49,26 +49,37 @@ final class VisualIndex: @unchecked Sendable {
         runBuild(root)
     }
 
+    // Synchronous, locked accessors: the build body is async, and NSLock must
+    // never be taken directly inside an async frame (a future await inside the
+    // locked region would deadlock — the compiler can only prove safety when
+    // the locked section lives in a sync function).
+    private func dequeueNextRoot() -> URL? {
+        lock.withLock {
+            let next = pending.isEmpty ? nil : pending.removeFirst()
+            if next == nil { building = false }
+            return next
+        }
+    }
+    private func isCurrent(path: String, mtime: Double) -> Bool {
+        lock.withLock { map[path].map { $0.mtime == mtime } ?? false }
+    }
+    private func store(_ rows: [(path: String, mtime: Double, labels: [String])]) {
+        lock.withLock { for r in rows { map[r.path] = Entry(mtime: r.mtime, labels: r.labels) } }
+    }
+
     private func runBuild(_ root: URL) {
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
             defer {
                 self.scheduleSave()
-                self.lock.lock()
-                let next = self.pending.isEmpty ? nil : self.pending.removeFirst()
-                if next == nil { self.building = false }
-                self.lock.unlock()
-                if let next { self.runBuild(next) }   // drain the queue
+                if let next = self.dequeueNextRoot() { self.runBuild(next) }   // drain the queue
             }
 
             let images = PaletteSearch.imageFiles(under: root, limit: 100_000)
             // Work the not-yet-current ones in batches, checkpointing per batch
             // so a quit mid-build keeps progress.
             let todo = images.filter { url in
-                let path = url.path
-                let mtime = Self.mtime(path)
-                self.lock.lock(); let cur = self.map[path]; self.lock.unlock()
-                return cur == nil || cur!.mtime != mtime
+                !self.isCurrent(path: url.path, mtime: Self.mtime(url.path))
             }
             guard !todo.isEmpty else { return }
 
@@ -84,9 +95,7 @@ final class VisualIndex: @unchecked Sendable {
                     let row = (url.path, Self.mtime(url.path), labels)
                     rlock.lock(); results.append(row); rlock.unlock()
                 }
-                self.lock.lock()
-                for r in results { self.map[r.path] = Entry(mtime: r.mtime, labels: r.labels) }
-                self.lock.unlock()
+                self.store(results)
                 self.scheduleSave()
                 i += batchSize
             }

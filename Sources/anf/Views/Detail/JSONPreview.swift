@@ -96,12 +96,12 @@ struct JSONPreview: View {
         }
         .task(id: "\(url.path)|\(fontSize)") {
             let cap = byteCap, size = fontSize
-            let result = await Task.detached(priority: .userInitiated) { () -> NSAttributedString? in
+            let result = await Task.detached(priority: .userInitiated) { () -> Handoff<NSAttributedString?> in
                 guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
                       data.count <= cap,
-                      let pretty = JSONPretty.prettyString(data) else { return nil }
-                return JSONPretty.highlight(pretty, fontSize: size)
-            }.value
+                      let pretty = JSONPretty.prettyString(data) else { return Handoff(nil) }
+                return Handoff(JSONPretty.highlight(pretty, fontSize: size))
+            }.value.value
             if let result { rich = result; fallback = false }
             else { fallback = true }
         }

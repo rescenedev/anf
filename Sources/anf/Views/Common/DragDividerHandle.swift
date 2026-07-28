@@ -122,7 +122,13 @@ final class DividerDragRouter {
             matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
         ) { [weak self] event in
             guard let self else { return event }
-            return MainActor.assumeIsolated { self.route(event) }
+            // Local monitors fire on the main thread; NSEvent just isn't Sendable,
+            // so only the consume/pass DECISION crosses the assumeIsolated
+            // boundary (Bool) — `route` passes an event through unchanged or
+            // consumes it, never substitutes one.
+            nonisolated(unsafe) let event = event
+            let consumed = MainActor.assumeIsolated { self.route(event) == nil }
+            return consumed ? nil : event
         }
     }
 
