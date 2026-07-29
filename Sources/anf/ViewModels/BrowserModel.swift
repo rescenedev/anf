@@ -800,6 +800,28 @@ final class BrowserModel: Identifiable {
         reload(preserveSelection: true)
     }
 
+    /// After a delete commits, land the selection on the row now occupying the
+    /// deleted row's slot (clamped to the end) — i.e. the nearest survivor, which
+    /// is what Finder selects after ⌘⌫. Only fills an EMPTY selection, so undo /
+    /// explicit reselection is never fought.
+    private func selectNeighborWhenLoaded(near index: Int) {
+        let token = loadToken
+        let versionBefore = itemsVersion
+        Task { @MainActor in
+            for _ in 0..<20 {
+                guard token == loadToken else { return }
+                if itemsVersion != versionBefore {
+                    let visible = items.filter { !$0.isParentRef }
+                    if selection.isEmpty, !visible.isEmpty {
+                        selection = [visible[min(index, visible.count - 1)].id]
+                    }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+    }
+
     /// After the new listing commits, select the item matching `child` (and scroll
     /// to it). Falls back to the first row if it isn't present.
     private func selectChildWhenLoaded(_ child: URL) {
@@ -1053,6 +1075,11 @@ final class BrowserModel: Identifiable {
         let targets = selectedItems
         guard !targets.isEmpty else { return }
         let folder = currentURL
+        // Where the selection sat in listing order — after the delete lands, the
+        // nearest surviving row inherits the selection (Finder behavior). Without
+        // this ⌘⌫ left NOTHING selected, stranding the keyboard until a click.
+        let anchor = items.filter { !$0.isParentRef }
+            .firstIndex { selection.contains($0.id) } ?? 0
         // In a Vault, snapshot the current state BEFORE deleting so the files are
         // recoverable from the timeline even after the Trash is emptied — that's the
         // whole Vault promise (V-002). Snapshot off-main (git), then trash.
@@ -1065,9 +1092,16 @@ final class BrowserModel: Identifiable {
                 VaultService.isVault(folder)
             }.value
             guard isVault else {
-                FileOperations.moveToTrash(targets)
-                self.reload()
-                self.broadcast(dirs: [folder.standardizedFileURL.path])
+                // Off-main bulk path: looping trashItem here beachballed for
+                // minutes on big network-share selections (each item is a
+                // blocking round-trip; a no-Trash volume then loops removeItem
+                // on top). The HUD/cancel come with it.
+                FileTransfer.shared.trashItems(targets) { [weak self] in
+                    guard let self else { return }
+                    self.reload()
+                    self.selectNeighborWhenLoaded(near: anchor)
+                    self.broadcast(dirs: [folder.standardizedFileURL.path])
+                }
                 return
             }
             let snapped = await Task.detached(priority: .userInitiated) {
@@ -1088,9 +1122,12 @@ final class BrowserModel: Identifiable {
                     return
                 }
             }
-            FileOperations.moveToTrash(targets)
-            reload()
-            broadcast(dirs: [folder.standardizedFileURL.path])
+            FileTransfer.shared.trashItems(targets) { [weak self] in
+                guard let self else { return }
+                self.reload()
+                self.selectNeighborWhenLoaded(near: anchor)
+                self.broadcast(dirs: [folder.standardizedFileURL.path])
+            }
         }
     }
 
@@ -1148,7 +1185,9 @@ final class BrowserModel: Identifiable {
             ? (FileItem(url: currentURL).map { [$0] } ?? [])
             : selectedItems
         for item in targets.prefix(8) {
-            GetInfoPanel.show(for: item) { [weak self] in self?.reload() }
+            // preserveSelection: a tag/rename tweak in Get Info re-reads the SAME
+            // folder — clearing the selection here made it vanish under the user.
+            GetInfoPanel.show(for: item) { [weak self] in self?.reload(preserveSelection: true) }
         }
     }
 
@@ -1165,7 +1204,9 @@ final class BrowserModel: Identifiable {
                 for url in urls { FileTags.toggle(tag, on: url, reindex: false) }
                 FileTags.reindex(urls)   // one batched mdimport for the whole selection
             }.value
-            self?.reload()
+            // preserveSelection: the files just tagged stay selected — the reload
+            // only repaints the colour swatches.
+            self?.reload(preserveSelection: true)
         }
     }
 
@@ -1489,7 +1530,9 @@ final class BrowserModel: Identifiable {
         let isCut = Set(urls.map(\.path)) == Self.cutPaths
         if isCut { Self.cutPaths = [] }
         FileTransfer.shared.transfer(urls, into: currentURL, move: isCut) { [weak self] in
-            self?.reload()
+            // preserveSelection: pasting adds files to the SAME folder — the
+            // user's existing selection has no reason to vanish.
+            self?.reload(preserveSelection: true)
         }
     }
 
@@ -1532,7 +1575,9 @@ final class BrowserModel: Identifiable {
         guard !urls.isEmpty, destination != currentURL else { return }
         FileTransfer.shared.transfer(urls, into: destination, move: move) { [weak self] in
             guard let self else { onDone(); return }
-            self.reload()
+            // preserveSelection: same folder re-read; on a move the vanished
+            // items drop out of selectedItems on their own.
+            self.reload(preserveSelection: true)
             var dirs: Set<String> = [destination.standardizedFileURL.path]
             if move { dirs.formUnion(self.parentDirs(of: urls)) }
             self.broadcast(dirs: dirs)
@@ -1603,7 +1648,8 @@ final class BrowserModel: Identifiable {
         guard !incoming.isEmpty else { return }
         FileTransfer.shared.transfer(incoming, into: destination, move: !copy) { [weak self] in
             guard let self else { return }
-            self.reload()
+            // preserveSelection: receiving a drop adds files to the SAME folder.
+            self.reload(preserveSelection: true)
             var dirs: Set<String> = [destination.standardizedFileURL.path]
             if !copy { dirs.formUnion(self.parentDirs(of: incoming)) }
             self.broadcast(dirs: dirs)

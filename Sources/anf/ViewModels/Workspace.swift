@@ -501,8 +501,9 @@ final class WorkspaceModel {
             MainActor.assumeIsolated { self?.previewTextSize = size }
         })
         // A file op (move/trash/rename) in one tab broadcasts the directories it
-        // touched; refresh every OTHER tab/pane showing them — anf has no live FS
-        // watcher, so a source folder open in another tab would otherwise go stale.
+        // touched; refresh every OTHER tab/pane showing them, so a source folder
+        // open in another tab doesn't go stale (FSEvents lands too, but ~0.2s
+        // later and not at all on network mounts' polling interval).
         observerTokens.append(NotificationCenter.default.addObserver(
             forName: BrowserModel.dirsChangedNote, object: nil, queue: .main
         ) { [weak self] note in
@@ -512,7 +513,14 @@ final class WorkspaceModel {
                 let except = note.userInfo?["except"] as? UUID
                 for pane in self.panes {
                     for tab in pane.tabs where tab.id != except {
-                        if dirs.contains(tab.currentURL.standardizedFileURL.path) { tab.reload() }
+                        // externalRefresh, NOT reload(): this is a change made
+                        // OUTSIDE the tab, and a plain reload clears the tab's
+                        // selection — whose didSet fires onActivity and yanks
+                        // activePane to whatever pane refreshed last (focus
+                        // stolen by a background pane after every file op, the
+                        // #47 bug class). externalRefresh also defers while an
+                        // inline rename is open there.
+                        if dirs.contains(tab.currentURL.standardizedFileURL.path) { tab.externalRefresh() }
                     }
                 }
             }
@@ -922,6 +930,8 @@ final class WorkspaceModel {
         let destPane = panes[(activePane + 1) % layout.count]
         let dest = destPane.current
         guard dest.currentURL.path != src.currentURL.path else { NSSound.beep(); return }
-        src.copySelection(into: dest.currentURL, move: move) { dest.reload() }
+        // externalRefresh: the change lands in dest from OUTSIDE it — a plain
+        // reload would clear dest's selection and steal the pane focus.
+        src.copySelection(into: dest.currentURL, move: move) { dest.externalRefresh() }
     }
 }

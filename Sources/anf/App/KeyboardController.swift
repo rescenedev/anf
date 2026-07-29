@@ -228,7 +228,9 @@ final class KeyboardController: NSObject, @preconcurrency QLPreviewPanelDataSour
         case .goToFolder:
             if workspace.pathBarVisible { model.beginPathEdit() } else { model.goToFolderPrompt() }
         case .newFolder: model.makeNewFolder()
-        case .reload: model.reload()
+        // preserveSelection: a manual refresh re-reads the SAME folder — losing
+        // the selection on ⌘R read as a glitch (Explorer's F5 keeps it too).
+        case .reload: model.reload(preserveSelection: true)
         case .toggleHidden: model.showHidden.toggle()
         case .goBack: model.goBack(); refocusContent()
         case .goForward: model.goForward(); refocusContent()

@@ -31,8 +31,51 @@ enum FileOperations {
         catch { presentFailures(L("Couldn’t open with \(app)", "\(app)(으)로 열지 못했습니다"), [error.localizedDescription]) }
     }
 
+    /// One item's trash attempt — the per-item unit shared by the synchronous
+    /// `moveToTrash` and FileTransfer's off-main bulk path.
+    enum TrashOutcome {
+        case trashed(original: URL, trashed: URL)
+        /// Trash succeeded but the driver reported no location and the Trash
+        /// search found nothing — gone, but not undoable (FO-001 tail case).
+        case trashedUntracked
+        case noTrash(FileItem)     // volume has no Trash (NSFeatureUnsupportedError)
+        case failed(String)
+    }
+
+    /// Try to trash a single item. Thread-safe (FileManager is), so bulk callers
+    /// can run it off the main thread — 9,780 trashItem round-trips on an SMB
+    /// share beachballed the UI for minutes when looped on the main actor.
+    nonisolated static func trashOne(_ item: FileItem, trashDir: URL?) -> TrashOutcome {
+        do {
+            var trashedURL: NSURL?
+            try FileManager.default.trashItem(at: item.url, resultingItemURL: &trashedURL)
+            if let t = trashedURL as URL? {
+                return .trashed(original: item.url, trashed: t)
+            }
+            if let dir = trashDir {
+                // trashItem succeeded but didn't report the trash location (observed
+                // on some AFP/third-party volume drivers — FO-001). Search the Trash
+                // for a file with the same name so undo can still restore it.
+                let name = item.url.lastPathComponent
+                if let found = try? FileManager.default.contentsOfDirectory(at: dir,
+                    includingPropertiesForKeys: nil).first(where: { $0.lastPathComponent == name }) {
+                    return .trashed(original: item.url, trashed: found)
+                }
+            }
+            return .trashedUntracked
+        } catch let error as NSError
+                    where error.domain == NSCocoaErrorDomain && error.code == NSFeatureUnsupportedError {
+            return .noTrash(item)
+        } catch {
+            return .failed("\(item.name): \(error.localizedDescription)")
+        }
+    }
+
     /// Move to Trash. Returns (original, trashed-location) pairs — the trashed
-    /// URL is what undo needs to put the file back.
+    /// URL is what undo needs to put the file back. SYNCHRONOUS — for small
+    /// batches and tests; the app's delete path goes through
+    /// `FileTransfer.trashItems`, which runs this per-item unit off the main
+    /// thread with progress + cancel.
     @discardableResult
     static func moveToTrash(_ items: [FileItem]) -> [(original: URL, trashed: URL)] {
         var pairs: [(original: URL, trashed: URL)] = []
@@ -40,26 +83,11 @@ enum FileOperations {
         var failures: [String] = []
         let trashDir = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first
         for item in items {
-            do {
-                var trashedURL: NSURL?
-                try FileManager.default.trashItem(at: item.url, resultingItemURL: &trashedURL)
-                if let t = trashedURL as URL? {
-                    pairs.append((item.url, t))
-                } else if let dir = trashDir {
-                    // trashItem succeeded but didn't report the trash location (observed
-                    // on some AFP/third-party volume drivers — FO-001). Search the Trash
-                    // for a file with the same name so undo can still restore it.
-                    let name = item.url.lastPathComponent
-                    if let found = try? FileManager.default.contentsOfDirectory(at: dir,
-                        includingPropertiesForKeys: nil).first(where: { $0.lastPathComponent == name }) {
-                        pairs.append((item.url, found))
-                    }
-                }
-            } catch let error as NSError
-                        where error.domain == NSCocoaErrorDomain && error.code == NSFeatureUnsupportedError {
-                noTrash.append(item)
-            } catch {
-                failures.append("\(item.name): \(error.localizedDescription)")
+            switch trashOne(item, trashDir: trashDir) {
+            case .trashed(let original, let trashed): pairs.append((original, trashed))
+            case .trashedUntracked: break
+            case .noTrash(let item): noTrash.append(item)
+            case .failed(let msg): failures.append(msg)
             }
         }
         if !pairs.isEmpty {
@@ -79,7 +107,8 @@ enum FileOperations {
 
     /// Confirm permanent deletion of items the volume can't trash. Returns true if
     /// the user agrees. Headless (tests) declines — never silently destroys data.
-    private static func confirmPermanentDelete(_ items: [FileItem]) -> Bool {
+    /// Internal (not private): FileTransfer's off-main bulk path confirms here too.
+    static func confirmPermanentDelete(_ items: [FileItem]) -> Bool {
         guard NSApplication.shared.isRunning else { return false }
         let names = items.prefix(5).map(\.name).joined(separator: "\n")
             + (items.count > 5 ? L("\nand \(items.count - 5) more", "\n외 \(items.count - 5)건") : "")

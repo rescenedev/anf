@@ -95,6 +95,26 @@ struct FileListView: NSViewRepresentable {
         init(model: BrowserModel, onFocus: @escaping () -> Void) {
             self.model = model
             self.onFocus = onFocus
+            super.init()
+            // Tag reads resolve asynchronously (display() never blocks on the
+            // xattr — that beachballed NAS scrolling); repaint the visible name
+            // cells when a batch lands so the dots/labels appear.
+            NotificationCenter.default.addObserver(self, selector: #selector(tagsResolved),
+                                                   name: FileTags.tagsResolvedNote, object: nil)
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        @objc private func tagsResolved() {
+            MainActor.assumeIsolated {
+                guard let table, model.editingItemID == nil else { return }
+                let rows = table.rows(in: table.visibleRect)
+                guard rows.length > 0 else { return }
+                table.reloadData(forRowIndexes: IndexSet(integersIn: rows.lowerBound..<rows.upperBound),
+                                 columnIndexes: IndexSet(integer: 0))
+            }
         }
 
         var items: [FileItem] { model.items }

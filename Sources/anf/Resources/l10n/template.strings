@@ -132,6 +132,11 @@
 "Copy cancelled" = "복사가 취소되었습니다";
 "Couldn’t move" = "이동하지 못했습니다";
 "Couldn’t copy" = "복사하지 못했습니다";
+"Moving to Trash…" = "휴지통으로 이동 중…";
+"Deleting…" = "삭제 중…";
+"Delete cancelled" = "삭제가 취소되었습니다";
+"Items already moved to the Trash stay there (undo restores them)." = "이미 휴지통으로 이동된 항목은 그대로 남습니다 (⌘Z로 복원).";
+"Couldn’t delete" = "삭제하지 못했습니다";
 "Keep both, replace the existing item, or skip it?" = "둘 다 두기, 기존 항목 덮어쓰기, 또는 건너뛰기를 선택하세요.";
 "Keep Both" = "둘 다 두기";
 "Replace" = "덮어쓰기";
