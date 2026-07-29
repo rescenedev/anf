@@ -26,10 +26,26 @@ if ! security find-identity -p codesigning -v 2>/dev/null | grep -q "Developer I
     echo "  Xcode → Settings → Accounts → Manage Certificates → + → Developer ID Application" >&2
     exit 1
 fi
+# Credentials: prefer the keychain profile; fall back to the app-specific
+# password in ~/.env (APP_PASSWORD). The profile silently became unreadable
+# once (2026-07-30: a custom signing keychain landed in the search list and
+# notarytool's data-protection item stopped resolving) and killed a nightly —
+# the env fallback keeps releases flowing while the keychain is being weird.
+NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
 if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    [ -f "$HOME/.env" ] && source "$HOME/.env"
+    if [ -n "${APP_PASSWORD:-}" ]; then
+        echo "▸ 프로파일 '$NOTARY_PROFILE' 사용 불가 — APP_PASSWORD 자격증명으로 폴백"
+        NOTARY_ARGS=(--apple-id zihado@gmail.com --team-id 589U6DQJN8 --password "$APP_PASSWORD")
+        if ! xcrun notarytool history "${NOTARY_ARGS[@]}" >/dev/null 2>&1; then
+            echo "✗ APP_PASSWORD 자격증명도 공증 서버 인증에 실패했습니다." >&2
+            exit 1
+        fi
+    else
     echo "✗ notarytool 자격증명 프로파일 '$NOTARY_PROFILE' 가 없습니다." >&2
     echo "  xcrun notarytool store-credentials $NOTARY_PROFILE --key AuthKey_XXXX.p8 --key-id XXXX --issuer XXXX-..." >&2
     exit 1
+    fi
 fi
 
 echo "▸ Info.plist 버전 → $VERSION"
@@ -50,7 +66,7 @@ echo "▸ 빌드"
 echo "▸ 공증 (notarytool submit --wait)"
 rm -f anf-notarize.zip
 ditto -c -k --keepParent anf.app anf-notarize.zip
-xcrun notarytool submit anf-notarize.zip --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun notarytool submit anf-notarize.zip "${NOTARY_ARGS[@]}" --wait
 rm -f anf-notarize.zip
 echo "▸ 티켓 스테이플"
 xcrun stapler staple anf.app
@@ -68,7 +84,7 @@ rm -rf "$STAGE"
 codesign --force --timestamp --sign "Developer ID Application" "$DMG"
 
 echo "▸ DMG 공증 + 스테이플"
-xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait
 xcrun stapler staple "$DMG"
 xcrun stapler validate "$DMG"
 spctl -a -t open --context context:primary-signature -vv "$DMG"   # 'accepted, Notarized Developer ID'
