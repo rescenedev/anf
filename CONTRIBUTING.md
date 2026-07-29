@@ -9,6 +9,10 @@ anf에 관심 가져주셔서 감사합니다. 이슈 제보, 버그 수정, 기
   ```bash
   xcode-select --install
   ```
+  > 되도록 **실행 중인 macOS와 같은 세대의 CLT**를 쓰세요. 링크된 SDK가 OS보다
+  > 낮으면 AppKit의 linked-on-or-after 동작이 달라져, 좁은 창에서 커스텀 툴바
+  > 아이템이 조용히 사라지는 식의 차이가 생깁니다(#93). 현재 SDK 확인:
+  > `xcrun --show-sdk-version`
 - 선택 도구(검색 강화): `fd`, `ripgrep`
   ```bash
   brew install fd ripgrep

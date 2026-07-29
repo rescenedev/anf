@@ -279,6 +279,18 @@ enum PaneLayout: String, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class WorkspaceModel {
+    /// NotificationCenter tokens from init — removed on deinit. Block-based
+    /// observers are retained by the center forever otherwise, so every closed
+    /// window (each window owns a WorkspaceModel) would leave zombie observers
+    /// firing on app-wide notifications. nonisolated(unsafe) + ObservationIgnored:
+    /// written once in init, read once in (nonisolated) deinit — no concurrent
+    /// access, and nothing observes it (the macro would otherwise wrap it).
+    @ObservationIgnored private nonisolated(unsafe) var observerTokens: [any NSObjectProtocol] = []
+
+    deinit {
+        for t in observerTokens { NotificationCenter.default.removeObserver(t) }
+    }
+
     var panes: [PaneModel]
     var activePane: Int = 0
     var layout: PaneLayout = .single
@@ -482,17 +494,17 @@ final class WorkspaceModel {
         loadPinSnapshots()
         wireActivity()
         // "previewTextSize" in the ⌘, settings file applies live on reload.
-        NotificationCenter.default.addObserver(
+        observerTokens.append(NotificationCenter.default.addObserver(
             forName: Keymap.previewTextSizeChanged, object: nil, queue: .main
         ) { [weak self] note in
             guard let size = note.object as? CGFloat else { return }
             MainActor.assumeIsolated { self?.previewTextSize = size }
-        }
+        })
         // A file op (move/trash/rename) in one tab broadcasts the directories it
         // touched; refresh every OTHER tab/pane showing them, so a source folder
         // open in another tab doesn't go stale (FSEvents lands too, but ~0.2s
         // later and not at all on network mounts' polling interval).
-        NotificationCenter.default.addObserver(
+        observerTokens.append(NotificationCenter.default.addObserver(
             forName: BrowserModel.dirsChangedNote, object: nil, queue: .main
         ) { [weak self] note in
             MainActor.assumeIsolated {
@@ -512,7 +524,7 @@ final class WorkspaceModel {
                     }
                 }
             }
-        }
+        })
         // Index the focused folder's subtree (not all of home) so the first ⌘K is
         // instant and the scope follows the focused pane.
         FileIndex.shared.build(for: active.currentURL)

@@ -776,6 +776,11 @@ final class BrowserModel: Identifiable {
             let local = DirectoryWatcherFactory.isLocalVolume(url)
             await MainActor.run { [weak self] in
                 guard let self, self.currentURL == url else { return }   // navigated away mid-probe
+                // Two probes for the same folder can be in flight (navigate away
+                // and back before the first resolves); replacing the reference
+                // without stop() would leak the earlier FSEvents stream, which
+                // keeps firing refreshes forever.
+                self.watcher?.stop()
                 let w: DirectoryWatcher = local ? FSEventDirectoryWatcher() : PollingDirectoryWatcher()
                 w.start(url) { [weak self] in
                     Task { @MainActor in self?.externalRefresh() }
@@ -912,8 +917,12 @@ final class BrowserModel: Identifiable {
                 // falsely showing that card on the Trash was reported. So gate the
                 // stall on a non-local volume; a local failure falls through to the
                 // normal empty/access-denied handling below.
+                // `probe.isLocal`, NOT a fresh isLocalVolume() call: that reads
+                // volumeIsLocalKey, which blocks ~30s on the very stalled mount
+                // this branch detects — recomputing it here would beachball the
+                // main thread at exactly the moment the probe was made to avoid.
                 if Self.shouldNetworkStall(reachable: probe.reachable,
-                                           isLocal: DirectoryWatcherFactory.isLocalVolume(url)) {
+                                           isLocal: probe.isLocal) {
                     // Volume unreachable → hold the last listing + selection, flag the
                     // stall, and retry until it comes back. Don't wipe `allItems`.
                     networkStalled = true

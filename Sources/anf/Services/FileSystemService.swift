@@ -72,20 +72,24 @@ struct FileSystemService: Sendable {
 
     /// Recursively sum the allocated size of everything under `url`. Off the main thread.
     func directorySize(of url: URL) async -> Int64 {
-        await Task.detached(priority: .utility) {
-            let fm = FileManager.default
-            let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileSizeKey, .isRegularFileKey]
-            guard let en = fm.enumerator(at: url, includingPropertiesForKeys: Array(keys),
-                                         options: [.skipsHiddenFiles]) else { return 0 }
-            var total: Int64 = 0
-            for case let f as URL in en {
-                let v = try? f.resourceValues(forKeys: keys)
-                if v?.isRegularFile == true {
-                    total += Int64(v?.totalFileAllocatedSize ?? v?.fileSize ?? 0)
-                }
+        await Task.detached(priority: .utility) { Self.directorySizeSync(of: url) }.value
+    }
+
+    /// Sync body: NSDirectoryEnumerator's iteration is sync-only API, so keep the
+    /// whole walk in a synchronous frame rather than inside the async closure.
+    private static func directorySizeSync(of url: URL) -> Int64 {
+        let fm = FileManager.default
+        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileSizeKey, .isRegularFileKey]
+        guard let en = fm.enumerator(at: url, includingPropertiesForKeys: Array(keys),
+                                     options: [.skipsHiddenFiles]) else { return 0 }
+        var total: Int64 = 0
+        for case let f as URL in en {
+            let v = try? f.resourceValues(forKeys: keys)
+            if v?.isRegularFile == true {
+                total += Int64(v?.totalFileAllocatedSize ?? v?.fileSize ?? 0)
             }
-            return total
-        }.value
+        }
+        return total
     }
 
     /// Filter by name (if any) then sort. Pure + Sendable so it can run off the

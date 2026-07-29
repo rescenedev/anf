@@ -38,7 +38,7 @@ enum UISelfTest {
             // NB: `window.contentView` is the controller's *container* NSView —
             // the actual NSSplitView lives on the NSSplitViewController.
             let splitView = window.anfSplitViewController?.splitView
-            func contentLeftNow() -> CGFloat {
+            @MainActor func contentLeftNow() -> CGFloat {
                 guard let sidebar = splitView?.arrangedSubviews.first else { return 0 }
                 return sidebar.convert(NSPoint(x: sidebar.bounds.maxX, y: 0), to: nil).x + 1
             }
@@ -117,7 +117,7 @@ enum UISelfTest {
             // -- 4. Stress: zoom / sidebar collapse / fullscreen must not bury
             // the overlays (this is exactly how "resize stopped working again"
             // reproduced — frame-view churn reorders subviews).
-            func sidebarDragCheck(_ stage: String) async {
+            @MainActor func sidebarDragCheck(_ stage: String) async {
                 guard let sv = splitView, let sidebar = sv.arrangedSubviews.first else {
                     check("\(stage): split view reachable", false); return
                 }
@@ -136,7 +136,7 @@ enum UISelfTest {
                 check("\(stage): sidebar drag works (\(Int(s0)) → \(Int(sidebar.frame.width)))",
                       sidebar.frame.width > s0 + 15)
             }
-            func edgeProbeCheck(_ stage: String) {
+            @MainActor func edgeProbeCheck(_ stage: String) {
                 guard let frameView = window.contentView?.superview else {
                     check("\(stage): frame view reachable", false); return
                 }

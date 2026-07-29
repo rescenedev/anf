@@ -11,9 +11,11 @@ final class SidebarDividerResizer: NSView {
 
     private var monitorDragging = false
     private var eventMonitor: Any?
+    private var resizeObserver: (any NSObjectProtocol)?
 
     deinit {
         if let m = eventMonitor { NSEvent.removeMonitor(m) }
+        if let o = resizeObserver { NotificationCenter.default.removeObserver(o) }
     }
 
     @discardableResult
@@ -25,7 +27,7 @@ final class SidebarDividerResizer: NSView {
         frameView.addSubview(overlay, positioned: .above, relativeTo: nil)
         OverlayKeeper.keepOnTop(overlay, in: window)
         overlay.installEventMonitor(window: window)
-        NotificationCenter.default.addObserver(
+        overlay.resizeObserver = NotificationCenter.default.addObserver(
             forName: NSSplitView.didResizeSubviewsNotification, object: splitView,
             queue: .main) { [weak overlay] _ in
             MainActor.assumeIsolated { overlay?.refreshCursorRects() }
@@ -42,29 +44,35 @@ final class SidebarDividerResizer: NSView {
             matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
         ) { [weak self, weak window] event in
             guard let self, let window, event.window === window else { return event }
-            return MainActor.assumeIsolated {
-                if InputGate.modalActive { return event }
+            // Local monitors fire on the main thread; NSEvent just isn't Sendable,
+            // so only the consume/pass DECISION crosses the assumeIsolated
+            // boundary (Bool) — returning the event from inside would be a
+            // non-Sendable result and a Swift 6 error.
+            nonisolated(unsafe) let event = event
+            let consumed = MainActor.assumeIsolated { () -> Bool in
+                if InputGate.modalActive { return false }
                 switch event.type {
                 case .leftMouseDown:
                     guard let dividerX = self.dividerXInWindow,
                           abs(event.locationInWindow.x - dividerX) <= self.grabZone
-                    else { return event }
+                    else { return false }
                     Trace.log("sidebar: down consumed at \(event.locationInWindow)")
                     self.monitorDragging = true
-                    return nil
+                    return true
                 case .leftMouseDragged:
-                    guard self.monitorDragging else { return event }
+                    guard self.monitorDragging else { return false }
                     self.mouseDragged(with: event)
-                    return nil
+                    return true
                 case .leftMouseUp:
-                    guard self.monitorDragging else { return event }
+                    guard self.monitorDragging else { return false }
                     self.monitorDragging = false
                     self.mouseUp(with: event)
-                    return nil
+                    return true
                 default:
-                    return event
+                    return false
                 }
             }
+            return consumed ? nil : event
         }
     }
 

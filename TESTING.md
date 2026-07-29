@@ -65,6 +65,13 @@ UI 셀프테스트는 GUI 세션이 필요해 로컬 전용입니다(릴리즈 �
   keyDown 전송 → 클립뷰 원점 이동 검증 (PgDn 한 화면, End 맨 아래, Home 맨 위).
   `NSResponder.scrollPage…` 기본 구현이 조용한 no-op이었던 회귀를 막음.
 - 별도: `ANF_RESIZE_SELFTEST=1` — 창 가장자리 리사이즈 오버레이
+- 툴바 프로브: `ANF_TOOLBAR_PROBE=1 .build/debug/anfapp` — 창을 1500→720px로
+  좁혔다 다시 넓히며(단일·2분할 두 레이아웃, 사이드바 최대 폭 포함) 두 커스텀
+  툴바 클러스터가 계속 윈도우에 붙어 있는지 검증. 종료 코드 0 = 전 구간 정상.
+  #93 회귀 대비: 두 클러스터가 창 폭에 안 들어가면 AppKit이 오버플로 대신
+  **하나를 통째로 떨어뜨려서**(delegate는 호출되지만 `view.window == nil`)
+  툴바 절반이 빈 채로 남습니다. 밀도 단계별 실측 폭도 함께 출력하므로,
+  클러스터 내용을 바꾼 뒤에는 이 값으로 `ToolbarWidths` 추정치를 재확인할 것
 - 성능 벤치: `ANF_BENCH=/큰/폴더 swift run anfTests` — 폴더 진입 단계별
   (벌크 읽기 → FileItem 생성 → 정렬) 소요 시간 출력. 26k 항목 기준
   total ~210ms(debug)가 회귀 기준선

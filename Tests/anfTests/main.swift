@@ -95,6 +95,7 @@ MainActor.assumeIsolated { runWorkspacePersistenceTests() }
 MainActor.assumeIsolated { runWorkspaceSplitMemoryTests() }
 MainActor.assumeIsolated { runCursorSurvivalTests() }
 MainActor.assumeIsolated { runFileOpsEdgeTests() }
+MainActor.assumeIsolated { runToolbarDensityTests() }
 MainActor.assumeIsolated { runFocusStabilityTests() }
 MainActor.assumeIsolated { runTagPipelineTests() }
 runFixVerificationTests()

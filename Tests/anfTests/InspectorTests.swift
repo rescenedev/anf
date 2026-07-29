@@ -19,14 +19,17 @@ func runInspectorTests() {
         T.group("selectedItems registers Observation deps even on a warm cache") {
             let model = BrowserModel(start: dir)
             _ = model.selectedItems            // warm the memo OUTSIDE tracking
-            var fired = false
+            // A class box, not a captured var: onChange is @Sendable, and mutating
+            // a captured local there is a Swift 6 data-race error.
+            final class Flag: @unchecked Sendable { var fired = false }
+            let flag = Flag()
             withObservationTracking {
                 _ = model.selectedItems        // cache-hit path
             } onChange: {
-                fired = true
+                flag.fired = true
             }
             model.selection = [dir.appendingPathComponent("x")]   // a real change must notify
-            T.expect(fired, "selection change re-renders a warm-cache reader")
+            T.expect(flag.fired, "selection change re-renders a warm-cache reader")
         }
 
         T.group("opaque binary / markdown classification") {

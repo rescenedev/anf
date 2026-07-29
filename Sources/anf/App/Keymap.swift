@@ -13,7 +13,7 @@ enum KeyAction: String, CaseIterable {
     case goBack, goForward, goUp, openSelected
     case copyPath, copyFolderPath
     case transferCopy, transferMove
-    case quickLook, rename, trash
+    case quickLook, rename, trash, emptyTrash
     case openWith
     case openSettings
     // Selection movement (issue #52): first-class so up/down/left/right and
@@ -73,6 +73,8 @@ final class Keymap {
         (.quickLook, ["space", "shift+space"]),
         (.rename, ["return", "shift+return", "enter", "shift+enter"]),
         (.trash, ["delete", "shift+delete", "cmd+delete"]),
+        // Finder parity: ⌘⇧⌫ empties the Trash (same confirmation dialog).
+        (.emptyTrash, ["cmd+shift+delete"]),
         (.openSettings, ["cmd+,"]),
         // Selection movement (issue #52). Arrow keys stay default; Emacs
         // (ctrl+p/n) and Vim (ctrl+h/j/k/l) chords are added so arrow-less

@@ -15,6 +15,10 @@ final class ViewMenuController: NSObject, NSMenuItemValidation {
         workspace?.active.connectToServerPrompt()
     }
 
+    @objc func emptyTrash(_ sender: Any?) {
+        ArchiveService.emptyTrash { [weak self] in self?.workspace?.active.reload() }
+    }
+
     @objc func toggleStatusBar(_ sender: Any?) {
         workspace?.pathBarVisible.toggle()
         workspace?.save()
@@ -211,6 +215,13 @@ enum MainMenu {
                                        action: #selector(SettingsMenuTarget.openSettings(_:)),
                                        keyEquivalent: ",")
         settings.target = SettingsMenuTarget.shared
+        appMenu.addItem(.separator())
+        // Finder keeps Empty Trash in the app menu with ⌘⇧⌫ — mirror both.
+        let emptyTrash = appMenu.addItem(withTitle: L("Empty Trash…", "휴지통 비우기…"),
+                                         action: #selector(ViewMenuController.emptyTrash(_:)),
+                                         keyEquivalent: "\u{8}")
+        emptyTrash.keyEquivalentModifierMask = [.command, .shift]
+        emptyTrash.target = ViewMenuController.shared
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: L("Hide anf", "anf 가리기"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthers = appMenu.addItem(withTitle: L("Hide Others", "기타 가리기"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
