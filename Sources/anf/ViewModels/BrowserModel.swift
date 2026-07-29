@@ -732,6 +732,23 @@ final class BrowserModel: Identifiable {
         }
     }
 
+    /// Wait for the listing owned by `token` to commit (itemsVersion bump).
+    /// Returns false when superseded by a newer load or the cap expires.
+    /// This used to be a fixed 20×50ms poll inlined at every call site — on a
+    /// slow NFS folder (e.g. backing out of a huge listing whose abandoned read
+    /// still clogs the connection) the fresh listing can take well over 1s, and
+    /// the give-up left the user with NO selection: keyboard flow stranded
+    /// until a click. Wait as long as the load is still CURRENT instead; a
+    /// newer navigation cancels via the token.
+    private func listingCommitted(after versionBefore: Int, token: Int) async -> Bool {
+        for _ in 0..<1200 {   // 60s cap — a truly stalled mount is handled by the stall machinery
+            guard token == loadToken else { return false }
+            if itemsVersion != versionBefore { return true }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return false
+    }
+
     /// After an async load lands, put the selection on the first row so keyboard
     /// navigation continues immediately (going up otherwise left nothing focused).
     private func selectFirstWhenLoaded() {
@@ -742,16 +759,10 @@ final class BrowserModel: Identifiable {
         // "1 selected" pointing at a row that no longer exists.
         let versionBefore = itemsVersion
         Task { @MainActor in
-            for _ in 0..<20 {   // poll up to ~1s; loads are usually <100ms
-                guard token == loadToken else { return }   // superseded
-                if itemsVersion != versionBefore {
-                    // Land on the first REAL item, never the synthetic ".." row.
-                    if selection.isEmpty, let first = items.first(where: { !$0.isParentRef }) {
-                        selection = [first.id]
-                    }
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000)
+            guard await listingCommitted(after: versionBefore, token: token) else { return }
+            // Land on the first REAL item, never the synthetic ".." row.
+            if selection.isEmpty, let first = items.first(where: { !$0.isParentRef }) {
+                selection = [first.id]
             }
         }
     }
@@ -808,16 +819,10 @@ final class BrowserModel: Identifiable {
         let token = loadToken
         let versionBefore = itemsVersion
         Task { @MainActor in
-            for _ in 0..<20 {
-                guard token == loadToken else { return }
-                if itemsVersion != versionBefore {
-                    let visible = items.filter { !$0.isParentRef }
-                    if selection.isEmpty, !visible.isEmpty {
-                        selection = [visible[min(index, visible.count - 1)].id]
-                    }
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000)
+            guard await listingCommitted(after: versionBefore, token: token) else { return }
+            let visible = items.filter { !$0.isParentRef }
+            if selection.isEmpty, !visible.isEmpty {
+                selection = [visible[min(index, visible.count - 1)].id]
             }
         }
     }
@@ -829,17 +834,11 @@ final class BrowserModel: Identifiable {
         let versionBefore = itemsVersion
         let wanted = child.standardizedFileURL.path
         Task { @MainActor in
-            for _ in 0..<20 {
-                guard token == loadToken else { return }
-                if itemsVersion != versionBefore {
-                    if let match = items.first(where: { $0.url.standardizedFileURL.path == wanted }) {
-                        selection = [match.id]
-                    } else if selection.isEmpty, let first = items.first {
-                        selection = [first.id]
-                    }
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000)
+            guard await listingCommitted(after: versionBefore, token: token) else { return }
+            if let match = items.first(where: { $0.url.standardizedFileURL.path == wanted }) {
+                selection = [match.id]
+            } else if selection.isEmpty, let first = items.first {
+                selection = [first.id]
             }
         }
     }
