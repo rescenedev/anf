@@ -34,6 +34,7 @@
 "About anf" = "anf에 관하여";
 "Check for Updates…" = "업데이트 확인…";
 "Settings…" = "설정…";
+"Empty Trash…" = "휴지통 비우기…";
 "Hide anf" = "anf 가리기";
 "Hide Others" = "기타 가리기";
 "Show All" = "모두 보기";
@@ -106,9 +107,12 @@
 "This format needs ‘unar’" = "이 형식은 ‘unar’가 필요합니다";
 "Install it once with: brew install unar" = "한 번만 설치하세요: brew install unar";
 "Couldn’t extract" = "압축을 풀지 못했습니다";
+"Can’t access the Trash" = "휴지통에 접근할 수 없습니다";
+"Allow anf under System Settings → Privacy & Security → Full Disk Access, then try again." = "시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 권한에서 anf를 허용한 뒤 다시 시도하세요.";
+"Open System Settings" = "시스템 설정 열기";
+"Cancel" = "취소";
 "Empty the Trash?" = "휴지통을 비우시겠습니까?";
 "Empty Trash" = "비우기";
-"Cancel" = "취소";
 "Some items couldn’t be deleted" = "일부 항목을 삭제하지 못했습니다";
 "This folder can't be read." = "이 폴더를 읽을 수 없어요.";
 "This folder has no documents to ask about." = "이 폴더에는 질문할 문서가 없어요.";
@@ -304,7 +308,6 @@
 "Locations" = "위치";
 "Open in New Tab" = "새 탭으로 열기";
 "Open in This Pane" = "이 pane에서 열기";
-"Empty Trash…" = "휴지통 비우기…";
 "Remove from Sidebar" = "사이드바에서 제거";
 "Switch to This Layout" = "이 레이아웃으로 전환";
 "Overwrite with Current Layout" = "현재 레이아웃으로 덮어쓰기";

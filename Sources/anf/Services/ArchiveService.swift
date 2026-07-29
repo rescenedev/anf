@@ -108,9 +108,24 @@ enum ArchiveService {
     /// Empty the user's Trash after confirmation. Irreversible — says so.
     static func emptyTrash(completion: @escaping () -> Void) {
         let fm = FileManager.default
-        guard let trash = fm.urls(for: .trashDirectory, in: .userDomainMask).first,
-              let contents = try? fm.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil),
-              !contents.isEmpty else { completion(); return }
+        guard let trash = fm.urls(for: .trashDirectory, in: .userDomainMask).first else { completion(); return }
+        guard let contents = try? fm.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil) else {
+            // Without Full Disk Access the Trash reads as an error, not as
+            // empty — surface the fix instead of silently doing nothing.
+            let a = NSAlert()
+            a.alertStyle = .warning
+            a.messageText = L("Can’t access the Trash", "휴지통에 접근할 수 없습니다")
+            a.informativeText = L("Allow anf under System Settings → Privacy & Security → Full Disk Access, then try again.",
+                                  "시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 권한에서 anf를 허용한 뒤 다시 시도하세요.")
+            a.addButton(withTitle: L("Open System Settings", "시스템 설정 열기"))
+            a.addButton(withTitle: L("Cancel", "취소"))
+            if a.runModal() == .alertFirstButtonReturn,
+               let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                NSWorkspace.shared.open(url)
+            }
+            completion(); return
+        }
+        guard !contents.isEmpty else { completion(); return }
 
         let alert = NSAlert()
         alert.alertStyle = .critical
