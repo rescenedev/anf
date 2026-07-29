@@ -268,6 +268,140 @@ final class FileTransfer {
         }
     }
 
+    // MARK: - Bulk trash / delete
+
+    /// Move `items` to the Trash with the transfer HUD's recipe: everything
+    /// heavy off the main thread, the delayed progress HUD, cancel, one alert.
+    /// Looping `trashItem` on the main actor beachballed for MINUTES on a
+    /// network share (9,780 items = 9,780 sequential SMB round-trips, and on a
+    /// no-Trash volume a second 9,780-round-trip delete loop after the confirm).
+    /// Volumes with no Trash still get the Finder-style confirmed immediate
+    /// delete — the dialog runs on main between the two off-main phases.
+    /// Undo for the trashed portion is recorded here; `completion` runs on the
+    /// main actor after everything (including a declined confirm) settles.
+    func trashItems(_ items: [FileItem], completion: @escaping @MainActor () -> Void = {}) {
+        guard !items.isEmpty else { completion(); return }
+
+        cancelRequested = false
+        let flag = CancelFlag()
+        cancelFlag = flag
+        jobGeneration &+= 1
+        let gen = jobGeneration
+        jobDone = false
+        fraction = 0
+        label = L("Moving to Trash…", "휴지통으로 이동 중…")
+        armDelayedHUD(generation: gen)
+
+        // Same concurrency rule as copies: local volume → all cores (trashItem
+        // is a cheap rename into .Trash), network → cap at 4 connections.
+        let parent = items[0].url.deletingLastPathComponent()
+        let cap = Self.isLocalVolume(parent) ? ProcessInfo.processInfo.activeProcessorCount : 4
+
+        Task { @MainActor [weak self] in
+            let outcome = await Task.detached(priority: .userInitiated) {
+                () -> (pairs: [(original: URL, trashed: URL)], noTrash: [FileItem], failures: [String]) in
+                let trashDir = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first
+                let lock = NSLock()
+                var pairs: [(original: URL, trashed: URL)] = []
+                var noTrash: [FileItem] = []
+                var failures: [String] = []
+                var completed = 0
+                var lastPushed = ContinuousClock.now
+                Self.boundedForEach(items.count, maxConcurrent: cap, useAllCores: cap > 4) { i in
+                    if flag.isSet { return }
+                    let outcome = FileOperations.trashOne(items[i], trashDir: trashDir)
+                    lock.lock()
+                    switch outcome {
+                    case .trashed(let original, let trashed): pairs.append((original, trashed))
+                    case .trashedUntracked: break
+                    case .noTrash(let item): noTrash.append(item)
+                    case .failed(let msg): failures.append(msg)
+                    }
+                    completed += 1
+                    let n = completed
+                    let now = ContinuousClock.now
+                    let push = now - lastPushed > .milliseconds(80) || n == items.count
+                    if push { lastPushed = now }
+                    lock.unlock()
+                    if push { Self.pushFraction(Double(n) / Double(items.count)) }
+                }
+                return (pairs, noTrash, failures)
+            }.value
+
+            guard let self else { return }
+            if !outcome.pairs.isEmpty {
+                FileUndo.shared.record(.trash(outcome.pairs))
+            }
+            var failures = outcome.failures
+
+            // The volume can't trash these (no .Trashes — typical on network
+            // shares). Finder-style confirmed immediate delete, NOT undoable.
+            // Hide the HUD while the modal is up; skip entirely on cancel.
+            if !outcome.noTrash.isEmpty, !flag.isSet {
+                self.isActive = false
+                if FileOperations.confirmPermanentDelete(outcome.noTrash) {
+                    self.fraction = 0
+                    self.label = L("Deleting…", "삭제 중…")
+                    self.jobDone = false
+                    self.armDelayedHUD(generation: gen)
+                    let deleteFailures = await Task.detached(priority: .userInitiated) {
+                        () -> [String] in
+                        let lock = NSLock()
+                        var failures: [String] = []
+                        var completed = 0
+                        var lastPushed = ContinuousClock.now
+                        let doomed = outcome.noTrash
+                        Self.boundedForEach(doomed.count, maxConcurrent: cap, useAllCores: cap > 4) { i in
+                            if flag.isSet { return }
+                            var failure: String?
+                            do { try FileManager.default.removeItem(at: doomed[i].url) }
+                            catch { failure = "\(doomed[i].name): \(error.localizedDescription)" }
+                            lock.lock()
+                            if let failure { failures.append(failure) }
+                            completed += 1
+                            let n = completed
+                            let now = ContinuousClock.now
+                            let push = now - lastPushed > .milliseconds(80) || n == doomed.count
+                            if push { lastPushed = now }
+                            lock.unlock()
+                            if push { Self.pushFraction(Double(n) / Double(doomed.count)) }
+                        }
+                        return failures
+                    }.value
+                    failures.append(contentsOf: deleteFailures)
+                }
+            }
+
+            self.jobDone = true
+            self.isActive = false
+            if self.cancelRequested {
+                FileOperations.presentFailures(
+                    L("Delete cancelled", "삭제가 취소되었습니다"),
+                    [L("Items already moved to the Trash stay there (undo restores them).",
+                       "이미 휴지통으로 이동된 항목은 그대로 남습니다 (⌘Z로 복원).")])
+            }
+            FileOperations.presentFailures(L("Couldn’t delete", "삭제하지 못했습니다"), failures)
+            completion()
+        }
+    }
+
+    /// Show the HUD only if the job is still running after 400ms — small jobs
+    /// never flash UI (same rule as transfer()).
+    private func armDelayedHUD(generation: Int) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, self.jobGeneration == generation, !self.jobDone else { return }
+            self.isActive = true
+        }
+    }
+
+    /// Throttled item-count progress push from a background worker.
+    private nonisolated static func pushFraction(_ f: Double) {
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { FileTransfer.shared.fraction = min(f, 1) }
+        }
+    }
+
     // MARK: - Helpers
 
     /// Plan (src, dest) pairs for the batch under a conflict `policy`, plus the

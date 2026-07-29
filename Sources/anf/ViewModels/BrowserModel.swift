@@ -1083,10 +1083,16 @@ final class BrowserModel: Identifiable {
                 VaultService.isVault(folder)
             }.value
             guard isVault else {
-                FileOperations.moveToTrash(targets)
-                self.reload()
-                self.selectNeighborWhenLoaded(near: anchor)
-                self.broadcast(dirs: [folder.standardizedFileURL.path])
+                // Off-main bulk path: looping trashItem here beachballed for
+                // minutes on big network-share selections (each item is a
+                // blocking round-trip; a no-Trash volume then loops removeItem
+                // on top). The HUD/cancel come with it.
+                FileTransfer.shared.trashItems(targets) { [weak self] in
+                    guard let self else { return }
+                    self.reload()
+                    self.selectNeighborWhenLoaded(near: anchor)
+                    self.broadcast(dirs: [folder.standardizedFileURL.path])
+                }
                 return
             }
             let snapped = await Task.detached(priority: .userInitiated) {
@@ -1107,10 +1113,12 @@ final class BrowserModel: Identifiable {
                     return
                 }
             }
-            FileOperations.moveToTrash(targets)
-            reload()
-            selectNeighborWhenLoaded(near: anchor)
-            broadcast(dirs: [folder.standardizedFileURL.path])
+            FileTransfer.shared.trashItems(targets) { [weak self] in
+                guard let self else { return }
+                self.reload()
+                self.selectNeighborWhenLoaded(near: anchor)
+                self.broadcast(dirs: [folder.standardizedFileURL.path])
+            }
         }
     }
 
