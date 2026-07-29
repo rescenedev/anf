@@ -48,6 +48,9 @@ final class AppController: NSObject, NSApplicationDelegate {
             if LayoutBench.isRequested {
                 LayoutBench.run(window: window, workspace: workspace)
             }
+            if ToolbarProbe.isRequested {
+                ToolbarProbe.run(window: window, workspace: workspace)
+            }
             if TerminalSmoke.isRequested {
                 TerminalSmoke.run(workspace: workspace)
             }
