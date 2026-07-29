@@ -51,6 +51,9 @@ final class AppController: NSObject, NSApplicationDelegate {
             if ToolbarProbe.isRequested {
                 ToolbarProbe.run(window: window, workspace: workspace)
             }
+            if FocusProbe.isRequested {
+                FocusProbe.run(window: window, workspace: workspace)
+            }
             if TerminalSmoke.isRequested {
                 TerminalSmoke.run(workspace: workspace)
             }
