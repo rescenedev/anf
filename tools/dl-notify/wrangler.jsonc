@@ -2,13 +2,16 @@
   "name": "anf-dl-notify",
   "main": "src/index.js",
   "compatibility_date": "2026-06-12",
+  "routes": [
+    { "pattern": "hooks.zihado.com", "custom_domain": true }
+  ],
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
   "kv_namespaces": [
     {
       "binding": "STATE",
-      "id": "bd30493208a14dbbb6029725147e8976"
+      "id": "90ee65464ff8425e9fe30d89f3c90bc5"
     }
   ]
 }

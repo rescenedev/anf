@@ -11,7 +11,7 @@ export default {
   },
 
   // Manual trigger for testing: GET /poke?key=<POKE_KEY>
-  // GitHub webhook (issues): POST /webhook, HMAC-verified with WEBHOOK_SECRET.
+  // GitHub webhook (issues/PRs): POST /webhook, HMAC-verified with WEBHOOK_SECRET.
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/poke" && url.searchParams.get("key") === env.POKE_KEY) {
@@ -48,6 +48,21 @@ async function webhook(req, env) {
       `💬 이슈 #${p.issue?.number} 새 댓글 (by ${c.user?.login})`,
       (c.body ?? "").slice(0, 300),
       c.html_url,
+    ].join("\n"));
+  } else if (event === "pull_request" && ["opened", "reopened", "closed", "ready_for_review"].includes(p.action)) {
+    const pr = p.pull_request;
+    // "closed" is two different stories — merged vs abandoned.
+    const verb =
+      p.action === "closed" ? (pr.merged ? "머지됨" : "닫힘")
+      : p.action === "reopened" ? "다시 열림"
+      : p.action === "ready_for_review" ? "리뷰 준비됨"
+      : "등록";
+    const emoji = p.action === "closed" ? (pr.merged ? "🎉" : "🚫") : "🔀";
+    await tg(env, [
+      `${emoji} PR ${verb} #${pr.number}`,
+      pr.title,
+      `by ${pr.user?.login}`,
+      pr.html_url,
     ].join("\n"));
   } else if (event === "release" && p.action === "published") {
     const r = p.release;
@@ -145,10 +160,17 @@ async function check(env, { verbose = false } = {}) {
 }
 
 async function tg(env, text) {
-  const res = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: env.TG_CHAT, text }),
-  });
-  if (!res.ok) console.log("telegram send failed", res.status, await res.text());
+  // Never throw: a network hiccup here used to bubble out of the webhook
+  // handler as a 500 back to GitHub — the notification is best-effort, the
+  // webhook ack is not.
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: env.TG_CHAT, text }),
+    });
+    if (!res.ok) console.log("telegram send failed", res.status, await res.text());
+  } catch (e) {
+    console.log("telegram send threw", String(e));
+  }
 }

@@ -10,5 +10,10 @@ Cloudflare Worker. GitHub에는 다운로드 웹훅이 없어 `download_count`�
 소진돼 있어 필수)
 수동 확인: `GET /poke?key=<POKE_KEY>`
 
-이슈/댓글은 GitHub 웹훅(push)으로 즉시 알림 — `POST /webhook`,
-`WEBHOOK_SECRET` HMAC 서명 검증.
+이슈/댓글/PR(등록·머지·닫힘)은 GitHub 웹훅(push)으로 즉시 알림 —
+`POST /webhook`, `WEBHOOK_SECRET` HMAC 서명 검증.
+
+hooks.zihado.com은 이 Worker의 커스텀 도메인이다 (2026-07-29에 legalize-ts
+터널의 localhost:8481에서 이관 — 터널 쪽 프로세스가 500을 내며 죽어가고
+있었고, Worker 관리가 더 단순하다). 웹훅 이벤트 구독은 GitHub 저장소 설정의
+issues · issue_comment · release · pull_request 네 가지.
