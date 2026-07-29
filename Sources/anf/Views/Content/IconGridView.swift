@@ -71,6 +71,17 @@ struct IconGridView: NSViewRepresentable {
         init(model: BrowserModel, onFocus: @escaping () -> Void) {
             self.model = model
             self.onFocus = onFocus
+            super.init()
+            // Async tag resolution (see FileTags.display) — retint visible cells
+            // when a batch lands.
+            NotificationCenter.default.addObserver(self, selector: #selector(tagsResolved),
+                                                   name: FileTags.tagsResolvedNote, object: nil)
+        }
+
+        @objc private func tagsResolved() {
+            MainActor.assumeIsolated {
+                collection?.visibleItems().forEach { ($0 as? IconItem)?.refreshTag() }
+            }
         }
 
         deinit {
@@ -668,6 +679,7 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
     private var iconW: NSLayoutConstraint?
     private var iconH: NSLayoutConstraint?
     private var currentID: FileItem.ID?
+    private var currentURL: URL?
     private var renameCommit: ((String) -> Void)?
     private var renameCancel: (() -> Void)?
 
@@ -741,13 +753,20 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
                 self.icon.image = thumb
             }
         }
-        if let tag = FileTags.primaryColor(of: item.url) {
+        currentURL = item.url
+        refreshTag()
+        applySelectionStyle()
+    }
+
+    /// Re-read the (cache-only) tag colour for the current file — called from
+    /// configure and again when an async tag batch resolves.
+    func refreshTag() {
+        if let url = currentURL, let tag = FileTags.primaryColor(of: url) {
             tagDot.layer?.backgroundColor = tag.cgColor
             tagDot.isHidden = false
         } else {
             tagDot.isHidden = true
         }
-        applySelectionStyle()
     }
 
     private var highlighted = false
@@ -769,6 +788,7 @@ final class IconItem: NSCollectionViewItem, NSTextFieldDelegate {
     override func prepareForReuse() {
         super.prepareForReuse()
         currentID = nil
+        currentURL = nil
         highlighted = false
         endRenameUI()
     }

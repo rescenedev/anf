@@ -96,6 +96,10 @@ private struct ColumnRow: View {
                 .frame(width: 16, height: 16)
             Text(item.displayName).lineLimit(1).font(.system(size: 13))
             Spacer(minLength: 0)
+            // Reading TagVersion subscribes this row to async tag resolution —
+            // display() is cache-only now (the inline read beachballed on NAS),
+            // so the dot appears when the background batch lands.
+            let _ = TagVersion.shared.n
             if let tag = FileTags.primaryColor(of: item.url) {
                 Circle().fill(Color(nsColor: tag)).frame(width: 8, height: 8)
             }
