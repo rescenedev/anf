@@ -104,12 +104,17 @@ enum VaultService {
             let store = folder.appendingPathComponent(isolatedDir)
             try? fm.createDirectory(at: store, withIntermediateDirectories: true)
             let gitDir = store.appendingPathComponent(".git").path
-            guard ExternalTools.run(git, ["--git-dir", gitDir, "--work-tree", folder.path,
-                                          "init"], maxLines: 100, timeout: 60) != nil,
+            // Success = exit code + the .git dir actually existing. (stdout can't
+            // signal failure: ExternalTools.run returns lines, never nil — V-002-B.)
+            // Raw args, NOT runStatus(["init"]): base() only routes to the isolated
+            // store once it exists, so during init it would point git at the
+            // user's project root instead.
+            guard rawStatus(["--git-dir", gitDir, "--work-tree", folder.path,
+                             "init"]) == 0,
                   fm.fileExists(atPath: gitDir) else { return false }
             appendToUserGitignore(folder)
         } else {
-            guard run(["init"], folder: folder) != nil else { return false }
+            guard runStatus(["init"], folder: folder) == 0 else { return false }
             // Mark this root .git as ours so a plain dev repo isn't seen as a vault.
             try? "".write(to: folder.appendingPathComponent(".anf_owned"),
                           atomically: true, encoding: .utf8)
@@ -172,7 +177,7 @@ enum VaultService {
     /// via the exit code of rev-parse — V-002-B.)
     static func hasUncommittedChanges(at folder: URL) -> Bool {
         guard runStatus(["rev-parse", "--git-dir"], folder: folder) == 0 else { return true }
-        return !(run(["status", "--porcelain"], folder: folder) ?? []).isEmpty
+        return !run(["status", "--porcelain"], folder: folder).isEmpty
     }
 
     /// Stage everything and commit, but ONLY if there are changes (an empty
@@ -191,13 +196,15 @@ enum VaultService {
         }
         let stamp = ISO8601Stamp.now()
         let msg = "\(snapshotPrefix)\(stamp)\(label.isEmpty ? "" : " (\(label))")"
-        return run(["commit", "-m", msg], folder: folder) != nil
+        // Exit code, not stdout: `run` returns lines (empty on failure), so a
+        // `!= nil` here reported success even when the commit never happened.
+        return runStatus(["commit", "-m", msg], folder: folder) == 0
     }
 
     /// The timeline, newest first.
     static func snapshots(at folder: URL, limit: Int = 200) -> [VaultSnapshot] {
         let out = run(["log", "--pretty=format:%H\u{1f}%ct\u{1f}%s",
-                       "-n", "\(limit)"], folder: folder) ?? []
+                       "-n", "\(limit)"], folder: folder)
         return out.compactMap { line in
             let f = line.components(separatedBy: "\u{1f}")
             guard f.count == 3, let secs = Double(f[1]) else { return nil }
@@ -209,7 +216,7 @@ enum VaultService {
     /// Files present in a snapshot but missing from the working tree now —
     /// candidates for "recover a deleted file".
     static func deletedSince(_ snapshot: VaultSnapshot, at folder: URL) -> [String] {
-        let inSnap = run(["ls-tree", "-r", "--name-only", snapshot.id], folder: folder) ?? []
+        let inSnap = run(["ls-tree", "-r", "--name-only", snapshot.id], folder: folder)
         let fm = FileManager.default
         return inSnap.filter { !fm.fileExists(atPath: folder.appendingPathComponent($0).path) }
     }
@@ -237,7 +244,7 @@ enum VaultService {
                     // captured → refuse rather than clobber (V-001-A/V-002-B). `run`
                     // returns empty stdout (not nil) on failure, so gate on rev-parse.
                     guard runStatus(["rev-parse", "--git-dir"], folder: folder) == 0 else { return false }
-                    let dirty = !(run(["status", "--porcelain", "--", relativePath], folder: folder) ?? []).isEmpty
+                    let dirty = !run(["status", "--porcelain", "--", relativePath], folder: folder).isEmpty
                     if dirty { return false }
                 }
             }
@@ -273,15 +280,24 @@ enum VaultService {
         return quoting + ["-C", folder.path]
     }
 
-    private static func run(_ args: [String], folder: URL) -> [String]? {
+    /// stdout lines; empty on failure. Success/failure must be judged with
+    /// `runStatus` — an Optional return here only ever produced dead `!= nil`
+    /// checks, because ExternalTools.run never returns nil (V-002-B).
+    private static func run(_ args: [String], folder: URL) -> [String] {
         ExternalTools.run(git, base(folder) + args, maxLines: 100_000, timeout: 60)
     }
 
-    /// Run for the EXIT CODE (used for `diff --quiet`, `checkout`).
+    /// Run for the EXIT CODE (used for `diff --quiet`, `checkout`, `init`).
     private static func runStatus(_ args: [String], folder: URL) -> Int32 {
+        rawStatus(base(folder) + args)
+    }
+
+    /// Exit code with the args verbatim — for the init path, where base() can't
+    /// route to the isolated store yet (it doesn't exist until init succeeds).
+    private static func rawStatus(_ args: [String]) -> Int32 {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: git)
-        p.arguments = base(folder) + args
+        p.arguments = args
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         do { try p.run(); p.waitUntilExit(); return p.terminationStatus }

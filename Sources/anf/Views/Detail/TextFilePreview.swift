@@ -41,14 +41,14 @@ struct TextFilePreview: View {
         }
         .task(id: "\(url.path)|\(fontSize)") {
             let cap = byteCap, ext = url.pathExtension, size = fontSize
-            let loaded = await Task.detached(priority: .userInitiated) { () -> (String, NSAttributedString?, Bool) in
+            let loaded = await Task.detached(priority: .userInitiated) { () -> Handoff<(String, NSAttributedString?, Bool)> in
                 guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
-                    return ("", nil, false)
+                    return Handoff(("", nil, false))
                 }
                 let slice = data.prefix(cap)
                 let s = TextDecoding.string(from: slice)
-                return (s, CodeHighlight.highlight(s, ext: ext, fontSize: size), data.count > cap)
-            }.value
+                return Handoff((s, CodeHighlight.highlight(s, ext: ext, fontSize: size), data.count > cap))
+            }.value.value
             text = loaded.0
             rich = loaded.1
             truncated = loaded.2
