@@ -15,11 +15,14 @@ enum TerminalSmoke {
 
     static func run(workspace: WorkspaceModel) {
         guard isRequested else { return }
-        var token: NSObjectProtocol?
-        token = NotificationCenter.default.addObserver(
+        // A class box, not a captured var: the observer block is Sendable, and
+        // mutating a captured local inside it is a Swift 6 data-race error.
+        final class TokenBox: @unchecked Sendable { var token: NSObjectProtocol? }
+        let box = TokenBox()
+        box.token = NotificationCenter.default.addObserver(
             forName: .init("anf.terminal.pageReady"), object: nil, queue: .main
         ) { _ in
-            if let token { NotificationCenter.default.removeObserver(token) }
+            if let token = box.token { NotificationCenter.default.removeObserver(token) }
             print("TERMINALSMOKE OK (bundle: \(anfResourceBundle?.bundlePath ?? "nil"))")
             exit(0)
         }

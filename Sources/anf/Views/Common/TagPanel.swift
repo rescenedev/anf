@@ -92,17 +92,25 @@ private final class TagState: ObservableObject {
     func cancel() { task?.cancel() }
 
     func apply() {
-        var applied: [URL] = []
-        for i in rows.indices where rows[i].enabled && rows[i].phase == .ready {
-            TagService.apply(rows[i].tags, to: rows[i].url)
-            rows[i].phase = .done
-            applied.append(rows[i].url)
+        // The tag writes are synchronous DesktopServices XPC round-trips (see
+        // FileTags.toggle) — run them OFF the main thread; a multi-file apply on
+        // the main actor beachballed the panel. UI state updates once they land.
+        let todo = rows.indices
+            .filter { rows[$0].enabled && rows[$0].phase == .ready }
+            .map { (index: $0, tags: rows[$0].tags, url: rows[$0].url) }
+        guard !todo.isEmpty else {
+            if !rows.contains(where: { $0.enabled && $0.phase == .ready }) { close() }
+            return
         }
-        if !applied.isEmpty {
-            FileTags.reindex(applied)   // make Finder/Spotlight pick the tags up now
+        Task { @MainActor in
+            await Task.detached(priority: .userInitiated) {
+                for item in todo { TagService.apply(item.tags, to: item.url) }
+                FileTags.reindex(todo.map(\.url))   // Finder/Spotlight pick the tags up now
+            }.value
+            for item in todo { rows[item.index].phase = .done }
             onDone()
+            if !rows.contains(where: { $0.enabled && $0.phase == .ready }) { close() }
         }
-        if !rows.contains(where: { $0.enabled && $0.phase == .ready }) { close() }
     }
 }
 

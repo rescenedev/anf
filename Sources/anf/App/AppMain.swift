@@ -48,6 +48,9 @@ final class AppController: NSObject, NSApplicationDelegate {
             if LayoutBench.isRequested {
                 LayoutBench.run(window: window, workspace: workspace)
             }
+            if ToolbarProbe.isRequested {
+                ToolbarProbe.run(window: window, workspace: workspace)
+            }
             if TerminalSmoke.isRequested {
                 TerminalSmoke.run(workspace: workspace)
             }
@@ -91,7 +94,9 @@ public func anfMain() {
     // default delay (~1.5s) makes them feel absent, so shorten it app-wide.
     UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 500])
     HangWatchdog.startIfRequested()
-    _ = VaultWatcher.shared   // resume watching protected folders from last launch
+    // resume watching protected folders from last launch. anfMain runs on the
+    // main thread but isn't statically main-actor — assume, don't just touch.
+    MainActor.assumeIsolated { _ = VaultWatcher.shared }
     // Return allocator slack to the OS periodically: after a burst (26k listing,
     // bulk copy) malloc keeps freed pages dirty, which reads as a bloated
     // footprint in Activity Monitor even though the live heap is ~30MB.

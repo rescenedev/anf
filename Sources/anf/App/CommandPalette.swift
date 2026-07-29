@@ -827,11 +827,16 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         // (via setAnswer) — without weak, Timer→closure→self→thinkTimer is a leak
         // that keeps animating until the next open (G-005).
         thinkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            step += 1
-            let dots = String(repeating: "·", count: 1 + step % 3)
-            self.setAnswer(header + "✦ \(provider) · " + L("Thinking", "생각 중") + " \(dots)",
-                           dim: true, questionLen: header.count)
+            // Scheduled on the main runloop, so the callback IS on the main
+            // thread — assumeIsolated makes that explicit for the compiler
+            // (setAnswer is main-actor) and traps loudly if it ever moves.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                step += 1
+                let dots = String(repeating: "·", count: 1 + step % 3)
+                self.setAnswer(header + "✦ \(provider) · " + L("Thinking", "생각 중") + " \(dots)",
+                               dim: true, questionLen: header.count)
+            }
         }
     }
 

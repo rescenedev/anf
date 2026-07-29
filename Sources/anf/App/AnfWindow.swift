@@ -57,10 +57,14 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
     let workspace: WorkspaceModel
     private let toolbarController: WindowToolbarController
     private var splitView: NSSplitView?
+    private var sidebarItem: NSSplitViewItem?
+    private var splitObserver: (any NSObjectProtocol)?
     /// This window's command palette — built lazily, dies with the window.
     lazy var palette = CommandPaletteController(workspace: workspace)
 
     static let frameKey = "anf.window.frame.v2"
+    nonisolated static let sidebarMinThickness: CGFloat = 184
+    nonisolated static let sidebarMaxThickness: CGFloat = 340
 
     /// `restoreFrame` is true for the first window of a launch (re-use the saved
     /// geometry); later windows cascade so they don't stack exactly.
@@ -72,8 +76,8 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
 
         let split = NSSplitViewController()
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarVC)
-        sidebarItem.minimumThickness = 184
-        sidebarItem.maximumThickness = 340
+        sidebarItem.minimumThickness = Self.sidebarMinThickness
+        sidebarItem.maximumThickness = Self.sidebarMaxThickness
         sidebarItem.canCollapse = true
         sidebarItem.allowsFullHeightLayout = true
         split.addSplitViewItem(sidebarItem)
@@ -81,6 +85,7 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         contentItem.minimumThickness = 420
         split.addSplitViewItem(contentItem)
         self.splitView = split.splitView
+        self.sidebarItem = sidebarItem
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
@@ -144,6 +149,14 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         SidebarDividerResizer.install(in: window, splitView: split.splitView)
         WindowEdgeResizer.install(in: window)
         WindowRegistry.register(self)
+
+        syncToolbarWidth()
+        splitObserver = NotificationCenter.default.addObserver(
+            forName: NSSplitView.didResizeSubviewsNotification,
+            object: split.splitView, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.syncToolbarWidth() }
+        }
     }
 
     private func placeWindow(restoreFrame: Bool, inSelfTest: Bool) {
@@ -175,12 +188,42 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: Self.frameKey)
     }
 
+    /// Recompute how much titlebar the toolbar clusters have to share. The
+    /// sidebar eats into it, so both a window resize and a divider drag matter.
+    ///
+    /// `width` overrides the window's current width — pass the *incoming* width
+    /// from `windowWillResize` so the clusters have already shrunk by the time
+    /// AppKit lays the toolbar out. Doing it after the fact lays out once with
+    /// the stale (too wide) size, and that single pass is enough for AppKit to
+    /// drop a cluster for good (#93).
+    func syncToolbarWidth(width: CGFloat? = nil) {
+        let windowWidth = width ?? window.frame.width
+        // NSSplitView.subviews order isn't the item order — ask the item.
+        guard let sidebarItem else { return }
+        // Keep the sidebar from growing into space the toolbar needs.
+        sidebarItem.maximumThickness = max(Self.sidebarMinThickness,
+                                           min(Self.sidebarMaxThickness,
+                                               WindowToolbarController.maxSidebarWidth(windowWidth: windowWidth)))
+        let sidebarWidth = sidebarItem.isCollapsed ? 0 : sidebarItem.viewController.view.frame.width
+        toolbarController.updateAvailableWidth(windowWidth: windowWidth, sidebarWidth: sidebarWidth)
+    }
+
     // MARK: NSWindowDelegate
+
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        syncToolbarWidth(width: frameSize.width)
+        return frameSize
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        syncToolbarWidth()
+    }
 
     func windowWillClose(_ notification: Notification) {
         workspace.save()
         saveFrame()
         OverlayKeeper.release(for: window)   // tear down per-window observers
+        if let splitObserver { NotificationCenter.default.removeObserver(splitObserver) }
         WindowRegistry.deregister(self)
     }
 

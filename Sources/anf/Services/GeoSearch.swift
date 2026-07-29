@@ -28,15 +28,23 @@ enum GeoSearch {
     /// Forward-geocode a place name → coordinate (the one network call), cached.
     private nonisolated(unsafe) static var cache: [String: CLLocation] = [:]
     private static let cacheLock = NSLock()
+    // Synchronous accessors so the lock is never taken inside an async frame —
+    // taking NSLock around an await would deadlock, and the compiler can only
+    // rule that out when the locked region lives in a sync function.
+    private static func cached(_ key: String) -> CLLocation? {
+        cacheLock.withLock { cache[key] }
+    }
+    private static func remember(_ key: String, _ loc: CLLocation) {
+        cacheLock.withLock { cache[key] = loc }
+    }
 
     static func place(_ query: String) async -> CLLocation? {
         let key = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !key.isEmpty else { return nil }
-        cacheLock.lock(); let hit = cache[key]; cacheLock.unlock()
-        if let hit { return hit }
+        if let hit = cached(key) { return hit }
         guard let placemarks = try? await CLGeocoder().geocodeAddressString(query),
               let loc = placemarks.first?.location else { return nil }
-        cacheLock.lock(); cache[key] = loc; cacheLock.unlock()
+        remember(key, loc)
         return loc
     }
 

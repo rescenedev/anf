@@ -332,10 +332,10 @@
 "New Folder (⌘⇧N)" = "새 폴더 (⌘⇧N)";
 "Move to Trash (⌘⌫)" = "휴지통으로 (⌘⌫)";
 "Save Layout as Workspace" = "현재 레이아웃을 Workspace로 저장";
-"Save Workspace" = "Workspace 저장";
-"Saves the current pane layout and tabs under this name." = "현재 pane 레이아웃과 탭을 이 이름으로 저장합니다.";
 "Terminal for this folder (⌃`)" = "이 폴더의 터미널 (⌃`)";
 "Inspector (⌘I)" = "인스펙터 (⌘I)";
+"Save Workspace" = "Workspace 저장";
+"Saves the current pane layout and tabs under this name." = "현재 pane 레이아웃과 탭을 이 이름으로 저장합니다.";
 "Sort By" = "정렬 기준";
 "Ascending" = "오름차순";
 "Arrange By" = "그룹 기준";
