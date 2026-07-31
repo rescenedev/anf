@@ -98,6 +98,7 @@ MainActor.assumeIsolated { runFileOpsEdgeTests() }
 MainActor.assumeIsolated { runToolbarDensityTests() }
 MainActor.assumeIsolated { runFocusStabilityTests() }
 MainActor.assumeIsolated { runTagPipelineTests() }
+runNetworkRemountTests()
 runFixVerificationTests()
 
 print("")

@@ -3,7 +3,10 @@ import Foundation
 /// Serializable snapshot of a window arrangement — the pane layout, split ratios
 /// and each pane's tabs — so a "view" can be saved and recalled on demand.
 struct ViewSnapshot: Codable, Hashable {
-    struct Tab: Codable, Hashable { var path: String; var viewMode: String }
+    /// `network` marks a tab on a non-local volume: restore keeps it even when
+    /// the share isn't mounted yet (the reconnect card + auto-remount revive it)
+    /// instead of silently dropping the tab — and with it the user's pin (#101).
+    struct Tab: Codable, Hashable { var path: String; var viewMode: String; var network: Bool? }
     struct Pane: Codable, Hashable { var tabs: [Tab]; var activeIndex: Int }
     var layout: String
     var activePane: Int
