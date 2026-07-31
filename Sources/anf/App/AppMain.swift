@@ -38,6 +38,12 @@ final class AppController: NSObject, NSApplicationDelegate {
 
             NSApp.activate(ignoringOtherApps: true)
 
+            // Remember + quietly remount network volumes (#101). Not in
+            // selftest/bench harness runs — they must not touch the network.
+            if !ResizeSelfTest.isRequested, !UISelfTest.isRequested, !LayoutBench.isRequested {
+                NetworkRemount.start()
+            }
+
             if ResizeSelfTest.isRequested,
                let resizer = WindowEdgeResizer.install(in: window) {
                 DispatchQueue.main.async { ResizeSelfTest.run(window: window, overlay: resizer) }

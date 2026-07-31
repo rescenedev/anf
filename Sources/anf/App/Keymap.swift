@@ -90,7 +90,7 @@ final class Keymap {
     private var fileMTime: Date?
     private var observer: NSObjectProtocol?
 
-    static var fileURL: URL {
+    nonisolated static var fileURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/anf/keybindings.json")
     }

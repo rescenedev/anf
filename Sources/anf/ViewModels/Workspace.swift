@@ -553,7 +553,12 @@ final class WorkspaceModel {
 
     private static let stateKey = "anf.workspace.v1"
 
-    private struct TabState: Codable { var path: String; var viewMode: String; var locked: String? }
+    private struct TabState: Codable {
+        var path: String; var viewMode: String; var locked: String?
+        /// Tab lives on a network volume — restore keeps it even while the
+        /// share is unmounted, instead of dropping the tab (and pin) forever (#101).
+        var network: Bool?
+    }
     private struct PaneState: Codable { var tabs: [TabState]; var activeIndex: Int }
     private struct State: Codable {
         var layout: String
@@ -591,7 +596,8 @@ final class WorkspaceModel {
                 PaneState(
                     tabs: pane.tabs.map {
                         TabState(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue,
-                                 locked: $0.lockedURL?.path)   // persist tab pin (issue #29)
+                                 locked: $0.lockedURL?.path,   // persist tab pin (issue #29)
+                                 network: $0.isOnNetworkVolume ? true : nil)
                     },
                     activeIndex: pane.activeIndex
                 )
@@ -643,7 +649,12 @@ final class WorkspaceModel {
         let validPaths = PathProbe.existingDirectories(
             state.panes.prefix(panes.count).flatMap { $0.tabs.map(\.path) })
         for (i, paneState) in state.panes.enumerated() where i < layout.count && i < panes.count {
-            let validTabs = paneState.tabs.filter { validPaths.contains($0.path) }
+            // Network tabs are kept even when their path doesn't answer: right
+            // after login the share simply isn't MOUNTED yet — dropping the tab
+            // here (and then saving that state) permanently lost the user's
+            // pinned network folder (#101). The reconnect card + auto-remount
+            // handle the not-yet-mounted window at runtime.
+            let validTabs = paneState.tabs.filter { validPaths.contains($0.path) || $0.network == true }
             guard !validTabs.isEmpty else { continue }
             let pane = panes[i]
             let models = validTabs.map { ts -> BrowserModel in
@@ -669,7 +680,8 @@ final class WorkspaceModel {
             panes: panes.prefix(layout.count).map { pane in
                 ViewSnapshot.Pane(
                     tabs: pane.tabs.map {
-                        ViewSnapshot.Tab(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue)
+                        ViewSnapshot.Tab(path: $0.currentURL.path, viewMode: $0.viewMode.rawValue,
+                                         network: $0.isOnNetworkVolume ? true : nil)
                     },
                     activeIndex: pane.activeIndex)
             }
@@ -684,7 +696,8 @@ final class WorkspaceModel {
         let validPaths = PathProbe.existingDirectories(
             snap.panes.prefix(panes.count).flatMap { $0.tabs.map(\.path) })
         for (i, paneState) in snap.panes.enumerated() where i < panes.count {
-            let validTabs = paneState.tabs.filter { validPaths.contains($0.path) }
+            // Same keep-network rule as restore() — see the comment there (#101).
+            let validTabs = paneState.tabs.filter { validPaths.contains($0.path) || $0.network == true }
             guard !validTabs.isEmpty else { continue }
             let models = validTabs.map { ts -> BrowserModel in
                 let m = BrowserModel(start: URL(fileURLWithPath: ts.path))

@@ -45,6 +45,11 @@ final class BrowserModel: Identifiable {
     private(set) var itemsVersion = 0
 
     // MARK: - Inline tree (list mode)
+    /// True when the current folder's volume probed as non-local (SMB/NFS…).
+    /// Fed by the watcher's off-main locality probe; read by Workspace.save so
+    /// network tabs survive a restore while their share is still unmounted (#101).
+    @ObservationIgnored private(set) var isOnNetworkVolume = false
+
     /// Folders the user expanded inline in list mode. Their children are spliced
     /// into `items` indented, so selection/keyboard/sort all work unchanged.
     @ObservationIgnored private var expanded: Set<URL> = []
@@ -787,6 +792,10 @@ final class BrowserModel: Identifiable {
             let local = DirectoryWatcherFactory.isLocalVolume(url)
             await MainActor.run { [weak self] in
                 guard let self, self.currentURL == url else { return }   // navigated away mid-probe
+                // Cached for persistence: save() must know "is this tab on a
+                // network volume" without a volume call (which blocks on a
+                // stalled mount). The watcher probe already paid for the answer.
+                self.isOnNetworkVolume = !local
                 // Two probes for the same folder can be in flight (navigate away
                 // and back before the first resolves); replacing the reference
                 // without stop() would leak the earlier FSEvents stream, which
