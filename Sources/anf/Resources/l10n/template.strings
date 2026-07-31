@@ -210,6 +210,10 @@
 "Tags" = "태그";
 "They were left in place — check permissions or a name conflict." = "해당 항목은 원래 자리에 그대로 있습니다 — 권한이나 이름 충돌을 확인하세요.";
 "Classifying…" = "분류 중…";
+"Preview" = "미리보기";
+"Select an item" = "항목을 선택하세요";
+"Keep on top" = "항상 위에 유지";
+"Select an item to preview" = "미리볼 항목을 선택하세요";
 "Proposing names…" = "이름 짓는 중…";
 "no suggestion" = "제안 없음";
 "Add SSH Host" = "SSH Host 추가";
@@ -296,10 +300,10 @@
 "Opens after download (Return or double-click)" = "열기(↵ 또는 더블클릭) 시 다운로드 후 표시됩니다";
 "No preview for this format" = "미리보기를 제공하지 않는 형식입니다";
 "Downloading from iCloud…" = "iCloud에서 다운로드 중…";
-"Select an item" = "항목을 선택하세요";
 "Summarizing…" = "요약 중…";
 "Summarize" = "AI 요약";
 "Summarize on-device (AI)" = "온디바이스 AI 요약";
+"Open preview in a floating window" = "미리보기를 팝업 창으로";
 "Hide Info" = "정보 가리기";
 "Show Info" = "정보 보기";
 "Summarizing on-device…" = "온디바이스로 요약 중…";
