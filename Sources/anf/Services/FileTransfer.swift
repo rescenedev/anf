@@ -292,10 +292,13 @@ final class FileTransfer {
         label = L("Moving to Trash…", "휴지통으로 이동 중…")
         armDelayedHUD(generation: gen)
 
-        // Same concurrency rule as copies: local volume → all cores (trashItem
-        // is a cheap rename into .Trash), network → cap at 4 connections.
-        let parent = items[0].url.deletingLastPathComponent()
-        let cap = Self.isLocalVolume(parent) ? ProcessInfo.processInfo.activeProcessorCount : 4
+        // Trash concurrency is capped at 4 everywhere: unlike a copy, trashItem
+        // round-trips the DesktopServices daemon per item, and when that daemon
+        // is busy/wedged (observed under heavy overnight mds load — even a
+        // single trashItem blocked for minutes) extra in-flight calls only pile
+        // up. Four keeps batches quick in the normal case without dogpiling a
+        // struggling daemon; the off-main design already keeps the UI live.
+        let cap = 4
 
         Task { @MainActor [weak self] in
             let outcome = await Task.detached(priority: .userInitiated) {
@@ -307,7 +310,7 @@ final class FileTransfer {
                 var failures: [String] = []
                 var completed = 0
                 var lastPushed = ContinuousClock.now
-                Self.boundedForEach(items.count, maxConcurrent: cap, useAllCores: cap > 4) { i in
+                Self.boundedForEach(items.count, maxConcurrent: cap) { i in
                     if flag.isSet { return }
                     let outcome = FileOperations.trashOne(items[i], trashDir: trashDir)
                     lock.lock()
@@ -351,7 +354,7 @@ final class FileTransfer {
                         var completed = 0
                         var lastPushed = ContinuousClock.now
                         let doomed = outcome.noTrash
-                        Self.boundedForEach(doomed.count, maxConcurrent: cap, useAllCores: cap > 4) { i in
+                        Self.boundedForEach(doomed.count, maxConcurrent: cap) { i in
                             if flag.isSet { return }
                             var failure: String?
                             do { try FileManager.default.removeItem(at: doomed[i].url) }

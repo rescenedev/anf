@@ -195,7 +195,11 @@ final class KeyboardController: NSObject, @preconcurrency QLPreviewPanelDataSour
 
     /// Execute one keymap-driven action. Consumes the event unless a move action
     /// declines it (columns view left/right → native AppKit browser navigation).
-    private func dispatch(_ action: KeyAction, shift: Bool = false) -> Bool {
+    /// Internal (not private) so the dispatch-routing tests can drive the REAL
+    /// action switch through an injected workspace (WindowRegistry.testOverride)
+    /// — #42 P1. Production callers stay within this file.
+    @discardableResult
+    func dispatch(_ action: KeyAction, shift: Bool = false) -> Bool {
         switch action {
         // Selection movement (issue #52). These return their own consumed flag.
         case .moveUp: return moveVertical(-1, extend: shift)
