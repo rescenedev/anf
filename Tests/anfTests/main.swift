@@ -99,6 +99,7 @@ MainActor.assumeIsolated { runToolbarDensityTests() }
 MainActor.assumeIsolated { runFocusStabilityTests() }
 MainActor.assumeIsolated { runTagPipelineTests() }
 runNetworkRemountTests()
+runAudioPreviewTests()
 runFixVerificationTests()
 
 print("")

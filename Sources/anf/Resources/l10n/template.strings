@@ -285,6 +285,10 @@
 "No Items" = "항목 없음";
 "Release Notes" = "릴리즈 노트";
 "Drag to move" = "드래그해서 이동";
+"Pause (Space plays via Quick Look)" = "일시 정지";
+"Play" = "재생";
+"Play all" = "연속 재생";
+"Keep playing through the folder's audio files" = "폴더의 다음 오디오 파일을 이어서 재생";
 "Extracting text…" = "본문 추출 중…";
 "No text to preview" = "미리볼 텍스트가 없습니다";
 "Text in image" = "이미지 속 텍스트";
