@@ -146,44 +146,9 @@ struct InfoInspector: View {
                 // the actual content instead of the generic icon.
                 // Plain-text-ish files use our own preview — Quick Look renders
                 // them at an unreadably small fixed size.
-                Group {
-                    if target.url.scheme == "sftp" {
-                        RemotePreviewPlaceholder(item: target)
-                    } else if target.isOpaqueBinary {
-                        BinaryPreviewPlaceholder(item: target)
-                    } else if target.ext == "docx" || target.ext == "hwpx" {
-                        // Native structured render (headings/tables/lists/bold;
-                        // hwpx collects only hp:t body runs, so form-field
-                        // metadata junk never reaches the preview) — instant
-                        // and full-width, no Quick Look page image.
-                        DocxPreview(url: target.url, fontSize: workspace.previewTextSize)
-                    } else if target.isExtractableDocument {
-                        // pptx/xlsx: extracted text (slides/sheets read fine).
-                        DocumentTextPreview(url: target.url, fontSize: workspace.previewTextSize)
-                    } else if target.isMarkdown {
-                        MarkdownPreview(url: target.url, fontSize: workspace.previewTextSize)
-                    } else if target.isJSON {
-                        JSONPreview(url: target.url, fontSize: workspace.previewTextSize)
-                    } else if target.isPlainTextLike {
-                        TextFilePreview(url: target.url, fontSize: workspace.previewTextSize)
-                    } else if AudioPreview.isAudio(target) {
-                        // Native player (#103): QL's remote audio controls went
-                        // click-dead in the inspector, had no volume, no FLAC art.
-                        AudioPreview(item: target, model: model)
-                    } else if OCRService.isImage(target.url) {
-                        // Image: Quick Look preview + on-device OCR text below
-                        // (shares the search cache). Text appears when ready.
-                        ImagePreview(url: target.url, fontSize: workspace.previewTextSize)
-                    } else if target.isQuickLookFriendly {
-                        QuickLookView(url: target.url)
-                    } else {
-                        // Unknown type: sniff the content — text shows as text,
-                        // binary skips QL entirely (instant placeholder).
-                        SniffedPreview(item: target, fontSize: workspace.previewTextSize)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id("\(target.url.path)|\(target.isCloudPlaceholder)")
+                InspectorPreviewContent(target: target, model: model, workspace: workspace)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id("\(target.url.path)|\(target.isCloudPlaceholder)")
                 if target.isCloudPlaceholder {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
@@ -230,6 +195,17 @@ struct InfoInspector: View {
                         .help(L("Summarize on-device (AI)", "온디바이스 AI 요약"))
                     }
                     Button {
+                        PreviewPopup.show(workspace: workspace)
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(7)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("Open preview in a floating window", "미리보기를 팝업 창으로"))
+                    Button {
                         withAnimation(.easeInOut(duration: 0.15)) { showDetails.toggle() }
                     } label: {
                         Image(systemName: showDetails ? "chevron.down" : "chevron.up")
@@ -263,6 +239,55 @@ struct InfoInspector: View {
             withAnimation {
                 summarizing = false
                 summary = result
+            }
+        }
+    }
+}
+
+
+/// The per-type preview switch, shared between the docked inspector and the
+/// detachable preview popup (#103 follow-up: "인스펙터로 볼 때 팝업으로") — one
+/// routing table, two hosts.
+struct InspectorPreviewContent: View {
+    let target: FileItem
+    let model: BrowserModel
+    let workspace: WorkspaceModel
+
+    var body: some View {
+        Group {
+            if target.url.scheme == "sftp" {
+                RemotePreviewPlaceholder(item: target)
+            } else if target.isOpaqueBinary {
+                BinaryPreviewPlaceholder(item: target)
+            } else if target.ext == "docx" || target.ext == "hwpx" {
+                // Native structured render (headings/tables/lists/bold;
+                // hwpx collects only hp:t body runs, so form-field
+                // metadata junk never reaches the preview) — instant
+                // and full-width, no Quick Look page image.
+                DocxPreview(url: target.url, fontSize: workspace.previewTextSize)
+            } else if target.isExtractableDocument {
+                // pptx/xlsx: extracted text (slides/sheets read fine).
+                DocumentTextPreview(url: target.url, fontSize: workspace.previewTextSize)
+            } else if target.isMarkdown {
+                MarkdownPreview(url: target.url, fontSize: workspace.previewTextSize)
+            } else if target.isJSON {
+                JSONPreview(url: target.url, fontSize: workspace.previewTextSize)
+            } else if target.isPlainTextLike {
+                TextFilePreview(url: target.url, fontSize: workspace.previewTextSize)
+            } else if AudioPreview.isAudio(target) {
+                // Native player (#103): QL's remote audio controls went
+                // click-dead in the inspector, had no volume, no FLAC art.
+                AudioPreview(item: target, model: model)
+            } else if OCRService.isImage(target.url) {
+                // Image: Quick Look preview + on-device OCR text below
+                // (shares the search cache). Text appears when ready.
+                ImagePreview(url: target.url, fontSize: workspace.previewTextSize)
+            } else if target.isQuickLookFriendly {
+                QuickLookView(url: target.url)
+            } else {
+                // Unknown type: sniff the content — text shows as text,
+                // binary skips QL entirely (instant placeholder).
+                SniffedPreview(item: target, fontSize: workspace.previewTextSize)
             }
         }
     }
