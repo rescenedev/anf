@@ -48,6 +48,14 @@ func runDispatchRoutingTests() {
             T.equal(ws.activePaneModel.tabs.count, 1, "final ⌘W targets the window, never the last tab")
         }
 
+        T.group("dispatch: F3 opens the preview popup (#103)") {
+            T.expect(!PreviewPopup.isOpen, "popup closed before")
+            kb.dispatch(.previewPopup)
+            T.expect(PreviewPopup.isOpen, "F3 action opens the popup")
+            T.equal(Keymap.shared.action(flags: [], key: "f3"), .previewPopup,
+                    "default keymap binds F3 to the popup")
+        }
+
         T.group("dispatch: panel toggles flip workspace state") {
             let insp = ws.inspectorVisible
             kb.dispatch(.toggleInspector)
