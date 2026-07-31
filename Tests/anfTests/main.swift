@@ -100,6 +100,7 @@ MainActor.assumeIsolated { runFocusStabilityTests() }
 MainActor.assumeIsolated { runTagPipelineTests() }
 runNetworkRemountTests()
 runAudioPreviewTests()
+MainActor.assumeIsolated { runBacklogP1Round2Tests() }
 runFixVerificationTests()
 
 print("")
