@@ -101,6 +101,7 @@ MainActor.assumeIsolated { runTagPipelineTests() }
 runNetworkRemountTests()
 runAudioPreviewTests()
 MainActor.assumeIsolated { runBacklogP1Round2Tests() }
+MainActor.assumeIsolated { runMenuValidationTests() }
 runFixVerificationTests()
 
 print("")

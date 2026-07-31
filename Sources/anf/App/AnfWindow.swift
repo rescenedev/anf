@@ -19,9 +19,15 @@ enum WindowRegistry {
         map.removeValue(forKey: ObjectIdentifier(controller.window))
     }
 
+    /// Test seam: headless suites have no windows, so menu-controller tests
+    /// inject the workspace `current` should resolve to (nil-nil = real lookup;
+    /// .some(nil) = simulate "no workspace" for validation gating).
+    static var testOverride: WorkspaceModel?? = .none
+
     /// The workspace of the key (or main) window — what shortcuts and the View
     /// menu should target right now.
     static var current: WorkspaceModel? {
+        if case .some(let forced) = testOverride { return forced }
         if let w = NSApp.keyWindow ?? NSApp.mainWindow, let ws = map[ObjectIdentifier(w)] {
             return ws
         }
