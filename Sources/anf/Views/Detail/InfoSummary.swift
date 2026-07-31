@@ -166,6 +166,10 @@ struct InfoInspector: View {
                         JSONPreview(url: target.url, fontSize: workspace.previewTextSize)
                     } else if target.isPlainTextLike {
                         TextFilePreview(url: target.url, fontSize: workspace.previewTextSize)
+                    } else if AudioPreview.isAudio(target) {
+                        // Native player (#103): QL's remote audio controls went
+                        // click-dead in the inspector, had no volume, no FLAC art.
+                        AudioPreview(item: target, model: model)
                     } else if OCRService.isImage(target.url) {
                         // Image: Quick Look preview + on-device OCR text below
                         // (shares the search cache). Text appears when ready.
