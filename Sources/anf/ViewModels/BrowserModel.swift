@@ -1150,6 +1150,11 @@ final class BrowserModel: Identifiable {
 
     func makeNewFolder() {
         if let url = FileOperations.newFolder(in: currentURL) {
+            // A live filter would hide "untitled folder" — the selection/rename
+            // below could then never land and the user got a folder they could
+            // neither see nor name (#42 P1). Creating something new is a clear
+            // signal the user is done narrowing; drop the filter first.
+            if !filterText.isEmpty { filterText = "" }
             reload()
             broadcast(dirs: [currentURL.standardizedFileURL.path])
             // Select the new folder once the reload lands AND begin renaming it,
@@ -1166,22 +1171,24 @@ final class BrowserModel: Identifiable {
     private func selectWhenLoaded(_ urls: [URL], renameFirst: Bool = false) {
         guard !urls.isEmpty else { return }
         let token = loadToken
-        let versionBefore = itemsVersion
+        var versionBefore = itemsVersion
         let targets = Set(urls.map { $0.standardizedFileURL.path })
         Task { @MainActor in
-            for _ in 0..<25 {   // poll up to ~1.25s; reloads are usually <100ms
-                guard token == loadToken else { return }   // superseded by navigation
-                if itemsVersion != versionBefore {
-                    let hits = items.filter { targets.contains($0.url.standardizedFileURL.path) }
-                    if let first = hits.first {
-                        selection = Set(hits.map { $0.id })
-                        selCursor = items.firstIndex { $0.id == first.id }
-                        selAnchor = selCursor
-                        if renameFirst { editingItemID = first.id }
-                        return
-                    }
+            // Wait for listing commits (not a fixed 1.25s — the #99 give-up
+            // class: a slow NFS reload outlived the poll and the fresh folder
+            // never got selected/renamed). Each commit gets one match attempt;
+            // a miss waits for the next commit while this load stays current.
+            for _ in 0..<8 {
+                guard await listingCommitted(after: versionBefore, token: token) else { return }
+                versionBefore = itemsVersion
+                let hits = items.filter { targets.contains($0.url.standardizedFileURL.path) }
+                if let first = hits.first {
+                    selection = Set(hits.map { $0.id })
+                    selCursor = items.firstIndex { $0.id == first.id }
+                    selAnchor = selCursor
+                    if renameFirst { editingItemID = first.id }
+                    return
                 }
-                try? await Task.sleep(nanoseconds: 50_000_000)
             }
         }
     }
