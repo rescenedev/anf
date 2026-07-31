@@ -152,8 +152,20 @@ final class AudioPreviewEngine {
             }
         }
         timeObserver = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 10),
-                                                 queue: .main) { [weak self] t in
-            MainActor.assumeIsolated { self?.position = t.seconds }
+                                                 queue: .main) { [weak self, weak item] t in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.position = t.seconds
+                // FLAC (#103 follow-up): the asset header's duration is an
+                // ESTIMATE and can under-report the real stream — the slider
+                // then pins at the end while audio keeps playing. The live
+                // item refines its duration during playback; track it, and
+                // never let the reported duration fall behind the position.
+                if let d = item?.duration.seconds, d.isFinite, d > 0, abs(d - self.duration) > 0.5 {
+                    self.duration = d
+                }
+                if self.position > self.duration { self.duration = self.position }
+            }
         }
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main

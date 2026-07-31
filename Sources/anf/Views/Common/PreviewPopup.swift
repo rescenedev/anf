@@ -10,12 +10,18 @@ import SwiftUI
 final class PreviewPopup: NSObject {
     private static var current: PreviewPopup?
 
-    /// One popup at a time: summoning it again just brings it forward (and it
-    /// already tracks the selection, so there's nothing to re-point).
+    /// One popup at a time. Summoning it from the SAME workspace just brings it
+    /// forward; from another window's workspace it re-binds (close + reopen) so
+    /// the popup always follows the window that asked — the singleton silently
+    /// staying glued to window A while the user hits F3 in window B was a
+    /// multi-window bug the tests caught.
     static func show(workspace: WorkspaceModel) {
         if let p = current {
-            p.window.makeKeyAndOrderFront(nil)
-            return
+            if p.workspace === workspace {
+                p.window.makeKeyAndOrderFront(nil)
+                return
+            }
+            p.window.close()   // windowWillClose clears `current`
         }
         let p = PreviewPopup(workspace: workspace)
         current = p

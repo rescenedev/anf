@@ -249,6 +249,7 @@ final class KeyboardController: NSObject, @preconcurrency QLPreviewPanelDataSour
         case .trash: model.trashSelection()
         case .emptyTrash: ArchiveService.emptyTrash { [weak self] in self?.model.reload() }
         case .openWith: openWithPresetApp()
+        case .previewPopup: PreviewPopup.show(workspace: workspace)
         case .openSettings: Keymap.openSettingsFile()
         }
         return true

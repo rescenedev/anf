@@ -15,6 +15,7 @@ enum KeyAction: String, CaseIterable {
     case transferCopy, transferMove
     case quickLook, rename, trash, emptyTrash
     case openWith
+    case previewPopup
     case openSettings
     // Selection movement (issue #52): first-class so up/down/left/right and
     // their Vim/Emacs aliases are remappable like every other action.
@@ -68,6 +69,8 @@ final class Keymap {
         (.goBack, ["cmd+left"]), (.goForward, ["cmd+right"]),
         (.goUp, ["cmd+up"]), (.openSelected, ["cmd+down"]),
         (.copyPath, ["cmd+opt+c"]), (.copyFolderPath, ["cmd+opt+shift+c"]),
+        // Commander-style F3 viewer (#103): pops the detachable preview.
+        (.previewPopup, ["f3"]),
         (.openWith, ["f4"]),
         (.transferCopy, ["f5", "shift+f5"]), (.transferMove, ["f6", "shift+f6"]),
         (.quickLook, ["space", "shift+space"]),
