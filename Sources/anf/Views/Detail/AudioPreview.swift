@@ -14,6 +14,7 @@ struct AudioPreview: View {
 
     @State private var engine = AudioPreviewEngine()
     @State private var artwork: NSImage?
+    @State private var lyrics: String?
 
     /// Sticky preferences (app-wide, deliberately not per-file).
     @AppStorage("anf.audio.volume") private var volume = 0.8
@@ -24,20 +25,43 @@ struct AudioPreview: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Artwork (or a big glyph) fills the flexible area, like QL did.
-            ZStack {
-                if let artwork {
-                    IconImage(image: artwork)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
-                        .padding(24)
-                } else {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 64))
-                        .foregroundStyle(.tertiary)
+            // Artwork fills the flexible area; with embedded lyrics (#103) the
+            // art yields to a scrollable lyrics sheet below a smaller cover.
+            if let lyrics {
+                VStack(spacing: 0) {
+                    if let artwork {
+                        IconImage(image: artwork)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+                            .frame(maxHeight: 140)
+                            .padding(.top, 16)
+                    }
+                    ScrollView {
+                        Text(lyrics)
+                            .font(.system(size: 12.5))
+                            .lineSpacing(4)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(16)
+                            .textSelection(.enabled)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ZStack {
+                    if let artwork {
+                        IconImage(image: artwork)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                            .padding(24)
+                    } else {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 64))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             VStack(spacing: 10) {
                 // Seek bar with elapsed/total.
@@ -88,7 +112,9 @@ struct AudioPreview: View {
         }
         .task(id: item.url) {
             engine.load(url: item.url, volume: volume, autoplay: false)
+            lyrics = nil
             artwork = await AudioArtwork.load(url: item.url)
+            lyrics = await AudioLyrics.load(url: item.url)
         }
         .onChange(of: volume) { _, v in engine.setVolume(v) }
         .onChange(of: engine.finished) { _, done in
@@ -201,6 +227,73 @@ final class AudioPreviewEngine {
         player?.pause()
         player = nil
         playing = false
+    }
+}
+
+/// Embedded lyrics (#103 follow-up: "가사를 볼 수 있는 방법은 없을까요") — ID3's
+/// USLT frame and iTunes ©lyr via AVAsset; FLAC keeps lyrics in VORBIS_COMMENT
+/// fields (LYRICS / UNSYNCEDLYRICS), which AVAsset doesn't surface, so those
+/// ride the same hand parser as the artwork.
+enum AudioLyrics {
+    static func load(url: URL) async -> String? {
+        let asset = AVURLAsset(url: url)
+        if let meta = try? await asset.load(.metadata) {
+            let ids: [AVMetadataIdentifier] = [.id3MetadataUnsynchronizedLyric, .iTunesMetadataLyrics]
+            for id in ids {
+                let items = AVMetadataItem.metadataItems(from: meta, filteredByIdentifier: id)
+                if let loaded = try? await items.first?.load(.stringValue),
+                   !loaded.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return loaded
+                }
+            }
+        }
+        if url.pathExtension.lowercased() == "flac" {
+            return await Task.detached(priority: .userInitiated) { flacLyrics(url: url) }.value
+        }
+        return nil
+    }
+
+    /// VORBIS_COMMENT (FLAC block type 4): vendor + field list, each
+    /// "NAME=value" UTF-8. NOTE: lengths here are LITTLE-endian u32 — the one
+    /// part of FLAC that isn't big-endian.
+    static func flacLyrics(url: URL) -> String? {
+        guard let fh = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? fh.close() }
+        func read(_ n: Int) -> Data? {
+            guard n >= 0, let d = try? fh.read(upToCount: n), d.count == n else { return nil }
+            return d
+        }
+        func be32(_ d: Data) -> Int { d.reduce(0) { ($0 << 8) | Int($1) } }
+        func le32(_ d: Data) -> Int { d.reversed().reduce(0) { ($0 << 8) | Int($1) } }
+        guard read(4) == Data("fLaC".utf8) else { return nil }
+        while true {
+            guard let head = read(4) else { return nil }
+            let isLast = head[head.startIndex] & 0x80 != 0
+            let type = head[head.startIndex] & 0x7F
+            let size = be32(head.dropFirst())
+            if type == 4, let block = read(size) {
+                var o = block.startIndex
+                func take(_ n: Int) -> Data? {
+                    guard n >= 0, o + n <= block.endIndex else { return nil }
+                    defer { o += n }
+                    return block[o..<o + n]
+                }
+                guard let vendorLen = take(4).map(le32), take(vendorLen) != nil,
+                      let count = take(4).map(le32) else { return nil }
+                for _ in 0..<min(count, 256) {
+                    guard let len = take(4).map(le32), let field = take(len),
+                          let s = String(data: field, encoding: .utf8) else { return nil }
+                    let upper = s.uppercased()
+                    for key in ["LYRICS=", "UNSYNCEDLYRICS="] where upper.hasPrefix(key) {
+                        let text = String(s.dropFirst(key.count))
+                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return text }
+                    }
+                }
+                return nil
+            }
+            if isLast { return nil }
+            guard size >= 0, (try? fh.seek(toOffset: fh.offsetInFile + UInt64(size))) != nil else { return nil }
+        }
     }
 }
 

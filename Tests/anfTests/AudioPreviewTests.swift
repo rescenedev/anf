@@ -58,4 +58,40 @@ func runAudioPreviewTests() {
         try? Data([0x01, 0x02, 0x03]).write(to: junk)
         T.isNil(AudioArtwork.flacPicture(url: junk), "garbage input → nil")
     }
+
+    T.group("FLAC VORBIS_COMMENT lyrics parser") {
+        func be24(_ n: Int) -> Data { Data([UInt8((n >> 16) & 0xFF), UInt8((n >> 8) & 0xFF), UInt8(n & 0xFF)]) }
+        func le32(_ n: Int) -> Data { Data([UInt8(n & 0xFF), UInt8((n >> 8) & 0xFF), UInt8((n >> 16) & 0xFF), UInt8((n >> 24) & 0xFF)]) }
+        // Vorbis comment: vendor + 2 fields, LITTLE-endian lengths (the one
+        // part of FLAC that isn't big-endian — the parser must not mix them up).
+        let vendor = Data("anf-test".utf8)
+        let artist = Data("ARTIST=한로로".utf8)
+        let lyric = Data("LYRICS=사랑하게 될 거야\n두 번째 줄".utf8)
+        var vc = le32(vendor.count) + vendor + le32(2)
+        vc += le32(artist.count) + artist
+        vc += le32(lyric.count) + lyric
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("anfflac2-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        var flac = Data("fLaC".utf8)
+        flac += Data([0x80 | 4]) + be24(vc.count) + vc          // type 4, last
+        let f = dir.appendingPathComponent("lyr.flac")
+        try? flac.write(to: f)
+        T.equal(AudioLyrics.flacLyrics(url: f), "사랑하게 될 거야\n두 번째 줄",
+                "LYRICS field extracted (UTF-8, little-endian lengths honored)")
+
+        // No lyrics field → nil; garbage → nil, no crash.
+        var bare = Data("fLaC".utf8)
+        let vc2 = le32(vendor.count) + vendor + le32(1) + le32(artist.count) + artist
+        bare += Data([0x80 | 4]) + be24(vc2.count) + vc2
+        let g = dir.appendingPathComponent("nolyr.flac")
+        try? bare.write(to: g)
+        T.isNil(AudioLyrics.flacLyrics(url: g), "no LYRICS field → nil")
+        let junk2 = dir.appendingPathComponent("junk2.flac")
+        try? Data([0xFF, 0x00]).write(to: junk2)
+        T.isNil(AudioLyrics.flacLyrics(url: junk2), "garbage → nil")
+    }
 }
