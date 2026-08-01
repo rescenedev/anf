@@ -56,6 +56,7 @@ func runSelectionSafetyTests() {
         }
 
         T.group("trashSelection deletes the target and leaves no dangling/'..' selection") {
+            if skipTrashGroups { print("  (skipped: ANF_SKIP_TRASH)"); return }
             let dir = makeFolder(["a.txt", "b.txt", "c.txt"])
             defer { try? fm.removeItem(at: dir) }
             let m = BrowserModel(start: dir)

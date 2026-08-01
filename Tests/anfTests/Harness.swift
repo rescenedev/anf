@@ -37,3 +37,11 @@ enum T {
         catch { failures.append("✗ \(name) threw: \(error)") }
     }
 }
+
+/// Trash-daemon gate, same idea as ANF_SKIP_TAGS for the metadata daemon: the
+/// nightly runs at midnight alongside the backup jobs, when DesktopServices can
+/// crawl or outright fail trashItem calls (observed: 7/30 items erroring at
+/// 00:5x; a healthy hour trashes them in milliseconds). Groups that depend on
+/// real trashItem behavior honor ANF_SKIP_TRASH=1 so the nightly isn't hostage
+/// to the machine's worst hour — CI and interactive runs keep full coverage.
+let skipTrashGroups = ProcessInfo.processInfo.environment["ANF_SKIP_TRASH"] != nil

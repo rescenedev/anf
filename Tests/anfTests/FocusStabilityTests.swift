@@ -86,6 +86,7 @@ func runFocusStabilityTests() {
         }
 
         T.group("after ⌘⌫ the nearest surviving row inherits the selection") {
+            if skipTrashGroups { print("  (skipped: ANF_SKIP_TRASH)"); return }
             let dir = fm.temporaryDirectory.appendingPathComponent("anffocus4-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             for n in ["a.txt", "b.txt", "c.txt"] {
@@ -114,6 +115,7 @@ func runFocusStabilityTests() {
         }
 
         T.group("bulk trash runs off-main and lands complete (beachball fix)") {
+            if skipTrashGroups { print("  (skipped: ANF_SKIP_TRASH)"); return }
             let dir = fm.temporaryDirectory.appendingPathComponent("anffocus5-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? fm.removeItem(at: dir) }
