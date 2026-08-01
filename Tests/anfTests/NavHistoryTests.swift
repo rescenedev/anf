@@ -10,7 +10,10 @@ func runNavHistoryTests() {
     MainActor.assumeIsolated {
         let fm = FileManager.default
         func pump(_ m: BrowserModel, until: () -> Bool) {
-            let deadline = Date().addingTimeInterval(5)
+            // 30s, not 5: under midnight disk load (backups + mds) a fixture
+        // listing can outlive a 5s deadline — that flake killed a nightly.
+        // Healthy runs pass the condition in milliseconds either way.
+        let deadline = Date().addingTimeInterval(30)
             while !until() && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
         }
 
