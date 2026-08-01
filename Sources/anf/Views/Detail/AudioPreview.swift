@@ -15,6 +15,7 @@ struct AudioPreview: View {
     @State private var engine = AudioPreviewEngine()
     @State private var artwork: NSImage?
     @State private var lyrics: String?
+    @State private var synced: [SyncedLyricLine]?
 
     /// Sticky preferences (app-wide, deliberately not per-file).
     @AppStorage("anf.audio.volume") private var volume = 0.8
@@ -36,14 +37,21 @@ struct AudioPreview: View {
                             .frame(maxHeight: 140)
                             .padding(.top, 16)
                     }
-                    ScrollView {
-                        Text(lyrics)
-                            .font(.system(size: 12.5))
-                            .lineSpacing(4)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .padding(16)
-                            .textSelection(.enabled)
+                    if let synced {
+                        SyncedLyricsView(lines: synced, position: engine.position) { t in
+                            engine.seek(to: t)
+                            if !engine.playing { engine.play() }
+                        }
+                    } else {
+                        ScrollView {
+                            Text(lyrics)
+                                .font(.system(size: 12.5))
+                                .lineSpacing(4)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(16)
+                                .textSelection(.enabled)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -113,8 +121,17 @@ struct AudioPreview: View {
         .task(id: item.url) {
             engine.load(url: item.url, volume: volume, autoplay: false)
             lyrics = nil
-            artwork = await AudioArtwork.load(url: item.url)
-            lyrics = await AudioLyrics.load(url: item.url)
+            synced = nil
+            // Metadata loads can outlive a quick track change (SwiftUI cancels
+            // the task but resumed awaits still run) — never let a stale track
+            // stamp its art/lyrics onto the current one.
+            let art = await AudioArtwork.load(url: item.url)
+            guard !Task.isCancelled else { return }
+            artwork = art
+            let text = await AudioLyrics.load(url: item.url)
+            guard !Task.isCancelled else { return }
+            lyrics = text
+            synced = text.flatMap(AudioLyrics.parseSynced)
         }
         .onChange(of: volume) { _, v in engine.setVolume(v) }
         .onChange(of: engine.finished) { _, done in
@@ -143,6 +160,50 @@ struct AudioPreview: View {
     }
 }
 
+/// Timestamped lyrics: the line under the playhead is highlighted and kept
+/// centered as the song plays; clicking a line seeks there (#103 follow-up,
+/// Petrichor-style). Plain VStack, not Lazy — scrollTo on unrendered lazy rows
+/// is unreliable, and embedded lyrics are at most a few hundred lines.
+private struct SyncedLyricsView: View {
+    let lines: [SyncedLyricLine]
+    let position: Double
+    let onSeek: (Double) -> Void
+
+    /// Last line whose stamp has passed; slight lead so a line lights up as
+    /// it's sung, not a beat after.
+    private var current: Int? {
+        var idx: Int?
+        for (i, l) in lines.enumerated() {
+            if l.time <= position + 0.2 { idx = i } else { break }
+        }
+        return idx
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(lines.indices, id: \.self) { i in
+                        Text(lines[i].text.isEmpty ? " " : lines[i].text)
+                            .font(.system(size: 12.5, weight: i == current ? .bold : .regular))
+                            .foregroundStyle(i == current ? Color.primary : Color.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onSeek(lines[i].time) }
+                            .id(i)
+                    }
+                }
+                .padding(16)
+            }
+            .onChange(of: current) { _, i in
+                guard let i else { return }
+                withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(i, anchor: .center) }
+            }
+        }
+    }
+}
+
 /// AVPlayer wrapper with observable position/duration. @Observable so the
 /// SwiftUI controls above track it without Combine plumbing.
 @MainActor
@@ -151,6 +212,11 @@ final class AudioPreviewEngine {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endObserver: (any NSObjectProtocol)?
+    /// Bumped by load(); async duration fetches compare against it so a slow
+    /// track (FLAC headers can take a while) can't stamp its duration onto
+    /// whatever track replaced it — that stale write pinned the seek bar when
+    /// 연속 재생 crossed from mp3 into flac (#103 follow-up).
+    private var loadGeneration = 0
 
     private(set) var playing = false
     private(set) var duration: Double = 0
@@ -164,6 +230,8 @@ final class AudioPreviewEngine {
 
     func load(url: URL, volume: Double, autoplay: Bool) {
         stop()
+        loadGeneration += 1
+        let gen = loadGeneration
         finished = false
         position = 0
         duration = 0
@@ -174,7 +242,8 @@ final class AudioPreviewEngine {
         // Duration arrives asynchronously; poll it off the status key cheaply.
         Task { @MainActor [weak self] in
             if let d = try? await item.asset.load(.duration).seconds, d.isFinite {
-                self?.duration = d
+                guard let self, self.loadGeneration == gen else { return }
+                self.duration = d
             }
         }
         timeObserver = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 10),
@@ -294,6 +363,63 @@ enum AudioLyrics {
             if isLast { return nil }
             guard size >= 0, (try? fh.seek(toOffset: fh.offsetInFile + UInt64(size))) != nil else { return nil }
         }
+    }
+}
+
+/// One line of timestamped (LRC-style) lyrics.
+struct SyncedLyricLine: Equatable, Sendable {
+    let time: Double
+    let text: String
+}
+
+extension AudioLyrics {
+    /// LRC parse of embedded lyrics (#103 follow-up: highlight the current
+    /// line as the song plays, Petrichor-style). Stamps look like [mm:ss.xx];
+    /// one line may carry several (repeated chorus), [offset:±ms] shifts them
+    /// all. Returns nil unless enough lines are stamped to trust the text as
+    /// synced — some taggers leave a single stray stamp in plain lyrics.
+    static func parseSynced(_ raw: String) -> [SyncedLyricLine]? {
+        var offsetMS = 0.0
+        var out: [SyncedLyricLine] = []
+        for rawLine in raw.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            var rest = rawLine
+            var times: [Double] = []
+            while rest.first == "[", let close = rest.firstIndex(of: "]") {
+                let tag = rest[rest.index(after: rest.startIndex)..<close]
+                if let t = parseStamp(tag) {
+                    times.append(t)
+                } else if tag.lowercased().hasPrefix("offset:"),
+                          let v = Double(tag.dropFirst("offset:".count).trimmingCharacters(in: .whitespaces)) {
+                    offsetMS = v
+                } else if times.isEmpty, tag.contains(":") {
+                    // metadata tag ([ti:…], [ar:…], …) — drop it
+                } else {
+                    break   // a '[' that isn't a tag belongs to the lyric text
+                }
+                rest = rest[rest.index(after: close)...]
+            }
+            let text = rest.trimmingCharacters(in: .whitespaces)
+            for t in times { out.append(SyncedLyricLine(time: t, text: text)) }
+        }
+        guard out.count >= 4 else { return nil }
+        let shift = offsetMS / 1000
+        return out.map { SyncedLyricLine(time: max(0, $0.time - shift), text: $0.text) }
+                  .sorted { $0.time < $1.time }
+    }
+
+    /// "mm:ss", "mm:ss.xx", "hh:mm:ss" → seconds; nil for anything else.
+    private static func parseStamp(_ tag: Substring) -> Double? {
+        let parts = tag.split(separator: ":")
+        guard parts.count == 2 || parts.count == 3 else { return nil }
+        var values: [Double] = []
+        for p in parts {
+            guard !p.isEmpty, p.allSatisfy({ $0.isNumber || $0 == "." }), let v = Double(p) else { return nil }
+            values.append(v)
+        }
+        let secs = values[values.count - 1]
+        let mins = values[values.count - 2]
+        let hours = values.count == 3 ? values[0] : 0
+        return hours * 3600 + mins * 60 + secs
     }
 }
 
