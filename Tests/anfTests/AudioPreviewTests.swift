@@ -59,6 +59,43 @@ func runAudioPreviewTests() {
         T.isNil(AudioArtwork.flacPicture(url: junk), "garbage input → nil")
     }
 
+    T.group("LRC synced-lyrics parser") {
+        // Typical embedded LRC: metadata tags, stamped lines, out-of-order OK.
+        let lrc = """
+        [ti:사랑하게 될 거야]
+        [ar:한로로]
+        [00:12.50]첫 번째 줄
+        [00:20]두 번째 줄
+        [00:05.1]인트로
+        [00:31.00]세 번째 줄
+        """
+        let synced = AudioLyrics.parseSynced(lrc)
+        T.equal(synced?.count, 4, "stamped lines parsed, metadata tags dropped")
+        T.equal(synced?.first?.text, "인트로", "sorted by time (out-of-order input)")
+        T.equal(synced?.first?.time, 5.1, "mm:ss.x stamp → seconds")
+        T.equal(synced?[1].time, 12.5, "mm:ss.xx stamp → seconds")
+        T.equal(synced?[2].time, 20, "bare mm:ss stamp → seconds")
+
+        // Repeated chorus: several stamps on one line fan out to one entry each.
+        let chorus = "[00:10]a\n[00:30][01:30]후렴\n[00:50]b\n[01:10]c"
+        let fan = AudioLyrics.parseSynced(chorus)
+        T.equal(fan?.count, 5, "multi-stamp line fans out per stamp")
+        T.equal(fan?.last?.text, "후렴", "fanned entry keeps the shared text")
+
+        // [offset:+ms] shifts every stamp earlier (lyrics show sooner).
+        let shifted = AudioLyrics.parseSynced("[offset:+500]\n[00:10]a\n[00:20]b\n[00:30]c\n[00:40]d")
+        T.equal(shifted?.first?.time, 9.5, "positive offset pulls stamps earlier")
+
+        // Plain lyrics (no stamps) and near-plain (one stray stamp) stay unsynced.
+        T.isNil(AudioLyrics.parseSynced("그냥 가사\n두 번째 줄"), "no stamps → nil (plain view)")
+        T.isNil(AudioLyrics.parseSynced("[00:01]한 줄만\n나머지는 평문\n셋\n넷\n다섯"),
+                "a stray stamp in plain lyrics → still nil")
+
+        // Brackets that aren't tags belong to the text, not the parser.
+        let bracket = AudioLyrics.parseSynced("[00:01]a\n[00:02][Verse 1] 시작\n[00:03]b\n[00:04]c")
+        T.equal(bracket?[1].text, "[Verse 1] 시작", "non-tag bracket survives as lyric text")
+    }
+
     T.group("FLAC VORBIS_COMMENT lyrics parser") {
         func be24(_ n: Int) -> Data { Data([UInt8((n >> 16) & 0xFF), UInt8((n >> 8) & 0xFF), UInt8(n & 0xFF)]) }
         func le32(_ n: Int) -> Data { Data([UInt8(n & 0xFF), UInt8((n >> 8) & 0xFF), UInt8((n >> 16) & 0xFF), UInt8((n >> 24) & 0xFF)]) }
