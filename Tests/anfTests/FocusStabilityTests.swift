@@ -117,25 +117,29 @@ func runFocusStabilityTests() {
             let dir = fm.temporaryDirectory.appendingPathComponent("anffocus5-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? fm.removeItem(at: dir) }
+            // 30 items and a generous completion window: the CONTRACT under test
+            // is bounded-concurrency + one undo step, not throughput. trashItem
+            // round-trips a daemon that crawls under the midnight backup rush
+            // (a 100-item batch outlived its 10s wait and killed a nightly).
             var items: [FileItem] = []
-            for n in 0..<100 {
+            for n in 0..<30 {
                 let u = dir.appendingPathComponent("f\(n).txt")
                 try? "x".write(to: u, atomically: true, encoding: .utf8)
                 if let it = FileItem(fastURL: u) { items.append(it) }
             }
-            T.equal(items.count, 100, "fixture built")
+            T.equal(items.count, 30, "fixture built")
 
             var done = false
             FileTransfer.shared.trashItems(items) { done = true }
-            let deadline = Date().addingTimeInterval(10)
+            let deadline = Date().addingTimeInterval(120)
             while !done && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
             T.expect(done, "completion fires on the main actor")
             let left = (try? fm.contentsOfDirectory(atPath: dir.path))?.count ?? -1
-            T.equal(left, 0, "all 100 items were trashed by the concurrent workers")
+            T.equal(left, 0, "all 30 items were trashed by the concurrent workers")
             // The batch is one undo step — ⌘Z brings everything back.
             _ = FileUndo.shared.undo()
             let restored = (try? fm.contentsOfDirectory(atPath: dir.path))?.count ?? -1
-            T.equal(restored, 100, "undo restores the whole batch")
+            T.equal(restored, 30, "undo restores the whole batch")
         }
 
         T.group("manual refresh (⌘R path) keeps the selection") {
