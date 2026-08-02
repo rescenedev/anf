@@ -105,6 +105,7 @@ MainActor.assumeIsolated { runMenuValidationTests() }
 MainActor.assumeIsolated { runDispatchRoutingTests() }
 MainActor.assumeIsolated { runPreviewPopupTests() }
 runQLPacingTests()
+runUserScriptsTests()
 runFixVerificationTests()
 
 print("")

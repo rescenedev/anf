@@ -28,6 +28,14 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         var askQuestion: String? = nil
         /// When true, activating this row opens the settings file to set up AI.
         var aiSetup = false
+        /// When set, activating this row runs the script in the built-in
+        /// terminal at the active folder (#103 follow-up).
+        var scriptURL: URL? = nil
+
+        static func script(_ url: URL) -> Target {
+            Target(name: url.lastPathComponent, url: url, symbol: "terminal",
+                   isFile: false, scriptURL: url)
+        }
 
         static func ask(question: String, folder: URL) -> Target {
             Target(name: question, url: folder, symbol: "sparkles", isFile: false,
@@ -123,6 +131,7 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         exitAnswerMode()                  // fresh open is always in search mode
         setAskMode(false)
         loadSSHTargets()
+        loadScriptTargets()
         recompute()
         position(over: host)
         host.addChildWindow(panel, ordered: .above)
@@ -401,6 +410,21 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
         }
     }
 
+    /// User scripts (App Support/anf/scripts) cached once per open, same deal
+    /// as the SSH hosts: no directory read per keystroke. Creating the folder
+    /// here doubles as its documentation.
+    private var scriptTargets: [Target] = []
+    private func loadScriptTargets() {
+        Task { @MainActor [weak self] in
+            let urls = await Task.detached(priority: .utility) { () -> [URL] in
+                UserScripts.ensureDirectory()
+                return UserScripts.list()
+            }.value
+            self?.scriptTargets = urls.map { .script($0) }
+            if self?.isShown == true { self?.recompute() }
+        }
+    }
+
     private func recompute() {
         guard let workspace else { results = []; table?.reloadData(); return }
         let q = query
@@ -443,6 +467,10 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             var seen = Set<String>()
             var rows = all.filter { seen.insert($0.url.standardizedFileURL.path).inserted }
                           .prefix(40).map { $0 }
+            if !scriptTargets.isEmpty {
+                rows.append(.divider(L("Scripts", "스크립트")))
+                rows.append(contentsOf: scriptTargets)
+            }
             if !sshTargets.isEmpty {
                 rows.append(.divider("SSH"))
                 rows.append(contentsOf: sshTargets)
@@ -508,16 +536,21 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
                     nameRows.append(r)
                 }
             }
-            // Matching Workspaces and SSH hosts surface at the top.
+            // Matching Workspaces, scripts and SSH hosts surface at the top.
             let workspaceRows = workspace.savedViews.views
                 .filter { $0.name.localizedCaseInsensitiveContains(q) }
                 .map { Target.workspace($0) }
+            let scriptRows = scriptTargets.filter { $0.name.localizedCaseInsensitiveContains(q) }
             let sshRows = sshTargets.filter { $0.name.localizedCaseInsensitiveContains(q) }
             // Two labeled sections: name matches (files/folders) and content matches.
             var rows: [Target] = []
             if !workspaceRows.isEmpty {
                 rows.append(.divider("Workspace"))
                 rows.append(contentsOf: workspaceRows)
+            }
+            if !scriptRows.isEmpty {
+                rows.append(.divider(L("Scripts", "스크립트")))
+                rows.append(contentsOf: scriptRows)
             }
             if !sshRows.isEmpty {
                 rows.append(.divider("SSH"))
@@ -763,7 +796,9 @@ final class CommandPaletteController: NSObject, NSTextFieldDelegate,
             }
             return
         }
-        if let viewID = t.viewID {
+        if let script = t.scriptURL {
+            workspace.runScript(script)
+        } else if let viewID = t.viewID {
             if let v = workspace.savedViews.views.first(where: { $0.id == viewID }) {
                 workspace.applyView(v)
             }

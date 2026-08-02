@@ -67,4 +67,11 @@ final class TerminalSession: NSObject, Identifiable {
         view.window?.makeFirstResponder(view)
         view.focus()
     }
+
+    /// Feed one command line to this session's shell (⌘K user scripts). Input
+    /// goes to the PTY master, which buffers — safe to call right after
+    /// startShell; the shell reads it as soon as it is up.
+    func run(_ commandLine: String) {
+        view.sendToShell(commandLine + "\n")
+    }
 }

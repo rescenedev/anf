@@ -906,6 +906,13 @@ final class WorkspaceModel {
     /// CURRENT folder tab, so each folder tab gets its own terminal at its own
     /// location. It never hides on a repeat press (that was perceived as the old
     /// "it just toggles" behavior, #76); use ⌃` or the drawer's ∨ button to hide.
+    /// Run a saved user script (⌘K, #103 follow-up) in the built-in terminal at
+    /// the active folder — reuses that folder's live shell if one exists.
+    func runScript(_ script: URL) {
+        openTerminal(at: active.currentURL)
+        terminal?.run(UserScripts.command(for: script))
+    }
+
     func openTerminalForActiveFolder() {
         openTerminal(at: active.currentURL)
         focusActiveTerminal()

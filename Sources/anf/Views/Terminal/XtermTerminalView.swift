@@ -94,6 +94,9 @@ final class XtermTerminalView: NSView {
 
     func focus() { webView.window?.makeFirstResponder(webView) }
 
+    /// Programmatic input to the shell, same path as keystrokes (⌘K scripts).
+    func sendToShell(_ string: String) { pty.write(string) }
+
     func terminate() { pty.kill() }
 
     // MARK: - Internals
