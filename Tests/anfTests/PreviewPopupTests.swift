@@ -66,6 +66,40 @@ func runPreviewPopupTests() {
 
             PreviewPopup.show(workspace: ws)
             T.expect(PreviewPopup.currentForTesting === popup, "second summon reuses the same popup")
+
+            // Lock (#103 follow-up: 음악 틀어두고 다른 작업): the popup stops
+            // following the selection until unlocked.
+            popup.state.toggleLock(current: b, folderItems: m.items)
+            m.select(a)
+            T.equal(popup.currentItemPath, b.url.path, "locked popup ignores selection changes")
+            popup.state.toggleLock(current: nil, folderItems: [])
+            T.equal(popup.currentItemPath, a.url.path, "unlock resumes following the selection")
+        }
+
+        T.group("locked popup's continuous-play queue") {
+            let dir = fm.temporaryDirectory.appendingPathComponent("anfpopq-\(UUID().uuidString)")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            for n in ["01.mp3", "02.flac", "03.mp3", "cover.jpg"] {
+                try? Data("x".utf8).write(to: dir.appendingPathComponent(n))
+            }
+            defer { try? fm.removeItem(at: dir) }
+            let items = ["01.mp3", "02.flac", "03.mp3", "cover.jpg"]
+                .compactMap { FileItem(fastURL: dir.appendingPathComponent($0)) }
+
+            let s = PreviewPopupState()
+            T.isNil(s.advanceLocked(after: items[0]), "no advance while unlocked")
+
+            s.toggleLock(current: items[0], folderItems: items)
+            T.equal(s.lockedQueue.map(\.name), ["01.mp3", "02.flac", "03.mp3"],
+                    "lock snapshots the folder's AUDIO files only")
+            T.equal(s.advanceLocked(after: items[0])?.name, "02.flac", "advances across formats")
+            T.equal(s.locked?.name, "02.flac", "the lock moves with the queue")
+            T.equal(s.advanceLocked(after: items[1])?.name, "03.mp3", "advances to the last track")
+            T.isNil(s.advanceLocked(after: items[2]), "end of queue → nil (playback stops)")
+
+            s.toggleLock(current: nil, folderItems: [])
+            T.isNil(s.locked, "unlock clears the lock")
+            T.isNil(s.advanceLocked(after: items[0]), "unlocked again → no advance")
         }
     }
 }

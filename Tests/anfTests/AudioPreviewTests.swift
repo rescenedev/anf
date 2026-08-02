@@ -59,6 +59,26 @@ func runAudioPreviewTests() {
         T.isNil(AudioArtwork.flacPicture(url: junk), "garbage input → nil")
     }
 
+    T.group("seek-bar scrub state machine") {
+        // Playerless engine: the state transitions are what desynced lyrics/
+        // slider from the audio (#103 — a seek fired per drag tick).
+        MainActor.assumeIsolated {
+            let e = AudioPreviewEngine()
+            e.beginScrub()
+            T.expect(e.scrubbing, "drag start enters scrub mode")
+            e.scrub(to: 30)
+            T.equal(e.position, 30, "mid-drag only the display position moves")
+            e.scrub(to: 45)
+            e.endScrub()
+            T.expect(!e.scrubbing, "release leaves scrub mode")
+            T.equal(e.position, 45, "release seeks to the last dragged position")
+            e.scrub(to: 10)
+            T.equal(e.position, 10, "a set with no drag session seeks immediately")
+            e.endScrub()
+            T.equal(e.position, 10, "endScrub outside a session is a no-op")
+        }
+    }
+
     T.group("LRC synced-lyrics parser") {
         // Typical embedded LRC: metadata tags, stamped lines, out-of-order OK.
         let lrc = """

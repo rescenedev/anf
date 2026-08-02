@@ -11,6 +11,10 @@ import AVFoundation
 struct AudioPreview: View {
     let item: FileItem
     let model: BrowserModel
+    /// Locked-popup hand-off (#103 follow-up): when set, 연속 재생 calls this with
+    /// the finished track instead of moving the pane's selection — the popup
+    /// advances within its own snapshot queue and the browser stays untouched.
+    var advanceOverride: ((FileItem) -> Void)? = nil
 
     @State private var engine = AudioPreviewEngine()
     @State private var artwork: NSImage?
@@ -78,8 +82,11 @@ struct AudioPreview: View {
                         .font(.system(size: 10, weight: .medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                     Slider(value: Binding(get: { engine.position },
-                                          set: { engine.seek(to: $0) }),
-                           in: 0...max(engine.duration, 0.01))
+                                          set: { engine.scrub(to: $0) }),
+                           in: 0...max(engine.duration, 0.01),
+                           onEditingChanged: { editing in
+                               editing ? engine.beginScrub() : engine.endScrub()
+                           })
                         .controlSize(.small)
                         .disabled(engine.duration <= 0)
                     Text(Self.clock(engine.duration))
@@ -145,6 +152,7 @@ struct AudioPreview: View {
     /// order — the inspector tracks the selection, so the new file's preview
     /// mounts and starts playing (autoplay flag set by the engine hand-off).
     private func playNextInFolder() {
+        if let advanceOverride { advanceOverride(item); return }
         let audios = model.items.filter { Self.isAudio($0) }
         guard let idx = audios.firstIndex(where: { $0.id == item.id }),
               idx + 1 < audios.count else { return }
@@ -223,6 +231,12 @@ final class AudioPreviewEngine {
     var position: Double = 0
     /// Flips true once when the track plays to its end (drives 연속 재생).
     private(set) var finished = false
+    /// True while the user drags the seek bar. The periodic observer must not
+    /// fight the thumb, and the actual seek fires ONCE on release — a zero-
+    /// tolerance seek per drag tick desynced mp3 playback from the reported
+    /// position, which dragged the slider AND the synced lyrics off the audio
+    /// (#103 follow-up).
+    private(set) var scrubbing = false
 
     /// One-shot: set right before a continuous-play selection hand-off so the
     /// NEXT AudioPreview starts playing immediately.
@@ -249,7 +263,7 @@ final class AudioPreviewEngine {
         timeObserver = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 10),
                                                  queue: .main) { [weak self, weak item] t in
             MainActor.assumeIsolated {
-                guard let self else { return }
+                guard let self, !self.scrubbing else { return }
                 self.position = t.seconds
                 // FLAC (#103 follow-up): the asset header's duration is an
                 // ESTIMATE and can under-report the real stream — the slider
@@ -280,11 +294,34 @@ final class AudioPreviewEngine {
     func pause() { player?.pause(); playing = false }
     func toggle() { playing ? pause() : play() }
 
+    func beginScrub() { scrubbing = true }
+
+    /// Slider value change: inside a drag session only the DISPLAY moves; a
+    /// stray set with no session (keyboard arrows) seeks immediately.
+    func scrub(to seconds: Double) {
+        if scrubbing { position = seconds } else { seek(to: seconds) }
+    }
+
+    func endScrub() {
+        guard scrubbing else { return }
+        scrubbing = false
+        seek(to: position)
+    }
+
     func seek(to seconds: Double) {
         position = seconds
-        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
-                     toleranceBefore: .zero, toleranceAfter: .zero)
         finished = false
+        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
+                     toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            // mp3 has no sample index — the decoder can land off the request.
+            // Adopt the player's OWN position so the slider and the synced
+            // lyrics track the audio, not the wish (#103 follow-up).
+            Task { @MainActor [weak self] in
+                guard let self, !self.scrubbing,
+                      let t = self.player?.currentTime().seconds, t.isFinite else { return }
+                self.position = t
+            }
+        }
     }
 
     func setVolume(_ v: Double) { player?.volume = Float(v) }
