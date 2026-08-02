@@ -104,6 +104,7 @@ MainActor.assumeIsolated { runBacklogP1Round2Tests() }
 MainActor.assumeIsolated { runMenuValidationTests() }
 MainActor.assumeIsolated { runDispatchRoutingTests() }
 MainActor.assumeIsolated { runPreviewPopupTests() }
+runQLPacingTests()
 runFixVerificationTests()
 
 print("")

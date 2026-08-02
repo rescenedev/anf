@@ -1,6 +1,20 @@
 import Foundation
 @testable import anf
 
+/// #103 follow-up: rapid selection changes must not queue unbounded renders in
+/// the shared QuickLookUIService (it went Not Responding with 926 mach ports).
+/// The pacing rule is pure: a lone load goes through instantly, bursts defer.
+func runQLPacingTests() {
+    T.group("QuickLook load pacing") {
+        T.isNil(QLLoadPacing.delay(sinceLastLoad: 10), "idle → load immediately")
+        T.isNil(QLLoadPacing.delay(sinceLastLoad: QLLoadPacing.minInterval), "exactly at the interval → immediate")
+        T.equal(QLLoadPacing.delay(sinceLastLoad: 0.05), QLLoadPacing.minInterval - 0.05,
+                "mid-burst → defer the remainder of the interval")
+        T.equal(QLLoadPacing.delay(sinceLastLoad: -1), QLLoadPacing.minInterval,
+                "clock skew (negative elapsed) → full interval, never a huge delay")
+    }
+}
+
 /// #103/#104 follow-up: the detachable preview popup. The panel must follow the
 /// active pane's selection (it's a live second screen, not a snapshot) and be a
 /// singleton — summoning it twice brings the same window forward.
