@@ -6,7 +6,9 @@
     { "pattern": "hooks.zihado.com", "custom_domain": true }
   ],
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    // 21:30 UTC = 06:30 KST — download/star deltas go out as one daily digest.
+    // Issue/PR/release webhooks are separate (fetch handler) and stay instant.
+    "crons": ["30 21 * * *"]
   },
   "kv_namespaces": [
     {
