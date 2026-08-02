@@ -273,7 +273,12 @@ final class AudioPreviewEngine {
                 if let d = item?.duration.seconds, d.isFinite, d > 0, abs(d - self.duration) > 0.5 {
                     self.duration = d
                 }
-                if self.position > self.duration { self.duration = self.position }
+                // Creep only once a real duration is known. With duration
+                // still 0 (the async header read hasn't landed — the window
+                // right after 연속 재생 advances a track) creeping would grow
+                // the slider range tick-by-tick and pin the thumb at the end
+                // (#103 follow-up screenshot).
+                if self.duration > 0, self.position > self.duration { self.duration = self.position }
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -311,13 +316,16 @@ final class AudioPreviewEngine {
     func seek(to seconds: Double) {
         position = seconds
         finished = false
+        let gen = loadGeneration
         player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
                      toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             // mp3 has no sample index — the decoder can land off the request.
             // Adopt the player's OWN position so the slider and the synced
-            // lyrics track the audio, not the wish (#103 follow-up).
+            // lyrics track the audio, not the wish (#103 follow-up). The
+            // generation guard keeps a late completion from stamping its time
+            // onto the NEXT track after 연속 재생 swaps the player.
             Task { @MainActor [weak self] in
-                guard let self, !self.scrubbing,
+                guard let self, !self.scrubbing, self.loadGeneration == gen,
                       let t = self.player?.currentTime().seconds, t.isFinite else { return }
                 self.position = t
             }

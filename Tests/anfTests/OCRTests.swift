@@ -51,7 +51,11 @@ func runOCRTests() {
         makeImage("CacheTest Alpha", to: u)
         T.expect(OCRTextCache.shared.cached(for: u) == nil, "cold: nothing cached yet")
         let first = OCRTextCache.shared.text(for: u) ?? ""
-        T.expect(first.localizedCaseInsensitiveContains("CacheTest"), "recognized on first call")
+        // Assert on the dictionary word only: Vision started misreading the
+        // synthetic camelcase's glyphs ("Cachelest") in 2026-08 — the test is
+        // about the cache serving recognized text, not glyph-exact OCR.
+        T.expect(first.localizedCaseInsensitiveContains("Alpha"),
+                 "recognized on first call (got: \(first))")
         T.expect(OCRTextCache.shared.cached(for: u) != nil, "warm: now cached")
 
         // A blank image caches empty (nil) and isn't re-OCR'd forever.

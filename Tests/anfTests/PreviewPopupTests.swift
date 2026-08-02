@@ -74,6 +74,13 @@ func runPreviewPopupTests() {
             T.equal(popup.currentItemPath, b.url.path, "locked popup ignores selection changes")
             popup.state.toggleLock(current: nil, folderItems: [])
             T.equal(popup.currentItemPath, a.url.path, "unlock resumes following the selection")
+
+            // ⎋ close must UNMOUNT the SwiftUI tree — a retained hosting view
+            // kept an AVPlayer playing after close (#103 follow-up).
+            let win = popup.windowForTesting
+            win.close()
+            T.isNil(win.contentView, "close drops the hosting view (players stop)")
+            T.expect(!PreviewPopup.isOpen, "close clears the singleton")
         }
 
         T.group("locked popup's continuous-play queue") {
