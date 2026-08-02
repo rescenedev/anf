@@ -41,6 +41,7 @@ final class PreviewPopup: NSObject {
     private let workspace: WorkspaceModel
     let state = PreviewPopupState()
     static var currentForTesting: PreviewPopup? { current }
+    var windowForTesting: NSWindow { window }
 
     private init(workspace: WorkspaceModel) {
         self.workspace = workspace
@@ -63,7 +64,13 @@ final class PreviewPopup: NSObject {
 
 extension PreviewPopup: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        if PreviewPopup.current?.window === (notification.object as? NSWindow) {
+        guard let w = notification.object as? NSWindow else { return }
+        // Drop the hosting view NOW: a closed-but-retained panel keeps its
+        // SwiftUI tree mounted, so onDisappear never fires and an AVPlayer in
+        // the preview keeps playing after ⎋ (#103 follow-up: "esc로 뷰어를
+        // 꺼도 음악재생이 멈추지 않아요").
+        w.contentView = nil
+        if PreviewPopup.current?.window === w {
             PreviewPopup.current = nil
         }
     }
