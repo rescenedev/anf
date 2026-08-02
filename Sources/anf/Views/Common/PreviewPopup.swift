@@ -5,7 +5,9 @@ import SwiftUI
 /// 아니라 인스펙터로 볼 때 팝업으로"). Hosts the same per-type preview switch as
 /// the docked inspector in a floating, resizable panel that FOLLOWS the active
 /// pane's selection — a second screen for the file under the cursor. The pin
-/// button toggles always-on-top; ⎋ closes (EscPanel).
+/// button toggles always-on-top; the lock button freezes the popup on the
+/// current file (선택을 따라가지 않음 — 음악을 틀어두고 다른 작업, #103);
+/// ⎋ closes (EscPanel).
 @MainActor
 final class PreviewPopup: NSObject {
     private static var current: PreviewPopup?
@@ -31,10 +33,13 @@ final class PreviewPopup: NSObject {
     static var isOpen: Bool { current != nil }
 
     /// The item the popup is currently rendering (test hook).
-    var currentItemPath: String? { workspace.active.selectedItems.first?.url.path }
+    var currentItemPath: String? {
+        (state.locked ?? workspace.active.selectedItems.first)?.url.path
+    }
 
     private let window: NSPanel
     private let workspace: WorkspaceModel
+    let state = PreviewPopupState()
     static var currentForTesting: PreviewPopup? { current }
 
     private init(workspace: WorkspaceModel) {
@@ -50,7 +55,7 @@ final class PreviewPopup: NSObject {
         self.window = w
         super.init()
         w.contentView = NSHostingView(rootView: PreviewPopupView(workspace: workspace,
-                                                                 panel: w))
+                                                                 panel: w, state: state))
         w.center()
         w.delegate = self
     }
@@ -64,14 +69,47 @@ extension PreviewPopup: NSWindowDelegate {
     }
 }
 
-/// Popup content: title row (filename + float pin) above the shared preview
-/// switch. Tracks the active pane's first selected item live.
+/// The popup's lock: while `locked` is set the popup shows that file regardless
+/// of the pane's selection, and 연속 재생 advances within `lockedQueue` — the
+/// folder's audio files snapshotted at lock time, so navigating the browser to
+/// another folder can't derail the music (#103: "음악을 틀어두고 다른 작업").
+@MainActor
+@Observable
+final class PreviewPopupState {
+    private(set) var locked: FileItem?
+    @ObservationIgnored private(set) var lockedQueue: [FileItem] = []
+
+    func toggleLock(current: FileItem?, folderItems: [FileItem]) {
+        if locked == nil, let current {
+            locked = current
+            lockedQueue = folderItems.filter(AudioPreview.isAudio)
+        } else {
+            locked = nil
+            lockedQueue = []
+        }
+    }
+
+    /// Next track after `item` in the snapshot queue; advances the lock and
+    /// returns it, or nil at the end (or when not locked).
+    func advanceLocked(after item: FileItem) -> FileItem? {
+        guard locked != nil,
+              let i = lockedQueue.firstIndex(where: { $0.id == item.id }),
+              i + 1 < lockedQueue.count else { return nil }
+        locked = lockedQueue[i + 1]
+        return locked
+    }
+}
+
+/// Popup content: title row (filename + lock + float pin) above the shared
+/// preview switch. Tracks the active pane's first selected item live — unless
+/// locked, in which case it stays on the locked file.
 private struct PreviewPopupView: View {
     @Bindable var workspace: WorkspaceModel
     let panel: NSPanel
+    @Bindable var state: PreviewPopupState
     @State private var floating = true
 
-    private var target: FileItem? { workspace.active.selectedItems.first }
+    private var target: FileItem? { state.locked ?? workspace.active.selectedItems.first }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,6 +118,18 @@ private struct PreviewPopupView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 8)
+                Button {
+                    state.toggleLock(current: workspace.active.selectedItems.first,
+                                     folderItems: workspace.active.items)
+                } label: {
+                    Image(systemName: state.locked != nil ? "lock.fill" : "lock.open")
+                        .font(.system(size: 11))
+                        .foregroundStyle(state.locked != nil ? Color.accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(target == nil)
+                .help(L("Keep showing this file — don't follow the selection",
+                        "이 파일 고정 — 선택을 따라가지 않음"))
                 Button {
                     floating.toggle()
                     panel.isFloatingPanel = floating
@@ -96,9 +146,19 @@ private struct PreviewPopupView: View {
             Divider()
 
             if let target {
+                // The advance override exists only while LOCKED — an unlocked
+                // popup keeps the default selection-driven 연속 재생.
                 InspectorPreviewContent(target: target,
                                         model: workspace.active,
-                                        workspace: workspace)
+                                        workspace: workspace,
+                                        audioAdvanceOverride: state.locked == nil ? nil : { finished in
+                                            // Advance inside the snapshot queue;
+                                            // the flag makes the NEXT preview
+                                            // start playing on mount.
+                                            if state.advanceLocked(after: finished) != nil {
+                                                AudioPreviewEngine.autoplayNext = true
+                                            }
+                                        })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("\(target.url.path)|\(target.isCloudPlaceholder)")
             } else {
