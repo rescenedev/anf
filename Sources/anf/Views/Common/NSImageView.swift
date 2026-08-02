@@ -25,4 +25,10 @@ struct QuickLookView: NSViewRepresentable {
     func updateNSView(_ view: QLPreviewWrapper, context: Context) {
         view.setURL(url)
     }
+
+    // Close the remote render connection the moment SwiftUI drops the view —
+    // deinit alone can lag long enough to pile items up in QuickLookUIService.
+    static func dismantleNSView(_ view: QLPreviewWrapper, coordinator: ()) {
+        view.tearDown()
+    }
 }
