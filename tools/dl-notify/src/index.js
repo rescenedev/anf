@@ -1,6 +1,8 @@
-// anf-dl-notify — polls GitHub every 5 minutes and Telegrams the author when
-// release downloads (or stars) go up. GitHub has no download webhook, so the
-// only way to know is to diff `download_count` between polls; state lives in KV.
+// anf-dl-notify — polls GitHub once a day (06:30 KST, cron in wrangler.jsonc)
+// and Telegrams the author a digest of release-download/star deltas since the
+// previous morning. GitHub has no download webhook, so the only way to know is
+// to diff `download_count` between polls; state lives in KV. Issue/PR/release
+// webhook notifications (fetch handler below) are event-driven and stay instant.
 // Secrets (never in this file): TG_TOKEN, TG_CHAT, POKE_KEY, optional GITHUB_TOKEN.
 
 const REPO = "rescenedev/anf";
@@ -10,13 +12,17 @@ export default {
     ctx.waitUntil(check(env));
   },
 
-  // Manual trigger for testing: GET /poke?key=<POKE_KEY>
+  // Manual trigger for testing: GET /poke?key=<POKE_KEY> — dry-run: reports the
+  // pending delta WITHOUT saving state or messaging, so a midday poke can't eat
+  // part of the daily digest window. Add &commit=1 for the real send+save.
   // GitHub webhook (issues/PRs): POST /webhook, HMAC-verified with WEBHOOK_SECRET.
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/poke" && url.searchParams.get("key") === env.POKE_KEY) {
-      const report = await check(env, { verbose: true });
-      return new Response(report, { headers: { "content-type": "text/plain; charset=utf-8" } });
+      const dryRun = url.searchParams.get("commit") !== "1";
+      const report = await check(env, { dryRun });
+      return new Response((dryRun ? "[dry-run]\n" : "") + report,
+                          { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
     if (url.pathname === "/webhook" && req.method === "POST") {
       return webhook(req, env);
@@ -99,7 +105,7 @@ async function validSignature(secret, body, header) {
   return `sha256=${hex}` === header;
 }
 
-async function check(env, { verbose = false } = {}) {
+async function check(env, { dryRun = false } = {}) {
   const gh = (path) =>
     fetch(`https://api.github.com${path}`, {
       headers: {
@@ -131,11 +137,11 @@ async function check(env, { verbose = false } = {}) {
   const now = { counts, total, stars };
 
   const prevRaw = await env.STATE.get("state");
-  await env.STATE.put("state", JSON.stringify(now));
+  if (!dryRun) await env.STATE.put("state", JSON.stringify(now));
 
   if (!prevRaw) {
-    await tg(env, `anf 알림 시작 — 누적 다운로드 ${total} · 스타 ${stars}`);
-    return `baseline stored: total=${total} stars=${stars}`;
+    if (!dryRun) await tg(env, `anf 알림 시작 — 누적 다운로드 ${total} · 스타 ${stars}`);
+    return `baseline${dryRun ? "" : " stored"}: total=${total} stars=${stars}`;
   }
   const prev = JSON.parse(prevRaw);
 
@@ -153,10 +159,10 @@ async function check(env, { verbose = false } = {}) {
     lines.push(`${starDelta > 0 ? "⭐️" : "💔"} 스타 ${starDelta > 0 ? "+" : ""}${starDelta} (총 ${stars})`);
   }
 
-  if (lines.length) await tg(env, `anf\n${lines.join("\n")}`);
+  if (lines.length && !dryRun) await tg(env, `anf 일일 요약 ☀️\n${lines.join("\n")}`);
   return lines.length
-    ? `notified:\n${lines.join("\n")}`
-    : `no change (total=${total} stars=${stars})${verbose ? "" : ""}`;
+    ? `${dryRun ? "pending" : "notified"}:\n${lines.join("\n")}`
+    : `no change (total=${total} stars=${stars})`;
 }
 
 async function tg(env, text) {
