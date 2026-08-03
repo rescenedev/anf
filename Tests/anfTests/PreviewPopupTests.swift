@@ -83,6 +83,23 @@ func runPreviewPopupTests() {
             T.expect(!PreviewPopup.isOpen, "close clears the singleton")
         }
 
+        T.group("preview size-memory buckets") {
+            let dir = fm.temporaryDirectory.appendingPathComponent("anfpops-\(UUID().uuidString)")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: dir) }
+            func cat(_ name: String) -> String? {
+                let u = dir.appendingPathComponent(name)
+                fm.createFile(atPath: u.path, contents: Data("x".utf8))
+                return FileItem(fastURL: u).map(PreviewSizeClass.category)
+            }
+            T.equal(cat("a.flac"), "audio", "flac → audio bucket")
+            T.equal(cat("b.mkv"), "video", "mkv → video bucket")
+            T.equal(cat("c.cbz"), "archive", "comic archive → archive bucket")
+            T.equal(cat("d.png"), "image", "png → image bucket")
+            T.equal(cat("e.hwpx"), "document", "hwpx → document bucket")
+            T.equal(cat("f.swift"), "other", "unknown kind → other bucket")
+        }
+
         T.group("locked popup's continuous-play queue") {
             let dir = fm.temporaryDirectory.appendingPathComponent("anfpopq-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)

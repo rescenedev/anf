@@ -58,13 +58,49 @@ final class PreviewPopup: NSObject {
         w.contentView = NSHostingView(rootView: PreviewPopupView(workspace: workspace,
                                                                  panel: w, state: state))
         w.center()
+        // Remember the size PER CONTENT KIND (#103: 음악은 작게, 만화·문서는
+        // 크게 쓰고 싶다) — restore the frame last used for this kind of file.
+        if let saved = UserDefaults.standard.string(forKey: sizeKey()) {
+            let f = NSRectFromString(saved)
+            if f.width >= 320, f.height >= 300 { w.setFrame(f, display: false) }
+        }
         w.delegate = self
+    }
+
+    private func sizeKey() -> String {
+        let item = state.locked ?? workspace.active.selectedItems.first
+        return "anf.previewPopup.frame." + (item.map(PreviewSizeClass.category) ?? "other")
+    }
+
+    fileprivate func saveFrame() {
+        UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: sizeKey())
+    }
+}
+
+/// Broad content kinds the popup remembers a size for. Pure so the bucketing
+/// is testable — the exact buckets matter less than their stability.
+enum PreviewSizeClass {
+    static func category(for item: FileItem) -> String {
+        let e = item.ext
+        if AudioPreview.isAudio(item) { return "audio" }
+        if ["mp4", "mov", "mkv", "avi", "webm", "m4v", "wmv"].contains(e) { return "video" }
+        if ["zip", "cbz", "cbr", "rar", "7z", "tar", "gz"].contains(e) { return "archive" }
+        if OCRService.isImage(item.url) { return "image" }
+        if ["pdf", "docx", "hwpx", "pptx", "xlsx", "md", "txt", "rtf", "epub"].contains(e) {
+            return "document"
+        }
+        return "other"
     }
 }
 
 extension PreviewPopup: NSWindowDelegate {
+    func windowDidEndLiveResize(_ notification: Notification) {
+        saveFrame()
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow else { return }
+        saveFrame()
         // Drop the hosting view NOW: a closed-but-retained panel keeps its
         // SwiftUI tree mounted, so onDisappear never fires and an AVPlayer in
         // the preview keeps playing after ⎋ (#103 follow-up: "esc로 뷰어를

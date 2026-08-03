@@ -220,6 +220,7 @@ final class AudioPreviewEngine {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endObserver: (any NSObjectProtocol)?
+    private var stallObserver: (any NSObjectProtocol)?
     /// Bumped by load(); async duration fetches compare against it so a slow
     /// track (FLAC headers can take a while) can't stamp its duration onto
     /// whatever track replaced it — that stale write pinned the seek bar when
@@ -252,6 +253,10 @@ final class AudioPreviewEngine {
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
         p.volume = Float(volume)
+        // File playback must not sit waiting for "enough buffer" — under a
+        // disk I/O storm (배치 ffmpeg 변환이 같은 볼륨을 두드릴 때, #103) the
+        // wait never resolves and the music just stops.
+        p.automaticallyWaitsToMinimizeStalling = false
         player = p
         // Duration arrives asynchronously; poll it off the status key cheaply.
         Task { @MainActor [weak self] in
@@ -287,6 +292,17 @@ final class AudioPreviewEngine {
             MainActor.assumeIsolated {
                 self?.playing = false
                 self?.finished = true
+            }
+        }
+        // I/O-storm resilience (#103: 변환 스크립트 실행 중 ~5초 뒤 멈춤): if
+        // the stream stalls anyway, kick playback back into motion instead of
+        // silently staying paused while the UI still says "playing".
+        stallObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.playbackStalledNotification, object: item, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.playing else { return }
+                self.player?.play()
             }
         }
         if autoplay || Self.autoplayNext {
@@ -337,7 +353,8 @@ final class AudioPreviewEngine {
     func stop() {
         if let t = timeObserver, let p = player { p.removeTimeObserver(t) }
         if let e = endObserver { NotificationCenter.default.removeObserver(e) }
-        timeObserver = nil; endObserver = nil
+        if let s = stallObserver { NotificationCenter.default.removeObserver(s) }
+        timeObserver = nil; endObserver = nil; stallObserver = nil
         player?.pause()
         player = nil
         playing = false
