@@ -83,6 +83,51 @@ func runPreviewPopupTests() {
             T.expect(!PreviewPopup.isOpen, "close clears the singleton")
         }
 
+        T.group("preview size restore and save") {
+            let d = UserDefaults.standard
+            let keys = ["anf.previewPopup.frame.audio", "anf.previewPopup.frame.document",
+                        "anf.previewPopup.frame.other", "anf.previewPopup.frame.last"]
+            let backups = keys.map { ($0, d.string(forKey: $0)) }
+            defer { for (k, v) in backups { v.map { d.set($0, forKey: k) } ?? d.removeObject(forKey: k) } }
+
+            let dir = fm.temporaryDirectory.appendingPathComponent("anfpopz-\(UUID().uuidString)")
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: dir) }
+            try? Data("x".utf8).write(to: dir.appendingPathComponent("t.mp3"))
+
+            let ws = WorkspaceModel()
+            let m = ws.active
+            m.navigate(to: dir)
+            pump { m.fileItems.count == 1 }
+            // By name, NOT items[0] — the listing prepends the synthetic ".."
+            // parent row, and selecting that buckets as "other".
+            guard let mp3 = m.items.first(where: { $0.name == "t.mp3" }) else {
+                T.expect(false, "fixture listed"); return
+            }
+            m.select(mp3)
+
+            // Saved audio frame → the popup opens at that size.
+            keys.forEach { d.removeObject(forKey: $0) }
+            d.set(NSStringFromRect(NSRect(x: 80, y: 80, width: 341, height: 470)),
+                  forKey: "anf.previewPopup.frame.audio")
+            PreviewPopup.show(workspace: ws)
+            guard let p = PreviewPopup.currentForTesting else { T.expect(false, "opened"); return }
+            T.equal(p.windowForTesting.frame.size.width.rounded(), 341, "audio width restored")
+            T.equal(p.windowForTesting.frame.size.height.rounded(), 470, "audio height restored")
+            p.windowForTesting.close()
+            T.expect(d.string(forKey: "anf.previewPopup.frame.last") != nil,
+                     "close writes the generic last-size key too")
+
+            // No per-kind frame but a generic last → that size is used.
+            d.removeObject(forKey: "anf.previewPopup.frame.audio")
+            d.set(NSStringFromRect(NSRect(x: 80, y: 80, width: 355, height: 480)),
+                  forKey: "anf.previewPopup.frame.last")
+            PreviewPopup.show(workspace: ws)
+            T.equal(PreviewPopup.currentForTesting?.windowForTesting.frame.width.rounded(), 355,
+                    "generic last size restores when the kind has none")
+            PreviewPopup.currentForTesting?.windowForTesting.close()
+        }
+
         T.group("preview size-memory buckets") {
             let dir = fm.temporaryDirectory.appendingPathComponent("anfpops-\(UUID().uuidString)")
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)

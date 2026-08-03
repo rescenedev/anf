@@ -28,6 +28,10 @@ final class PreviewPopup: NSObject {
         let p = PreviewPopup(workspace: workspace)
         current = p
         p.window.makeKeyAndOrderFront(nil)
+        // AFTER ordering front: the first display's layout pass rewrites any
+        // frame set on the not-yet-shown panel (height snapped back to the
+        // contentRect default — the #103 "크기 기억 안 됨" report).
+        p.restoreSavedFrame()
     }
 
     static var isOpen: Bool { current != nil }
@@ -40,11 +44,18 @@ final class PreviewPopup: NSObject {
     private let window: NSPanel
     private let workspace: WorkspaceModel
     let state = PreviewPopupState()
+    /// Content kind at summon time — the save-key fallback when the selection
+    /// has drifted (or emptied) by the time the popup closes. Keying saves off
+    /// the close-time selection alone silently dropped sizes (#103: mp3 세션
+    /// 크기 저장 안 됨).
+    private let openCategory: String
     static var currentForTesting: PreviewPopup? { current }
     var windowForTesting: NSWindow { window }
 
     private init(workspace: WorkspaceModel) {
         self.workspace = workspace
+        openCategory = workspace.active.selectedItems.first
+            .map(PreviewSizeClass.category) ?? "other"
         let w = EscPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 620),
                          styleMask: [.titled, .closable, .resizable, .utilityWindow],
                          backing: .buffered, defer: false)
@@ -55,25 +66,46 @@ final class PreviewPopup: NSObject {
         w.minSize = NSSize(width: 320, height: 300)
         self.window = w
         super.init()
-        w.contentView = NSHostingView(rootView: PreviewPopupView(workspace: workspace,
-                                                                 panel: w, state: state))
+        let host = NSHostingView(rootView: PreviewPopupView(workspace: workspace,
+                                                            panel: w, state: state))
+        // Never let SwiftUI dictate the panel's min/max: the default sizing
+        // options clamp setFrame (breaking size restore, run-order dependent)
+        // and stop the user shrinking the popup into a compact player. The
+        // panel's own minSize is the only floor.
+        host.sizingOptions = []
+        w.contentView = host
         w.center()
-        // Remember the size PER CONTENT KIND (#103: 음악은 작게, 만화·문서는
-        // 크게 쓰고 싶다) — restore the frame last used for this kind of file.
-        if let saved = UserDefaults.standard.string(forKey: sizeKey()) {
-            let f = NSRectFromString(saved)
-            if f.width >= 320, f.height >= 300 { w.setFrame(f, display: false) }
-        }
         w.delegate = self
+        // ⌘Q with the popup open never delivers windowWillClose to a panel —
+        // that quietly lost the session's size (#103: 크기 기억 안 됨).
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appWillTerminate),
+            name: NSApplication.willTerminateNotification, object: nil)
     }
 
-    private func sizeKey() -> String {
-        let item = state.locked ?? workspace.active.selectedItems.first
-        return "anf.previewPopup.frame." + (item.map(PreviewSizeClass.category) ?? "other")
+    @objc private func appWillTerminate() { saveFrame() }
+
+    /// Remember the size PER CONTENT KIND (#103: 음악은 작게, 만화·문서는
+    /// 크게) — the frame last used for this kind, else the last of ANY kind,
+    /// else the default stays. Clamp instead of rejecting: a saved frame a
+    /// point under minSize must not silently discard the whole restore.
+    private func restoreSavedFrame() {
+        let d = UserDefaults.standard
+        guard let saved = d.string(forKey: "anf.previewPopup.frame.\(openCategory)")
+                       ?? d.string(forKey: "anf.previewPopup.frame.last") else { return }
+        var f = NSRectFromString(saved)
+        guard f.width > 0, f.height > 0 else { return }
+        f.size.width = max(f.width, window.minSize.width)
+        f.size.height = max(f.height, window.minSize.height)
+        window.setFrame(f, display: true)
     }
 
     fileprivate func saveFrame() {
-        UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: sizeKey())
+        let cat = (state.locked ?? workspace.active.selectedItems.first)
+            .map(PreviewSizeClass.category) ?? openCategory
+        let d = UserDefaults.standard
+        d.set(NSStringFromRect(window.frame), forKey: "anf.previewPopup.frame.\(cat)")
+        d.set(NSStringFromRect(window.frame), forKey: "anf.previewPopup.frame.last")
     }
 }
 
@@ -161,15 +193,19 @@ private struct PreviewPopupView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 8)
+                // fixedSize: in a narrow popup the filename must truncate —
+                // never these controls (#103: 잠금 표시가 안 보임).
                 Button {
                     state.toggleLock(current: workspace.active.selectedItems.first,
                                      folderItems: workspace.active.items)
                 } label: {
                     Image(systemName: state.locked != nil ? "lock.fill" : "lock.open")
-                        .font(.system(size: 11))
-                        .foregroundStyle(state.locked != nil ? Color.accentColor : .secondary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(state.locked != nil ? Color.accentColor : Color.primary.opacity(0.55))
+                        .frame(width: 18)
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
                 .disabled(target == nil)
                 .help(L("Keep showing this file — don't follow the selection",
                         "이 파일 고정 — 선택을 따라가지 않음"))
@@ -179,10 +215,12 @@ private struct PreviewPopupView: View {
                     panel.level = floating ? .floating : .normal
                 } label: {
                     Image(systemName: floating ? "pin.fill" : "pin")
-                        .font(.system(size: 11))
-                        .foregroundStyle(floating ? Color.accentColor : .secondary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(floating ? Color.accentColor : Color.primary.opacity(0.55))
+                        .frame(width: 18)
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
                 .help(L("Keep on top", "항상 위에 유지"))
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
