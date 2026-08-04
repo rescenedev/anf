@@ -86,6 +86,20 @@ final class AppController: NSObject, NSApplicationDelegate {
     // Re-open a window when the user clicks the Dock icon with none open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { MainActor.assumeIsolated { AppController.newWindow() } }
+        else {
+            // A floating preview panel (🔒 음악 재생 중) can be the app's key
+            // window; activation then leaves the BROWSER window buried under
+            // other apps and Dock clicks appear dead (#103). Raise the browser
+            // windows explicitly — the panel floats above them regardless.
+            MainActor.assumeIsolated {
+                let browsers = sender.windows.filter {
+                    $0.isVisible && !($0 is NSPanel) && $0.styleMask.contains(.titled)
+                }
+                browsers.forEach { $0.orderFront(nil) }
+                let front = browsers.first(where: \.isMainWindow) ?? browsers.first
+                front?.makeKeyAndOrderFront(nil)
+            }
+        }
         return true
     }
 
