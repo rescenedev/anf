@@ -15,6 +15,10 @@ struct AudioPreview: View {
     /// the finished track instead of moving the pane's selection — the popup
     /// advances within its own snapshot queue and the browser stays untouched.
     var advanceOverride: ((FileItem) -> Void)? = nil
+    /// Popup viewer only (#103: "뷰어로 열었을때 자동 플레이"): start playback
+    /// the moment the file appears. The docked inspector keeps this off — arrow-
+    /// key browsing must not blast audio per keystroke.
+    var autoplayOnOpen = false
 
     @State private var engine = AudioPreviewEngine()
     @State private var artwork: NSImage?
@@ -24,6 +28,7 @@ struct AudioPreview: View {
     /// Sticky preferences (app-wide, deliberately not per-file).
     @AppStorage("anf.audio.volume") private var volume = 0.8
     @AppStorage("anf.audio.continuous") private var continuous = false
+    @AppStorage("anf.audio.repeatOne") private var repeatOne = false
 
     static let audioExts: Set<String> = ["mp3", "m4a", "aac", "flac", "wav", "aiff", "aif", "ogg", "opus", "wma"]
     static func isAudio(_ item: FileItem) -> Bool { audioExts.contains(item.ext) }
@@ -114,6 +119,16 @@ struct AudioPreview: View {
 
                     Spacer(minLength: 0)
 
+                    // Repeat-one (#103: "현재 곡만 반복재생 옵션도 보이면").
+                    Button { repeatOne.toggle() } label: {
+                        Image(systemName: "repeat.1")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(repeatOne ? Color.accentColor : Color.primary.opacity(0.55))
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .help(L("Repeat this track", "현재 곡 반복"))
+
                     Toggle(isOn: $continuous) {
                         Text(L("Play all", "연속 재생")).font(.system(size: 11))
                     }
@@ -126,7 +141,7 @@ struct AudioPreview: View {
             .padding(.bottom, 12)
         }
         .task(id: item.url) {
-            engine.load(url: item.url, volume: volume, autoplay: false)
+            engine.load(url: item.url, volume: volume, autoplay: autoplayOnOpen)
             lyrics = nil
             synced = nil
             // Metadata loads can outlive a quick track change (SwiftUI cancels
@@ -142,7 +157,10 @@ struct AudioPreview: View {
         }
         .onChange(of: volume) { _, v in engine.setVolume(v) }
         .onChange(of: engine.finished) { _, done in
-            guard done, continuous else { return }
+            guard done else { return }
+            // Repeat-one outranks 연속 재생: rewind and go again.
+            if repeatOne { engine.seek(to: 0); engine.play(); return }
+            guard continuous else { return }
             playNextInFolder()
         }
         .onDisappear { engine.stop() }
@@ -311,7 +329,20 @@ final class AudioPreviewEngine {
         }
     }
 
-    func play() { player?.play(); playing = true }
+    /// Replay needs a rewind: at end-of-track AVPlayer sits on the last frame
+    /// and play() alone does nothing (#103: "한곡 재생 끝나고 다시 재생버튼을
+    /// 누르면 플레이 안 됩니다"). Pure so the condition is testable.
+    nonisolated static func shouldRewindBeforePlay(finished: Bool, position: Double,
+                                                   duration: Double) -> Bool {
+        finished || (duration > 0 && position >= duration - 0.05)
+    }
+
+    func play() {
+        if Self.shouldRewindBeforePlay(finished: finished, position: position, duration: duration) {
+            seek(to: 0)
+        }
+        player?.play(); playing = true
+    }
     func pause() { player?.pause(); playing = false }
     func toggle() { playing ? pause() : play() }
 

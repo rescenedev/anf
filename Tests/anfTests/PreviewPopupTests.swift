@@ -81,6 +81,26 @@ func runPreviewPopupTests() {
             win.close()
             T.isNil(win.contentView, "close drops the hosting view (players stop)")
             T.expect(!PreviewPopup.isOpen, "close clears the singleton")
+
+            // Locked popups are INDEPENDENT viewers (#103: "음악을 플레이 해두고
+            // 다른 문서를 체크") — summoning again opens a second popup instead
+            // of stealing the locked one.
+            m.select(a)
+            PreviewPopup.show(workspace: ws)
+            guard let locked = PreviewPopup.currentForTesting else {
+                T.expect(false, "reopened"); return
+            }
+            locked.state.toggleLock(current: a, folderItems: m.items)
+            PreviewPopup.show(workspace: ws)
+            T.equal(PreviewPopup.openCountForTesting, 2, "locked viewer stays; a new one opens")
+            m.select(b)
+            T.equal(locked.currentItemPath, a.url.path, "locked viewer keeps its file")
+            T.equal(PreviewPopup.currentForTesting?.currentItemPath, b.url.path,
+                    "the new popup is the one following the selection")
+            PreviewPopup.currentForTesting?.windowForTesting.close()
+            T.equal(PreviewPopup.openCountForTesting, 1, "closing the follower leaves the locked viewer")
+            locked.windowForTesting.close()
+            T.expect(!PreviewPopup.isOpen, "closing the locked viewer empties the registry")
         }
 
         T.group("preview size restore and save") {
