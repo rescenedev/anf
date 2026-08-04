@@ -101,8 +101,30 @@ git tag "$TAG"
 git push origin main "$TAG"
 
 echo "▸ GitHub Release $TAG"
+# 사용자용 릴리즈 노트: 직전 태그 이후의 squash 커밋 제목을 분류해 조립.
+# --generate-notes는 "feat: ..." PR 제목을 그대로 나열해 읽기 어려웠음
+# (#103 사용자 피드백). 제목의 (#PR) 번호는 GitHub이 자동 링크한다.
+PREV_TAG=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo "")
+NOTES=$(mktemp)
+{
+    feats=""; fixes=""; others=""
+    while IFS= read -r s; do
+        case "$s" in
+            release:*) ;;                                # 버전 범프 커밋은 노트에서 제외
+            feat*:*)  feats+="- ${s#*: }"$'\n' ;;
+            fix*:*)   fixes+="- ${s#*: }"$'\n' ;;
+            *:*)      others+="- ${s#*: }"$'\n' ;;
+            *)        others+="- $s"$'\n' ;;
+        esac
+    done < <(git log --no-merges --pretty=%s ${PREV_TAG:+$PREV_TAG..}HEAD)
+    [ -n "$feats" ]  && printf '### ✨ 새 기능\n%s\n' "$feats"
+    [ -n "$fixes" ]  && printf '### 🐛 수정\n%s\n' "$fixes"
+    [ -n "$others" ] && printf '### 🧰 내부 개선\n%s\n' "$others"
+    [ -n "$PREV_TAG" ] && printf '**전체 변경 내역**: https://github.com/rescenedev/anf/compare/%s...%s\n' "$PREV_TAG" "$TAG"
+} > "$NOTES"
 gh release create "$TAG" anf.dmg --repo rescenedev/anf \
-    --title "anf $TAG" --generate-notes
+    --title "anf $TAG" --notes-file "$NOTES"
+rm -f "$NOTES"
 
 echo "▸ Homebrew cask 갱신"
 TAP_DIR=$(mktemp -d)
