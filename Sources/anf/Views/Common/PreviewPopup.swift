@@ -10,31 +10,44 @@ import SwiftUI
 /// ⎋ closes (EscPanel).
 @MainActor
 final class PreviewPopup: NSObject {
-    private static var current: PreviewPopup?
+    private static var popups: [PreviewPopup] = []
+    /// The selection-following popup (at most one); locked popups are
+    /// independent viewers and never returned here unless nothing else exists.
+    private static var current: PreviewPopup? {
+        popups.last(where: { $0.state.locked == nil }) ?? popups.last
+    }
 
-    /// One popup at a time. Summoning it from the SAME workspace just brings it
-    /// forward; from another window's workspace it re-binds (close + reopen) so
-    /// the popup always follows the window that asked — the singleton silently
-    /// staying glued to window A while the user hits F3 in window B was a
-    /// multi-window bug the tests caught.
+    /// ONE selection-following popup at a time — summoning it from the SAME
+    /// workspace brings it forward; from another window's workspace it re-binds
+    /// (close + reopen) so it follows the window that asked. LOCKED popups are
+    /// left alone and a fresh following popup opens beside them (#103: "음악을
+    /// 플레이 해두고 다른 문서를 체크" — 잠근 뷰어는 독립 창).
     static func show(workspace: WorkspaceModel) {
-        if let p = current {
+        if let p = popups.last(where: { $0.state.locked == nil }) {
             if p.workspace === workspace {
                 p.window.makeKeyAndOrderFront(nil)
                 return
             }
-            p.window.close()   // windowWillClose clears `current`
+            p.window.close()   // windowWillClose drops it from `popups`
         }
         let p = PreviewPopup(workspace: workspace)
-        current = p
+        popups.append(p)
         p.window.makeKeyAndOrderFront(nil)
         // AFTER ordering front: the first display's layout pass rewrites any
         // frame set on the not-yet-shown panel (height snapped back to the
         // contentRect default — the #103 "크기 기억 안 됨" report).
         p.restoreSavedFrame()
+        // A brand-new popup opening exactly over a locked one reads as "my
+        // viewer got replaced" — offset it so both are visibly present.
+        if popups.count > 1, let prev = popups.dropLast().last,
+           abs(prev.window.frame.origin.x - p.window.frame.origin.x) < 8,
+           abs(prev.window.frame.origin.y - p.window.frame.origin.y) < 8 {
+            p.window.setFrameOrigin(NSPoint(x: p.window.frame.origin.x + 40,
+                                            y: p.window.frame.origin.y - 40))
+        }
     }
 
-    static var isOpen: Bool { current != nil }
+    static var isOpen: Bool { !popups.isEmpty }
 
     /// The item the popup is currently rendering (test hook).
     var currentItemPath: String? {
@@ -50,7 +63,12 @@ final class PreviewPopup: NSObject {
     /// 크기 저장 안 됨).
     private let openCategory: String
     static var currentForTesting: PreviewPopup? { current }
+    static var openCountForTesting: Int { popups.count }
     var windowForTesting: NSWindow { window }
+
+    fileprivate static func remove(windowed w: NSWindow) {
+        popups.removeAll { $0.window === w }
+    }
 
     private init(workspace: WorkspaceModel) {
         self.workspace = workspace
@@ -138,9 +156,7 @@ extension PreviewPopup: NSWindowDelegate {
         // the preview keeps playing after ⎋ (#103 follow-up: "esc로 뷰어를
         // 꺼도 음악재생이 멈추지 않아요").
         w.contentView = nil
-        if PreviewPopup.current?.window === w {
-            PreviewPopup.current = nil
-        }
+        PreviewPopup.remove(windowed: w)
     }
 }
 
@@ -239,7 +255,8 @@ private struct PreviewPopupView: View {
                                             if state.advanceLocked(after: finished) != nil {
                                                 AudioPreviewEngine.autoplayNext = true
                                             }
-                                        })
+                                        },
+                                        mediaAutoplay: true)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .id("\(target.url.path)|\(target.isCloudPlaceholder)")
             } else {

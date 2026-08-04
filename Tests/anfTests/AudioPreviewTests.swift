@@ -59,6 +59,19 @@ func runAudioPreviewTests() {
         T.isNil(AudioArtwork.flacPicture(url: junk), "garbage input → nil")
     }
 
+    T.group("replay-after-finish rewind rule") {
+        // #103: at end-of-track AVPlayer sits on the last frame — play() alone
+        // is a no-op, so the play button seemed dead in both hosts.
+        T.expect(AudioPreviewEngine.shouldRewindBeforePlay(finished: true, position: 0, duration: 0),
+                 "finished flag → rewind")
+        T.expect(AudioPreviewEngine.shouldRewindBeforePlay(finished: false, position: 180.0, duration: 180.0),
+                 "parked at the end → rewind even without the flag")
+        T.expect(!AudioPreviewEngine.shouldRewindBeforePlay(finished: false, position: 42, duration: 180),
+                 "mid-track → plain resume")
+        T.expect(!AudioPreviewEngine.shouldRewindBeforePlay(finished: false, position: 3, duration: 0),
+                 "unknown duration → never rewind")
+    }
+
     T.group("seek-bar scrub state machine") {
         // Playerless engine: the state transitions are what desynced lyrics/
         // slider from the audio (#103 — a seek fired per drag tick).
