@@ -11,10 +11,11 @@ import AVFoundation
 struct AudioPreview: View {
     let item: FileItem
     let model: BrowserModel
-    /// Locked-popup hand-off (#103 follow-up): when set, 연속 재생 calls this with
-    /// the finished track instead of moving the pane's selection — the popup
-    /// advances within its own snapshot queue and the browser stays untouched.
-    var advanceOverride: ((FileItem) -> Void)? = nil
+    /// Locked-popup hand-off (#103 follow-up): when set, 연속 재생 and the
+    /// prev/next buttons call this with (current, ±1) instead of moving the
+    /// pane's selection — the popup steps within its own snapshot queue and
+    /// the browser stays untouched.
+    var stepOverride: ((FileItem, Int) -> Void)? = nil
     /// Popup viewer only (#103: "뷰어로 열었을때 자동 플레이"): start playback
     /// the moment the file appears. The docked inspector keeps this off — arrow-
     /// key browsing must not blast audio per keystroke.
@@ -100,6 +101,17 @@ struct AudioPreview: View {
                 }
 
                 HStack(spacing: 14) {
+                    // Prev / next track (#103: "이전곡 |<, 다음곡 >| 도 선택
+                    // 가능하게") — 잠금 팝업은 스냅샷 큐, 기본은 선택 이동.
+                    Button { step(-1) } label: {
+                        Image(systemName: "backward.end.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.primary.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .help(L("Previous track", "이전 곡"))
+
                     Button { engine.toggle() } label: {
                         Image(systemName: engine.playing ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 30))
@@ -108,6 +120,15 @@ struct AudioPreview: View {
                     .buttonStyle(.plain)
                     .help(engine.playing ? L("Pause (Space plays via Quick Look)", "일시 정지")
                                          : L("Play", "재생"))
+
+                    Button { step(1) } label: {
+                        Image(systemName: "forward.end.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.primary.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .help(L("Next track", "다음 곡"))
 
                     // Volume — the report asked for it by name.
                     Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -166,17 +187,19 @@ struct AudioPreview: View {
         .onDisappear { engine.stop() }
     }
 
-    /// Continuous playback: hand the selection to the next audio file in listing
-    /// order — the inspector tracks the selection, so the new file's preview
-    /// mounts and starts playing (autoplay flag set by the engine hand-off).
-    private func playNextInFolder() {
-        if let advanceOverride { advanceOverride(item); return }
+    /// Step to the adjacent audio file (+1 다음 곡 / -1 이전 곡). Default mode
+    /// hands the SELECTION to that file — the preview follows and autoplays;
+    /// a locked popup steps inside its snapshot queue via `stepOverride`.
+    private func step(_ direction: Int) {
+        if let stepOverride { stepOverride(item, direction); return }
         let audios = model.items.filter { Self.isAudio($0) }
         guard let idx = audios.firstIndex(where: { $0.id == item.id }),
-              idx + 1 < audios.count else { return }
+              audios.indices.contains(idx + direction) else { return }
         AudioPreviewEngine.autoplayNext = true
-        model.select(audios[idx + 1])
+        model.select(audios[idx + direction])
     }
+
+    private func playNextInFolder() { step(1) }
 
     private static func clock(_ t: Double) -> String {
         guard t.isFinite, t > 0 else { return "0:00" }

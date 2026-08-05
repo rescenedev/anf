@@ -180,14 +180,20 @@ final class PreviewPopupState {
         }
     }
 
-    /// Next track after `item` in the snapshot queue; advances the lock and
-    /// returns it, or nil at the end (or when not locked).
-    func advanceLocked(after item: FileItem) -> FileItem? {
+    /// Step to the adjacent track in the snapshot queue (+1 다음 곡 / -1 이전
+    /// 곡, #103); moves the lock and returns the new track, or nil at either
+    /// edge (or when not locked).
+    func stepLocked(from item: FileItem, direction: Int) -> FileItem? {
         guard locked != nil,
               let i = lockedQueue.firstIndex(where: { $0.id == item.id }),
-              i + 1 < lockedQueue.count else { return nil }
-        locked = lockedQueue[i + 1]
+              lockedQueue.indices.contains(i + direction) else { return nil }
+        locked = lockedQueue[i + direction]
         return locked
+    }
+
+    /// Next track after `item` (연속 재생 hand-off).
+    func advanceLocked(after item: FileItem) -> FileItem? {
+        stepLocked(from: item, direction: 1)
     }
 }
 
@@ -243,16 +249,16 @@ private struct PreviewPopupView: View {
             Divider()
 
             if let target {
-                // The advance override exists only while LOCKED — an unlocked
-                // popup keeps the default selection-driven 연속 재생.
+                // The step override exists only while LOCKED — an unlocked
+                // popup keeps the default selection-driven 연속 재생/곡 이동.
                 InspectorPreviewContent(target: target,
                                         model: workspace.active,
                                         workspace: workspace,
-                                        audioAdvanceOverride: state.locked == nil ? nil : { finished in
-                                            // Advance inside the snapshot queue;
+                                        audioStepOverride: state.locked == nil ? nil : { from, dir in
+                                            // Step inside the snapshot queue;
                                             // the flag makes the NEXT preview
                                             // start playing on mount.
-                                            if state.advanceLocked(after: finished) != nil {
+                                            if state.stepLocked(from: from, direction: dir) != nil {
                                                 AudioPreviewEngine.autoplayNext = true
                                             }
                                         },
