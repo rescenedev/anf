@@ -253,8 +253,9 @@ struct InspectorPreviewContent: View {
     let model: BrowserModel
     let workspace: WorkspaceModel
     /// Passed through to AudioPreview by the locked preview popup; the docked
-    /// inspector leaves it nil (selection-driven 연속 재생 as before).
-    var audioAdvanceOverride: ((FileItem) -> Void)? = nil
+    /// inspector leaves it nil (selection-driven 연속 재생/곡 이동 as before).
+    /// (item, direction): +1 next track, -1 previous.
+    var audioStepOverride: ((FileItem, Int) -> Void)? = nil
     /// True in the preview popup: audio/video start playing on open (#103).
     var mediaAutoplay = false
 
@@ -283,7 +284,7 @@ struct InspectorPreviewContent: View {
                 // Native player (#103): QL's remote audio controls went
                 // click-dead in the inspector, had no volume, no FLAC art.
                 AudioPreview(item: target, model: model,
-                             advanceOverride: audioAdvanceOverride,
+                             stepOverride: audioStepOverride,
                              autoplayOnOpen: mediaAutoplay)
             } else if OCRService.isImage(target.url) {
                 // Image: Quick Look preview + on-device OCR text below

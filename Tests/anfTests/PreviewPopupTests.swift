@@ -186,6 +186,12 @@ func runPreviewPopupTests() {
             T.equal(s.advanceLocked(after: items[1])?.name, "03.mp3", "advances to the last track")
             T.isNil(s.advanceLocked(after: items[2]), "end of queue → nil (playback stops)")
 
+            // Prev/next buttons (#103): stepping backward walks the same queue.
+            T.equal(s.stepLocked(from: items[2], direction: -1)?.name, "02.flac",
+                    "이전 곡 steps backward")
+            T.isNil(s.stepLocked(from: items[0], direction: -1),
+                    "start of queue → 이전 곡 is a no-op")
+
             s.toggleLock(current: nil, folderItems: [])
             T.isNil(s.locked, "unlock clears the lock")
             T.isNil(s.advanceLocked(after: items[0]), "unlocked again → no advance")
