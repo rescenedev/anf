@@ -5,11 +5,8 @@
   "routes": [
     { "pattern": "hooks.zihado.com", "custom_domain": true }
   ],
-  "triggers": {
-    // 21:30 UTC = 06:30 KST — download/star deltas go out as one daily digest.
-    // Issue/PR/release webhooks are separate (fetch handler) and stay instant.
-    "crons": ["30 21 * * *"]
-  },
+  // 다운로드/스타 알림 전면 중단(사용자 요청) — 크론 없음.
+  // 이슈/PR/릴리즈 웹훅(fetch 핸들러)만 살아 있습니다.
   "kv_namespaces": [
     {
       "binding": "STATE",

@@ -1,16 +1,15 @@
-// anf-dl-notify — polls GitHub once a day (06:30 KST, cron in wrangler.jsonc)
-// and Telegrams the author a digest of release-download/star deltas since the
-// previous morning. GitHub has no download webhook, so the only way to know is
-// to diff `download_count` between polls; state lives in KV. Issue/PR/release
-// webhook notifications (fetch handler below) are event-driven and stay instant.
+// anf-dl-notify — GitHub 이슈/PR/릴리즈 웹훅을 텔레그램으로 중계한다.
+// 다운로드/스타 증감 알림은 사용자 요청으로 중단됨(크론 제거 + scheduled 무력화).
+// check()는 /poke dry-run 점검용으로만 남겨 둔다 — 스스로 발송하지 않는다.
 // Secrets (never in this file): TG_TOKEN, TG_CHAT, POKE_KEY, optional GITHUB_TOKEN.
 
 const REPO = "rescenedev/anf";
 
 export default {
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(check(env));
-  },
+  // 다운로드/스타 알림은 사용자 요청으로 전면 중단. 크론도 제거했지만, 남아
+  // 있던 트리거가 어쩌다 발사되더라도 아무것도 보내지 않도록 여기서 막는다.
+  // (수동 점검은 /poke 로 여전히 가능 — dry-run이라 발송하지 않음)
+  async scheduled(_event, _env, _ctx) {},
 
   // Manual trigger for testing: GET /poke?key=<POKE_KEY> — dry-run: reports the
   // pending delta WITHOUT saving state or messaging, so a midday poke can't eat
