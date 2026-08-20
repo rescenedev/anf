@@ -9,6 +9,7 @@
 "Sponsor" = "후원하기";
 "Set up AI — connect Claude, a local model, or Apple" = "AI 설정하기 — Claude·로컬·Apple 연결";
 "Search files & folders…" = "파일 · 폴더 검색…";
+"Scripts" = "스크립트";
 "Files · Folders" = "파일 · 폴더";
 "Contents" = "내용";
 "Searching…" = "검색 중…";
@@ -42,6 +43,7 @@
 "File" = "파일";
 "New Window" = "새 창";
 "Connect to Server…" = "서버에 연결…";
+"Connect to FTP Server…" = "FTP 서버에 연결…";
 "Edit" = "편집";
 "Undo" = "실행 취소";
 "Redo" = "실행 복귀";
@@ -165,6 +167,9 @@
 "Snapshot" = "스냅샷";
 "Recents" = "최근";
 "Smart Folder" = "스마트 폴더";
+"FTP Password" = "FTP 비밀번호";
+"Password" = "비밀번호";
+"Connect" = "연결";
 "Couldn’t protect before deleting" = "삭제 전에 보호하지 못했어요";
 "The vault couldn’t snapshot the current state, so the delete was cancelled to avoid unrecoverable loss." = "현재 상태를 스냅샷하지 못해, 복구 불가능한 손실을 막기 위해 삭제를 취소했어요.";
 "Couldn’t create Vault" = "Vault를 만들지 못했습니다";
@@ -181,8 +186,9 @@
 "Go" = "이동";
 "Connect to Server" = "서버에 연결";
 "Enter a server address (e.g. smb://host/share):" = "서버 주소를 입력하세요 (예: smb://host/share):";
-"Connect" = "연결";
 "Connection Failed" = "연결 실패";
+"Connect to FTP Server" = "FTP 서버에 연결";
+"Enter an FTP address (e.g. ftp://user@host/folder). Use ftps:// for TLS." = "FTP 주소를 입력하세요 (예: ftp://사용자@호스트/폴더). TLS는 ftps://를 사용하세요.";
 "Single Pane (⌘1)" = "단일창 (⌘1)";
 "Two Panes (⌘2)" = "2분할 좌우 (⌘2)";
 "Two Rows (⌘3)" = "2행 상하 (⌘3)";
@@ -212,6 +218,7 @@
 "Classifying…" = "분류 중…";
 "Preview" = "미리보기";
 "Select an item" = "항목을 선택하세요";
+"Keep showing this file — don't follow the selection" = "이 파일 고정 — 선택을 따라가지 않음";
 "Keep on top" = "항상 위에 유지";
 "Select an item to preview" = "미리볼 항목을 선택하세요";
 "Proposing names…" = "이름 짓는 중…";
@@ -262,7 +269,6 @@
 "Go to Folder…" = "폴더로 이동…";
 "Copy Path" = "경로 복사";
 "Show Hidden Files" = "숨김 파일 보기";
-"SFTP Connection Failed" = "SFTP 연결 실패";
 "Retry" = "다시 시도";
 "Reconnecting to the network drive…" = "네트워크 드라이브에 다시 연결 중…";
 "Showing the last view — this refreshes automatically when the drive is back." = "마지막 화면을 표시 중입니다 — 드라이브가 돌아오면 자동으로 새로고침됩니다.";
@@ -289,8 +295,11 @@
 "No Items" = "항목 없음";
 "Release Notes" = "릴리즈 노트";
 "Drag to move" = "드래그해서 이동";
+"Previous track" = "이전 곡";
 "Pause (Space plays via Quick Look)" = "일시 정지";
 "Play" = "재생";
+"Next track" = "다음 곡";
+"Repeat this track" = "현재 곡 반복";
 "Play all" = "연속 재생";
 "Keep playing through the folder's audio files" = "폴더의 다음 오디오 파일을 이어서 재생";
 "Extracting text…" = "본문 추출 중…";
@@ -333,6 +342,8 @@
 "SFTP (Terminal)" = "SFTP (터미널)";
 "Mount over SFTP" = "SFTP 마운트해서 열기";
 "Connect with Ghostty" = "Ghostty로 연결";
+"Edit Address…" = "주소 편집…";
+"Forget Password" = "비밀번호 삭제";
 "New Terminal Tab" = "새 터미널 탭";
 "Hide Terminal (⌃`)" = "터미널 가리기 (⌃`)";
 "Close Session" = "세션 닫기";

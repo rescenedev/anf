@@ -44,7 +44,8 @@ struct ContentArea: View {
                     }
                 }
             } else if let err = model.remoteError, model.items.isEmpty {
-                RemoteErrorState(message: err) { model.reload() }
+                RemoteErrorState(protocolName: model.isSFTP ? "SFTP" : "FTP",
+                                 message: err) { model.reload() }
             } else if !model.isLoading && model.items.isEmpty {
                 if model.accessDenied {
                     VStack(spacing: 10) {
@@ -95,13 +96,17 @@ private struct BackgroundMenu: View {
 }
 
 private struct RemoteErrorState: View {
+    /// "SFTP" or "FTP" — the title names the protocol that actually failed, since
+    /// the two connect in completely different ways and the fix differs too.
+    let protocolName: String
     let message: String
     let retry: () -> Void
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: 40)).foregroundStyle(.tertiary)
-            Text(L("SFTP Connection Failed", "SFTP 연결 실패")).font(.title3).foregroundStyle(.secondary)
+            Text(L("\(protocolName) Connection Failed", "\(protocolName) 연결 실패"))
+                .font(.title3).foregroundStyle(.secondary)
             Text(message)
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 360)

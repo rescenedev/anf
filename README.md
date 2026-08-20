@@ -68,6 +68,9 @@ XCTest는 Xcode 전용이라 CLT 환경에선 자체 하니스로 순수 로직�
   그냥 타이핑(타입어헤드)해도. NFC/NFD 정규화·한글 IME ⌘단축키까지 한국어에 진심.
 - **hwpx 본문 미리보기** — 한글 hwpx·docx·pptx·xlsx·pdf 본문 텍스트를 직접 추출해 인스펙터에 표시(알한글 불필요).
 - **GUI SFTP** — SSH 호스트를 일반 폴더처럼 탐색. 터미널도, sshfs·macFUSE 설치도 없이 원격 디렉터리 브라우징.
+- **FTP · FTPS** — `ftp://사용자@호스트/폴더`로 접속해 로컬 폴더처럼 탐색.
+  마운트 없이(macOS는 FTP 볼륨 마운트를 오래전에 뺐습니다) 사이드바 FTP 섹션에 저장,
+  비밀번호는 키체인에만.
 - **내장 터미널** — 창 하단 전역 드로어. xterm.js + 실제 PTY. SSH 한 번에 연결.
 - **인스펙터** — QuickLook 미리보기 + 가독성 좋은 텍스트 뷰어. iCloud placeholder
   배지 + 선택 시 자동 다운로드.
@@ -75,7 +78,7 @@ XCTest는 Xcode 전용이라 CLT 환경에선 자체 하니스로 순수 로직�
 - **안전한 파일 작업** — ⌘Z 실행 취소(이동·이름변경·복사·휴지통), 이름 충돌 시
   둘 다 유지/덮어쓰기/건너뛰기 선택, 대용량 복사 진행률 + 취소, 실패는 항상 알림.
 - **압축 · 해제** — 우클릭으로 zip 압축/풀기. **휴지통·디스크 추출**도 사이드바에서.
-- **네이티브 사이드바** — 즐겨찾기 · 핀 · Workspace · 위치 · SSH(`~/.ssh/config` 자동 인식).
+- **네이티브 사이드바** — 즐겨찾기 · 핀 · Workspace · 위치 · SSH(`~/.ssh/config` 자동 인식) · FTP.
 - **반투명 배경** — content 영역에 behind-window 블러로 데스크탑이 은은하게 비침.
 - **오쏘독스 전송** — F5 복사 · F6 이동. pane 간 드래그 이동도 지원.
 - **제로 설정 영속화** — 레이아웃·탭·보기·즐겨찾기·Workspace가 설정 없이 저장·복원.
@@ -175,6 +178,7 @@ Sources/
     ViewModels/ BrowserModel(탭) · Workspace(Pane/Workspace/Favorites/RecentFolders/SavedViews)
     Services/   FileSystemService, FastDirRead(getattrlistbulk 벌크 읽기), IconProvider,
                 ThumbnailProvider, SSHConfig, SFTPClient(GUI SFTP) / RemoteMount(sshfs),
+                FTPClient(curl 기반 FTP/FTPS) + FTPServers(사이드바 저장),
                 TerminalSession(xterm.js+PTY), ExternalTools
     Views/      ContentRoot, Sidebar, Pane(layout/tabs), Content(icon / list=NSTableView /
                 column / gallery), Detail(inspector + hwpx 텍스트), Terminal,
@@ -268,6 +272,7 @@ Command Line Tools(전체 Xcode 없음)로 빌드하면 SwiftUI scene 라이프�
 
 **원격 · 터미널**
 - **GUI SFTP** — SSH 호스트를 일반 폴더처럼 탐색 (sshfs·macFUSE 불필요)
+- **FTP · FTPS** — 주소로 접속해 폴더처럼 탐색, 사이드바에 저장, 비밀번호는 키체인
 - 창 하단 내장 터미널(실제 PTY, ⌃`), **터미널 다중 탭**, "여기서 터미널 열기"
 - `~/.ssh/config` 자동 인식 · 라이브 세션 표시, 비밀번호 입력·저장 없음(키/에이전트 인증)
 

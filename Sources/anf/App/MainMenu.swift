@@ -15,6 +15,10 @@ final class ViewMenuController: NSObject, NSMenuItemValidation {
         workspace?.active.connectToServerPrompt()
     }
 
+    @objc func connectToFTP(_ sender: Any?) {
+        workspace?.active.connectFTPPrompt()
+    }
+
     @objc func emptyTrash(_ sender: Any?) {
         ArchiveService.emptyTrash { [weak self] in self?.workspace?.active.reload() }
     }
@@ -248,6 +252,12 @@ enum MainMenu {
                                        keyEquivalent: "k")
         connect.keyEquivalentModifierMask = [.command, .shift]
         connect.target = ViewMenuController.shared
+        // FTP is browsed in-app (curl), not mounted — its own item so the address
+        // field can be pre-filled with ftp:// and explain the ftps:// variant.
+        let ftp = fileMenu.addItem(withTitle: L("Connect to FTP Server…", "FTP 서버에 연결…"),
+                                   action: #selector(ViewMenuController.connectToFTP(_:)),
+                                   keyEquivalent: "")
+        ftp.target = ViewMenuController.shared
 
         // Edit menu (standard responder-chain selectors)
         let editItem = NSMenuItem()

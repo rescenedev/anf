@@ -489,10 +489,17 @@ final class BrowserModel: Identifiable {
         return isRemote ? remotePath != "/" : currentURL.path != "/"
     }
 
-    // MARK: - Remote (SFTP)
+    // MARK: - Remote (SFTP / FTP)
 
-    /// True when the current location is a remote `sftp://host/path` address.
-    var isRemote: Bool { currentURL.scheme == "sftp" }
+    /// True when the current location is browsed over the network rather than
+    /// read from disk — `sftp://host/path` or `ftp(s)://host/path`.
+    var isRemote: Bool { isSFTP || ftpLocation != nil }
+
+    /// The SSH-backed remote scheme specifically (served by SFTPClient).
+    var isSFTP: Bool { currentURL.scheme == "sftp" }
+
+    /// The current location parsed as an FTP address, or nil if it isn't one.
+    var ftpLocation: FTPLocation? { FTPLocation.parse(currentURL) }
 
     // MARK: - Virtual locations (Recents, Smart Folders)
 
@@ -554,6 +561,14 @@ final class BrowserModel: Identifiable {
         return URL(string: "sftp://\(h)\(pe)") ?? URL(string: "sftp://\(h)/")!
     }
 
+    /// Another path on the same remote server as `base`, whatever its scheme.
+    /// FTP addresses carry a user and port that the sftp-shaped builder above
+    /// would drop, so they're rebuilt from the base URL instead.
+    static func remoteURL(like base: URL, path: String) -> URL {
+        if let ftp = FTPLocation.parse(base) { return ftp.url(path: path) }
+        return remoteURL(host: base.host ?? "", path: path)
+    }
+
     /// Open a host's home directory in this pane as a browsable remote folder.
     func openRemote(host: String) {
         remoteError = nil
@@ -564,17 +579,37 @@ final class BrowserModel: Identifiable {
         }
     }
 
+    /// Open an `ftp(s)://` address in this pane. Asks for the password when the
+    /// address names a user and the Keychain has nothing stored for them yet;
+    /// an anonymous address (no user) connects straight away.
+    func openFTP(_ url: URL) {
+        guard let loc = FTPLocation.parse(url) else { NSSound.beep(); return }
+        if let user = loc.user, !user.isEmpty, Keychain.get(loc.secretAccount) == nil {
+            let password = TextPrompt.runSecure(
+                title: L("FTP Password", "FTP 비밀번호"),
+                message: L("Password for ‘\(loc.label)’:", "‘\(loc.label)’의 비밀번호:"),
+                placeholder: L("Password", "비밀번호"),
+                action: L("Connect", "연결"))
+            guard let password else { return }   // cancelled
+            // Blank is legitimate (some servers accept an empty password), and
+            // Keychain.set treats it as a delete — so only store a real one.
+            if !password.isEmpty { Keychain.set(loc.secretAccount, password) }
+        }
+        remoteError = nil
+        navigate(to: loc.url(path: loc.path))
+    }
+
     /// Breadcrumb trail from root to the current directory. Built forward from
     /// Foundation's path components — walking *up* with deletingLastPathComponent
     /// can fail to reach a fixed point for some URLs and spin forever.
     var pathComponents: [URL] {
         if isVirtual { return [currentURL] }
-        if isRemote, let host = remoteHost {
-            var urls = [Self.remoteURL(host: host, path: "/")]
+        if isRemote {
+            var urls = [Self.remoteURL(like: currentURL, path: "/")]
             var path = ""
             for part in remotePath.split(separator: "/") {
                 path += "/" + part
-                urls.append(Self.remoteURL(host: host, path: path))
+                urls.append(Self.remoteURL(like: currentURL, path: path))
             }
             return urls
         }
@@ -673,13 +708,26 @@ final class BrowserModel: Identifiable {
 
     /// Download a remote file to a temp dir, then open it with the default app.
     private func openRemoteFile(_ item: FileItem) {
-        guard let host = remoteHost else { return }
-        let remotePath = item.url.path
         Task { @MainActor in
             do {
-                let local = try await SFTPClient.download(host: host, remotePath: remotePath)
+                let local: URL
+                if let ftp = FTPLocation.parse(item.url) {
+                    local = try await FTPClient.download(ftp)
+                } else if let host = remoteHost {
+                    local = try await SFTPClient.download(host: host, remotePath: item.url.path)
+                } else {
+                    return
+                }
                 NSWorkspace.shared.open(local)
             } catch {
+                // FTP's LIST can't say what a symlink points at, so links to
+                // directories arrive looking like files (ftp.gnu.org's /gnu/git →
+                // gnuit is one). A link that refuses to download is almost always
+                // one of those — browse into it instead of reporting a failure.
+                if item.isSymlink, FTPLocation.parse(item.url) != nil {
+                    navigate(to: item.url)
+                    return
+                }
                 RemoteMount.presentError(error.localizedDescription)
             }
         }
@@ -709,9 +757,9 @@ final class BrowserModel: Identifiable {
     func goUp() {
         guard canGoUp else { return }
         let left = currentURL
-        if isRemote, let host = remoteHost {
+        if isRemote {
             let parent = (remotePath as NSString).deletingLastPathComponent
-            navigate(to: Self.remoteURL(host: host, path: parent.isEmpty ? "/" : parent),
+            navigate(to: Self.remoteURL(like: currentURL, path: parent.isEmpty ? "/" : parent),
                      returningFrom: left)
             return
         }
@@ -976,20 +1024,27 @@ final class BrowserModel: Identifiable {
         }
     }
 
-    /// Load the current remote directory over SFTP and map it onto FileItems.
+    /// Load the current remote directory (SFTP or FTP) and map it onto FileItems.
     private func reloadRemote(token: Int) {
-        guard let host = remoteHost else { return }
+        let base = currentURL
         let path = remotePath
         let hidden = showHidden
         Task { @MainActor in
             do {
-                let entries = try await SFTPClient.list(host: host, path: path)
+                let entries: [RemoteEntry]
+                if let ftp = FTPLocation.parse(base) {
+                    entries = try await FTPClient.list(ftp)
+                } else if let host = base.host {
+                    entries = try await SFTPClient.list(host: host, path: path)
+                } else {
+                    return
+                }
                 guard token == loadToken else { return }
                 allItems = entries
                     .filter { hidden || (!$0.name.hasPrefix(".") && !WindowsSystemFiles.isHidden($0.name)) }
                     .map { e in
                         FileItem.remote(
-                            url: Self.remoteURL(host: host, path: joinRemote(path, e.name)),
+                            url: Self.remoteURL(like: base, path: joinRemote(path, e.name)),
                             name: e.name, isDir: e.isDir, isSymlink: e.isSymlink,
                             size: e.size, modified: e.modified)
                     }
@@ -1741,9 +1796,15 @@ final class BrowserModel: Identifiable {
                        "서버 주소를 입력하세요 (예: smb://host/share):"),
             defaultValue: "smb://", action: L("Connect", "연결")) else { return }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard NetworkMount.isMountable(trimmed), let url = URL(string: trimmed) else {
-            NSSound.beep(); return
+        guard let url = URL(string: trimmed) else { NSSound.beep(); return }
+        // FTP goes to our own browser, not NetFS: macOS dropped FTP volume
+        // mounting years ago, so NetFSMountURLSync just fails on an ftp:// URL.
+        if let loc = FTPLocation.parse(url) {
+            FTPServersStore.shared.add(FTPServer(loc))
+            openFTP(url)
+            return
         }
+        guard NetworkMount.isMountable(trimmed) else { NSSound.beep(); return }
         NetworkMount.mount(url) { [weak self] mountPoint, error in
             guard let self else { return }
             if let mountPoint {
@@ -1755,5 +1816,22 @@ final class BrowserModel: Identifiable {
                 alert.runModal()
             }
         }
+    }
+
+    /// Connect to an FTP/FTPS server typed as an address and browse it in this
+    /// pane. The server is remembered in the sidebar's FTP section; the password
+    /// (asked for by `openFTP`) goes to the Keychain, never to UserDefaults.
+    func connectFTPPrompt(defaultValue: String = "ftp://") {
+        guard let raw = TextPrompt.run(
+            title: L("Connect to FTP Server", "FTP 서버에 연결"),
+            message: L("Enter an FTP address (e.g. ftp://user@host/folder). Use ftps:// for TLS.",
+                       "FTP 주소를 입력하세요 (예: ftp://사용자@호스트/폴더). TLS는 ftps://를 사용하세요."),
+            defaultValue: defaultValue, action: L("Connect", "연결")) else { return }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), let loc = FTPLocation.parse(url) else {
+            NSSound.beep(); return
+        }
+        FTPServersStore.shared.add(FTPServer(loc))
+        openFTP(url)
     }
 }
