@@ -106,6 +106,9 @@ MainActor.assumeIsolated { runDispatchRoutingTests() }
 MainActor.assumeIsolated { runPreviewPopupTests() }
 runQLPacingTests()
 runUserScriptsTests()
+runFTPClientTests()
+runFTPLiveCheck()   // no-op unless ANF_FTP_LIVE=1 (hits a real server)
+MainActor.assumeIsolated { runRemoteURLTests() }
 runFixVerificationTests()
 
 print("")

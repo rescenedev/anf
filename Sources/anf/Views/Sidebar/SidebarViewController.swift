@@ -12,9 +12,10 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     // MARK: Node model
 
     enum Section: String, CaseIterable {
-        case favorites, pinned, workspace, smartFolders, locations, ssh
+        case favorites, pinned, workspace, smartFolders, locations, ssh, ftp
         var title: String {
             switch self {
+            case .ftp:          "FTP"
             case .favorites:    L("Favorites", "즐겨찾기")
             case .pinned:       L("Pinned", "핀")
             case .workspace:    "Workspace"
@@ -33,6 +34,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             case workspaceRow(SavedView)
             case smartFolderRow(SmartFolder)
             case sshRow(SSHHost, CustomSSHHost?)
+            case ftpRow(FTPServer)
         }
         let kind: Kind
         var children: [Node] = []
@@ -163,6 +165,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             _ = workspace.savedViews.views
             _ = workspace.smartFolders.folders
             _ = workspace.customSSH.hosts
+            _ = workspace.ftpServers.servers
             _ = workspace.terminals.map(\.isRunning)
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -218,6 +221,9 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
                 && model.currentURL.absoluteString == folder.url.absoluteString
         case .sshRow(let host, _):
             return workspace.showTerminal && workspace.terminal?.sshHost == host.alias
+        case .ftpRow(let server):
+            return workspace.activeViewID == nil
+                && model.ftpLocation?.serverURL == server.location.serverURL
         case .header:
             return false
         }
@@ -273,6 +279,12 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         let sshHeader = Node(.header(.ssh)); sshHeader.children = sshNodes
         roots.append(sshHeader)
 
+        // FTP always shows its header (even when empty) so the "+" that adds the
+        // first server is reachable — same rule as Smart Folders.
+        let ftpHeader = Node(.header(.ftp))
+        ftpHeader.children = workspace.ftpServers.servers.map { Node(.ftpRow($0)) }
+        roots.append(ftpHeader)
+
         self.roots = roots
         outline.reloadData()
         for root in roots {
@@ -318,9 +330,13 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         case .header(let s):
             let cell = SidebarHeaderCell.make(o)
             cell.configure(title: s.title,
-                           showsAdd: s == .ssh || s == .smartFolders,
+                           showsAdd: s == .ssh || s == .smartFolders || s == .ftp,
                            onAdd: { [weak self] in
-                               if s == .smartFolders { self?.addSmartFolder() } else { self?.addSSHHost() }
+                               switch s {
+                               case .smartFolders: self?.addSmartFolder()
+                               case .ftp:          self?.workspace.connectFTPPrompt()
+                               default:            self?.addSSHHost()
+                               }
                            })
             return cell
 
@@ -360,6 +376,18 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
                            highlighted: selected, dot: dot)
             cell.toolTip = "ssh \(host.subtitle)"
             return cell
+
+        case .ftpRow(let server):
+            let cell = SidebarRowCell.make(o)
+            // Highlighted while this pane is browsing that server — compare the
+            // login, not the folder, so it stays lit as the user navigates down.
+            let highlighted = workspace.activeViewID == nil
+                && model.ftpLocation?.serverURL == server.location.serverURL
+            cell.configure(text: server.label,
+                           symbol: server.location.isTLS ? "lock.icloud" : "network",
+                           tint: .systemTeal, highlighted: highlighted, dot: nil)
+            cell.toolTip = server.url.absoluteString
+            return cell
         }
     }
 
@@ -394,6 +422,8 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             model.navigate(to: folder.url)
         case .sshRow(let host, let custom):
             if let custom { workspace.openSSH(custom) } else { workspace.openSSH(host.alias) }
+        case .ftpRow(let server):
+            workspace.openFTP(server.url)
         }
     }
 
@@ -476,6 +506,27 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
                 add(L("Remove from Sidebar", "사이드바에서 제거")) { [weak self] in
                     self?.workspace.customSSH.remove(target: host.alias)
                 }
+            }
+
+        case .ftpRow(let server):
+            add(L("Connect", "연결")) { [weak self] in self?.workspace.openFTP(server.url) }
+            add(L("Open in New Tab", "새 탭으로 열기")) { [weak self] in
+                guard let self else { return }
+                // Open the tab where we are, then connect *into* it — starting the
+                // tab at the ftp:// URL would skip openFTP's password prompt.
+                self.workspace.activePaneModel.newTab()
+                self.workspace.openFTP(server.url)
+            }
+            add(L("Edit Address…", "주소 편집…")) { [weak self] in
+                self?.workspace.connectFTPPrompt(defaultValue: server.url.absoluteString)
+            }
+            add(L("Forget Password", "비밀번호 삭제")) {
+                Keychain.delete(server.location.secretAccount)
+            }
+            menu.addItem(.separator())
+            // Removing also drops the saved password (FTPServersStore.remove).
+            add(L("Remove from Sidebar", "사이드바에서 제거")) {
+                FTPServersStore.shared.remove(id: server.id)
             }
         }
         return menu

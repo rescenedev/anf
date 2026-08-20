@@ -86,6 +86,11 @@ UI 셀프테스트는 GUI 세션이 필요해 로컬 전용입니다(릴리즈 �
   kr(55,860개/622MB) ~7s — cp -Rc(8.4s)보다 빨라야 정상
 - 버벅임 추적: `ANF_TRACE=1`로 실행하면 HangWatchdog이 메인 스레드 100ms 초과
   정지를 /tmp/anf-trace.log에 기록 — "느낌상 버벅임"은 이 로그로 재현 시점 확보
+- FTP 실서버 확인: `ANF_FTP_LIVE=1 swift run anfTests` — 기본값
+  `ftp://ftp.gnu.org/gnu/`(다른 서버는 `ANF_FTP_URL=ftp://user@host/path`)에
+  실제로 접속해 curl 설정 → LIST → 파서 전 구간을 검증. **평소 스위트는 오프라인**
+  이므로 이 변수 없이는 no-op — CI/nightly는 네트워크를 타지 않습니다.
+  기준선: ftp.gnu.org `/gnu/` 387개 항목 파싱
 
 ## 3. 수동 체크리스트 (릴리즈 전)
 

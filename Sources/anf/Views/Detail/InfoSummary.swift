@@ -54,8 +54,8 @@ struct InfoSummary: View {
     }
 }
 
-/// Inspector preview for a remote (SFTP) selection — Quick Look can't read a
-/// `sftp://` URL, so show the icon, name and a hint to open/download.
+/// Inspector preview for a remote (SFTP/FTP) selection — Quick Look can't read a
+/// `sftp://`/`ftp://` URL, so show the icon, name and a hint to open/download.
 private struct RemotePreviewPlaceholder: View {
     let item: FileItem
     var body: some View {
@@ -261,7 +261,7 @@ struct InspectorPreviewContent: View {
 
     var body: some View {
         Group {
-            if target.url.scheme == "sftp" {
+            if ["sftp", "ftp", "ftps"].contains(target.url.scheme ?? "") {
                 RemotePreviewPlaceholder(item: target)
             } else if target.isOpaqueBinary {
                 BinaryPreviewPlaceholder(item: target)

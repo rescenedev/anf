@@ -102,16 +102,6 @@ enum SFTPClient {
 
     // MARK: - Parsing
 
-    private static let dateTime: DateFormatter = formatter("MMM d HH:mm")
-    private static let dateYear: DateFormatter = formatter("MMM d yyyy")
-
-    private static func formatter(_ fmt: String) -> DateFormatter {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = fmt
-        return f
-    }
-
     /// Parse one OpenSSH `ls -la` line:
     /// `drwxr-xr-x    2 user  group      4096 Jun  3 04:54 name with spaces`
     /// Internal (not private) so unit tests can exercise the parser directly.
@@ -125,34 +115,15 @@ enum SFTPClient {
               let nameR = Range(m.range(at: 4), in: line) else { return nil }
         let type = String(line[typeR])
         let size = Int64(line[sizeR]) ?? 0
-        let dateStr = line[dateR].replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         var name = String(line[nameR])
         let isSymlink = type == "l"
         if isSymlink, let arrow = name.range(of: " -> ") {   // strip "link -> target"
             name = String(name[..<arrow.lowerBound])
         }
-        // `ls -la` omits the year for files newer than ~6 months ("MMM d HH:mm"),
-        // so the time-only formatter parses them into a default (wrong) year.
-        // Stamp the current year — and roll back one if that lands in the future.
-        let modified: Date
-        if let timed = dateTime.date(from: dateStr) {
-            modified = currentYear(timed)
-        } else {
-            modified = dateYear.date(from: dateStr) ?? .distantPast
-        }
+        // `ls -la` omits the year for files newer than ~6 months; ListingDate
+        // stamps those with the right year (see it for the roll-back rule).
         return RemoteEntry(name: name, isDir: type == "d", isSymlink: isSymlink,
-                           size: size, modified: modified)
-    }
-
-    /// Apply the current year to a year-less `ls` timestamp; if that puts it in the
-    /// future, it belongs to last year (e.g. a Dec date read in January).
-    private static func currentYear(_ d: Date) -> Date {
-        let cal = Calendar(identifier: .gregorian)
-        let now = Date()
-        var c = cal.dateComponents([.month, .day, .hour, .minute], from: d)
-        c.year = cal.component(.year, from: now)
-        guard let stamped = cal.date(from: c) else { return d }
-        return stamped > now ? (cal.date(byAdding: .year, value: -1, to: stamped) ?? stamped) : stamped
+                           size: size, modified: ListingDate.parse(String(line[dateR])))
     }
 
     private static func shq(_ s: String) -> String {

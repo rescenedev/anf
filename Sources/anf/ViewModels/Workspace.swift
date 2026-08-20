@@ -308,6 +308,7 @@ final class WorkspaceModel {
     // window is visible in the others and no window's save clobbers another's.
     var favorites: FavoritesStore { .shared }
     var customSSH: CustomSSHStore { .shared }
+    var ftpServers: FTPServersStore { .shared }
     var savedViews: SavedViewsStore { .shared }
     /// App-wide saved searches (singleton); exposed here so the sidebar can observe
     /// and list them alongside the per-window stores.
@@ -453,6 +454,17 @@ final class WorkspaceModel {
     /// sshfs/macFUSE) — the remote home opens as a normal folder listing.
     func openRemote(_ host: String) {
         activePaneModel.current.openRemote(host: host)
+    }
+
+    /// Browse a saved `ftp(s)://` server in the active pane (curl-driven, no mount).
+    func openFTP(_ url: URL) {
+        activePaneModel.current.openFTP(url)
+    }
+
+    /// Ask for an FTP address, then connect. `defaultValue` pre-fills the field so
+    /// "Edit…" on a saved server reopens it with its own address.
+    func connectFTPPrompt(defaultValue: String = "ftp://") {
+        activePaneModel.current.connectFTPPrompt(defaultValue: defaultValue)
     }
 
     /// Mount `host` over SFTP (sshfs) and open it in the active pane, so the
