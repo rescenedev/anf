@@ -719,6 +719,7 @@ final class SidebarRowCell: NSTableCellView {
     private let icon = NSImageView()
     private let name = NSTextField(labelWithString: "")
     private let dotView = NSView()
+    private var normalTint: NSColor = .labelColor
 
     static func make(_ table: NSTableView) -> SidebarRowCell {
         (table.makeView(withIdentifier: id, owner: nil) as? SidebarRowCell) ?? SidebarRowCell()
@@ -771,15 +772,17 @@ final class SidebarRowCell: NSTableCellView {
                    highlighted: Bool, dot: NSColor?) {
         name.stringValue = text
         icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        icon.contentTintColor = tint
+        normalTint = tint
         setHighlighted(highlighted)
         dotView.isHidden = dot == nil
         dotView.layer?.backgroundColor = dot?.cgColor
     }
 
-    /// Just the highlight pill — used by the navigation-only refresh that must
-    /// not rebuild the whole row.
+    /// Update selection colors without rebuilding the row during navigation.
     func setHighlighted(_ on: Bool) {
+        name.textColor = on ? .controlAccentColor : .labelColor
+        icon.contentTintColor = on ? .controlAccentColor : normalTint
+        setAccessibilitySelected(on)
         pill.layer?.backgroundColor = on
             ? NSColor.labelColor.withAlphaComponent(0.12).cgColor
             : NSColor.clear.cgColor
