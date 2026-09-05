@@ -64,9 +64,8 @@ final class WindowToolbarController: NSObject, NSToolbarDelegate {
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        // The flexible space before the sidebar toggle pushes it to the RIGHT
-        // edge of the sidebar section (next to the tracking separator).
-        [.flexibleSpace, Self.sidebarToggle, Self.sidebarSeparator, Self.leading, .flexibleSpace, Self.trailing]
+        // Keep the toggle beside the traffic lights, independent of sidebar width.
+        [Self.sidebarToggle, .flexibleSpace, Self.sidebarSeparator, Self.leading, .flexibleSpace, Self.trailing]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -79,6 +78,7 @@ final class WindowToolbarController: NSObject, NSToolbarDelegate {
         switch identifier {
         case Self.sidebarToggle:
             let item = NSToolbarItem(itemIdentifier: identifier)
+            item.isNavigational = true
             item.label = L("Sidebar", "사이드바")
             item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: item.label)
             item.target = self
