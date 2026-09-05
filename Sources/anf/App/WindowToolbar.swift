@@ -1,14 +1,11 @@
 import AppKit
 import SwiftUI
 
-/// The window's NSToolbar. With a `.sidebarTrackingSeparator`, the control groups
-/// land over the *content* (right of the sidebar divider) while the system sidebar
-/// toggle stays over the sidebar — exactly how Finder lays its toolbar out. Pairs
-/// with the `NSSplitViewController` sidebar so resize / traffic-lights / full-height
-/// glass are all handled natively.
+/// Native toolbar aligned to the edge-to-edge sidebar's split divider.
 @MainActor
 final class WindowToolbarController: NSObject, NSToolbarDelegate {
     private let workspace: WorkspaceModel
+    private weak var split: NSSplitViewController?
     private let metrics = ToolbarMetrics()
     /// The two cluster hosting views, so a width change can be flushed into them
     /// synchronously — see `updateAvailableWidth`.
@@ -16,9 +13,12 @@ final class WindowToolbarController: NSObject, NSToolbarDelegate {
 
     static let leading = NSToolbarItem.Identifier("anf.leading")
     static let trailing = NSToolbarItem.Identifier("anf.trailing")
+    static let sidebarToggle = NSToolbarItem.Identifier("anf.sidebar.toggle")
+    static let sidebarSeparator = NSToolbarItem.Identifier("anf.sidebar.separator")
 
-    init(workspace: WorkspaceModel) {
+    init(workspace: WorkspaceModel, split: NSSplitViewController) {
         self.workspace = workspace
+        self.split = split
         super.init()
     }
 
@@ -66,7 +66,7 @@ final class WindowToolbarController: NSObject, NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         // The flexible space before the sidebar toggle pushes it to the RIGHT
         // edge of the sidebar section (next to the tracking separator).
-        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, Self.leading, .flexibleSpace, Self.trailing]
+        [.flexibleSpace, Self.sidebarToggle, Self.sidebarSeparator, Self.leading, .flexibleSpace, Self.trailing]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -77,13 +77,29 @@ final class WindowToolbarController: NSObject, NSToolbarDelegate {
                  itemForItemIdentifier identifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch identifier {
+        case Self.sidebarToggle:
+            let item = NSToolbarItem(itemIdentifier: identifier)
+            item.label = L("Sidebar", "사이드바")
+            item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: item.label)
+            item.target = self
+            item.action = #selector(toggleSidebar)
+            return item
+        case Self.sidebarSeparator:
+            guard let split else { return nil }
+            return NSTrackingSeparatorToolbarItem(identifier: identifier, splitView: split.splitView, dividerIndex: 0)
         case Self.leading:
             return host(identifier, AnyView(ToolbarLeadingCluster(workspace: workspace, metrics: metrics)))
         case Self.trailing:
             return host(identifier, AnyView(ToolbarTrailingCluster(workspace: workspace, metrics: metrics)))
         default:
-            return nil   // system items (.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace)
+            return nil
         }
+    }
+
+    @objc private func toggleSidebar() {
+        guard let item = split?.splitViewItems.first else { return }
+        item.animator().isCollapsed.toggle()
+        workspace.sidebarVisible = !item.isCollapsed
     }
 
     private func host(_ id: NSToolbarItem.Identifier, _ view: AnyView) -> NSToolbarItem {

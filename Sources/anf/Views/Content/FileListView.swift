@@ -174,7 +174,7 @@ struct FileListView: NSViewRepresentable {
         }
 
         func applyRowHeight() {
-            table?.rowHeight = max(20, 18 * model.textScale + 6)
+            table?.rowHeight = max(24, 18 * model.textScale + 10)
         }
 
         /// Row identity of the listing we last applied — input for the diff below.
@@ -339,7 +339,7 @@ struct FileListView: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { !isHeaderRow(row) }
 
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-            isHeaderRow(row) ? max(22, 17 * model.textScale + 8) : max(20, 18 * model.textScale + 6)
+            isHeaderRow(row) ? max(22, 17 * model.textScale + 8) : max(24, 18 * model.textScale + 10)
         }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?,

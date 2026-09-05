@@ -26,8 +26,8 @@ func runToolbarDensityTests() {
             T.expect(ToolbarWidths.leading(density) > 0, "leading \(density) has a width")
             T.expect(ToolbarWidths.trailing(density) > 0, "trailing \(density) has a width")
         }
-        T.expect(ToolbarWidths.leading(.full) > ToolbarWidths.leading(.compact),
-                 "leading compact is narrower than full")
+        T.equal(ToolbarWidths.leading(.full), ToolbarWidths.leading(.compact),
+                "shrinking the filter preserves the labeled layout menu")
         T.expect(ToolbarWidths.leading(.compact) > ToolbarWidths.leading(.minimal),
                  "leading minimal is narrower than compact")
         T.expect(ToolbarWidths.trailing(.full) > ToolbarWidths.trailing(.compact),

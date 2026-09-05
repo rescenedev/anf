@@ -81,8 +81,8 @@ private struct TabChip: View {
         ZStack {
             // Finder's selected segment: a neutral (not accent) rounded fill,
             // slightly inset from the bar. Hover gets a fainter wash.
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(active ? Color.primary.opacity(0.12)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(active ? Color.primary.opacity(0.08)
                              : (hovering ? Color.primary.opacity(0.05) : .clear))
                 .padding(.vertical, 3)
                 .padding(.horizontal, 2)

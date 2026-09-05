@@ -19,6 +19,11 @@ enum UISelfTest {
                 if !ok { failures += 1 }
             }
             func settle() async { try? await Task.sleep(nanoseconds: 400_000_000) }
+            @MainActor func checkGeometry(_ stage: String) {
+                for result in ToolbarProbe.geometryChecks(window: window) {
+                    check("\(stage): \(result.name)", result.passed)
+                }
+            }
 
             // Watchdog: a synthetic mouseDown that strays into an AppKit modal
             // tracking loop hangs the main thread — force-exit so output flushes.
@@ -38,6 +43,11 @@ enum UISelfTest {
             // NB: `window.contentView` is the controller's *container* NSView —
             // the actual NSSplitView lives on the NSSplitViewController.
             let splitView = window.anfSplitViewController?.splitView
+            // A previous width probe can leave the sidebar at its maximum;
+            // start below that cap so this test actually has room to grow.
+            splitView?.setPosition(220, ofDividerAt: 0)
+            await settle()
+            checkGeometry("initial layout")
             @MainActor func contentLeftNow() -> CGFloat {
                 guard let sidebar = splitView?.arrangedSubviews.first else { return 0 }
                 return sidebar.convert(NSPoint(x: sidebar.bounds.maxX, y: 0), to: nil).x + 1
@@ -54,6 +64,7 @@ enum UISelfTest {
                     await settle()
                     check("sidebar drag grows width (\(Int(s0)) → \(Int(sidebar.frame.width)))",
                           sidebar.frame.width > s0 + 20)
+                    checkGeometry("after sidebar drag")
                 } else {
                     // Sending a synthetic mouseDown into NSSplitView's own divider
                     // enters its modal tracking loop and hangs — skip the drag.
@@ -135,6 +146,7 @@ enum UISelfTest {
                 await settle()
                 check("\(stage): sidebar drag works (\(Int(s0)) → \(Int(sidebar.frame.width)))",
                       sidebar.frame.width > s0 + 15)
+                checkGeometry(stage)
             }
             @MainActor func edgeProbeCheck(_ stage: String) {
                 guard let frameView = window.contentView?.superview else {

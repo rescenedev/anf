@@ -48,9 +48,9 @@ enum ToolbarProbe {
             }
 
             if failures.isEmpty {
-                print("TOOLBARPROBE ok — clusters stayed attached \(Int(minWidth))–\(Int(maxWidth))px, both layouts")
+                print("TOOLBARPROBE ok — clusters stayed attached and sidebar/titlebar geometry passed \(Int(minWidth))–\(Int(maxWidth))px, both layouts")
             } else {
-                print("TOOLBARPROBE FAIL — dropped at \(failures.joined(separator: ", "))")
+                print("TOOLBARPROBE FAIL — \(failures.joined(separator: ", "))")
             }
             exit(failures.isEmpty ? 0 : 1)
         }
@@ -75,9 +75,61 @@ enum ToolbarProbe {
         let report = items.filter { $0.view != nil }.map { describe($0) }.joined(separator: " ")
         let sidebar = window.anfSplitViewController?.splitViewItems.first?
             .viewController.view.frame.width ?? -1
+        let geometryFailures = geometryChecks(window: window).filter { !$0.passed }.map(\.name)
         print("TOOLBARPROBE \(layout) width=\(Int(width)) sidebar=\(Int(sidebar)) \(report)"
-              + (dropped ? " DROPPED" : ""))
-        return dropped ? "\(layout)@\(Int(width))px" : nil
+              + (dropped ? " DROPPED" : "")
+              + (geometryFailures.isEmpty ? " GEOMETRY_OK" : " \(geometryFailures.joined(separator: "; "))"))
+        let reasons = (dropped ? ["cluster detached"] : []) + geometryFailures
+        return reasons.isEmpty ? nil : "\(layout)@\(Int(width))px: \(reasons.joined(separator: "; "))"
+    }
+
+    /// Compare native view bounds in one coordinate space, including after
+    /// AppKit rebuilds its frame view during zoom and fullscreen transitions.
+    static func geometryChecks(window: NSWindow) -> [(name: String, passed: Bool)] {
+        guard let item = window.anfSplitViewController?.splitViewItems.first else {
+            return [("sidebar geometry: split item missing", false)]
+        }
+        guard !item.isCollapsed else { return [] }
+        let sidebar = item.viewController.view
+        guard sidebar.window === window else {
+            return [("sidebar geometry: view detached", false)]
+        }
+        let tolerance: CGFloat = 2
+        let bounds = sidebar.convert(sidebar.bounds, to: nil)
+        let safeTop = window.contentLayoutRect.maxY
+        var checks: [(name: String, passed: Bool)] = [
+            (String(format: "sidebar stays below titlebar (top=%.1f safeTop=%.1f)", bounds.maxY, safeTop),
+             bounds.maxY <= safeTop + tolerance)
+        ]
+        if window.toolbar?.isVisible == true {
+            guard let leading = window.toolbar?.items.first(where: {
+                $0.itemIdentifier == WindowToolbarController.leading
+            })?.view else {
+                checks.append(("toolbar leading cluster exists", false))
+                return checks
+            }
+            guard let toolbarWindow = leading.window else {
+                // AppKit detaches the fullscreen toolbar while auto-hidden.
+                // A missing item is still a failure, as is detachment in a
+                // normal window where the toolbar must remain available.
+                if window.styleMask.contains(.fullScreen) {
+                    print("SKIP toolbar/sidebar horizontal geometry: fullscreen toolbar auto-hidden")
+                    return checks
+                }
+                checks.append(("toolbar leading cluster attached", false))
+                return checks
+            }
+            // Fullscreen toolbars can belong to a separate native window;
+            // screen coordinates keep the comparison valid in either host.
+            let leadingBounds = toolbarWindow.convertToScreen(leading.convert(leading.bounds, to: nil))
+            let sidebarBounds = window.convertToScreen(bounds)
+            checks.append((
+                String(format: "toolbar clears sidebar (leadingLeft=%.1f sidebarRight=%.1f)",
+                       leadingBounds.minX, sidebarBounds.maxX),
+                leadingBounds.minX >= sidebarBounds.maxX - tolerance
+            ))
+        }
+        return checks
     }
 
     /// Renders each cluster at each density off-screen and prints the real fitting

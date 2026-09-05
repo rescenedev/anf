@@ -9,11 +9,11 @@ import CoreGraphics
 /// for more than fits: the window feeds its available width to `ToolbarFit`,
 /// which picks a density pair, and the views render a narrower variant.
 enum ToolbarDensity: String, CaseIterable, Sendable {
-    /// Everything inline, as designed.
+    /// Labeled layout menu and full-width filter.
     case full
-    /// Segmented layout switcher folds into a menu; filter field shrinks.
+    /// Filter field shrinks, retaining the layout label.
     case compact
-    /// View-mode switcher folds too; secondary actions move into the options menu.
+    /// Layout menu becomes icon-only and the filter uses its minimum width.
     case minimal
 }
 
@@ -36,46 +36,40 @@ enum ToolbarWidths {
     static let gap: CGFloat = 8            // cluster HStack spacing
     static let padding: CGFloat = 12       // .padding(.horizontal, 6), both sides
     static let navGroup: CGFloat = 88      // back/forward/up at 2pt spacing
-    static let viewPicker: CGFloat = 150   // segmented view-mode switcher
-    static let layoutPicker: CGFloat = 140 // segmented pane-layout switcher
-    static let menuButton: CGFloat = 28    // a Picker folded into a borderless menu
-    static let optionsMenu: CGFloat = 41   // sort/options menu incl. its chevron
-    static let searchChrome: CGFloat = 33  // magnifier + spacing + capsule padding
-    static let searchFull: CGFloat = 120
-    static let searchCompact: CGFloat = 56
+    static let layoutPicker: CGFloat = 112 // icon, current layout title, chevron
+    static let menuButton: CGFloat = 28
+    static let searchChrome: CGFloat = 33  // magnifier + spacing + field padding
+    static let searchFull: CGFloat = 180
+    static let searchCompact: CGFloat = 120
+    static let searchMinimal: CGFloat = 56
 
-    /// One icon button plus the gap that precedes it.
-    private static let slot = icon + gap
-
-    static func leading(_ density: ToolbarDensity) -> CGFloat {
-        let switcher = density == .minimal ? menuButton : viewPicker
-        let layout = density == .full ? layoutPicker : menuButton
-        return padding + navGroup + gap + switcher + gap + layout
+    static func search(_ density: ToolbarDensity) -> CGFloat {
+        switch density {
+        case .full: searchFull
+        case .compact: searchCompact
+        case .minimal: searchMinimal
+        }
     }
 
-    /// Assumes the pane-layout is split, i.e. the "save workspace" button is
-    /// present — the widest the cluster ever gets. Sizing for the narrower
-    /// single-pane case would drop the cluster the moment the user splits.
+    static func leading(_ density: ToolbarDensity) -> CGFloat {
+        let layout = density == .minimal ? menuButton : layoutPicker
+        // Native menu chrome rounds the full cluster up by a few points.
+        return padding + navGroup + gap + menuButton + gap + layout + 4
+    }
+
     static func trailing(_ density: ToolbarDensity) -> CGFloat {
-        let search = density == .full ? searchFull : searchCompact
-        // star, options, trash, inspector, search are never folded away.
-        let core = padding + icon + gap + optionsMenu + slot + slot
-            + gap + searchChrome + search
-        // new tab, new folder, terminal, save-workspace fold into the menu.
-        return density == .minimal ? core : core + slot * 4
+        // Filter, inspector, and More remain visible at every density. All
+        // secondary commands live in More, independent of the pane layout.
+        padding + searchChrome + search(density) + gap + icon + gap + menuButton
     }
 }
 
 extension ToolbarFit {
-    /// Degradation ladder, least disruptive first: shrink the filter field, then
-    /// fold the layout switcher, then the secondary actions, then the view-mode
-    /// switcher. The first rung that fits wins; if nothing fits we still return
-    /// the narrowest rung, because a squeezed toolbar beats a missing one.
+    /// Shrink the filter first, then collapse the layout label and shrink the
+    /// filter to its minimum. Secondary actions remain in More at every width.
     static let ladder: [ToolbarFit] = [
         ToolbarFit(leading: .full, trailing: .full),
         ToolbarFit(leading: .full, trailing: .compact),
-        ToolbarFit(leading: .compact, trailing: .compact),
-        ToolbarFit(leading: .compact, trailing: .minimal),
         ToolbarFit(leading: .minimal, trailing: .minimal),
     ]
 

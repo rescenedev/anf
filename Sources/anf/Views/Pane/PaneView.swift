@@ -12,6 +12,24 @@ struct PaneView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder")
+                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                Text(BrowserModel.tabTitle(current: pane.current.currentURL, locked: pane.current.lockedURL))
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                Text("\(pane.current.items.count)")
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(Color(nsColor: .textBackgroundColor))
+            .contentShape(Rectangle())
+            .onTapGesture { workspace.focusPane(index) }
+            Divider()
             // The focus gestures live on this inner stack only — NOT the path bar.
             // A pane-wide `DragGesture(minimumDistance: 0)` fires on mouse-down and
             // swallows the path bar's breadcrumb button taps, so clicking a crumb

@@ -66,6 +66,8 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         outline.controller = self
         self.outline = outline
         outline.headerView = nil
+        // Cells provide their own insets; automatic sidebar styling doubles them.
+        outline.style = .plain
         outline.floatsGroupRows = false
         outline.rowSizeStyle = .custom
         outline.rowHeight = 26
@@ -93,28 +95,12 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
-        scroll.drawsBackground = false
-        scroll.automaticallyAdjustsContentInsets = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .windowBackgroundColor
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 8, left: 6, bottom: 10, right: 6)
 
-        // Slight opacity boost over the bare sidebar material (washes out on
-        // bright desktops otherwise).
-        let tint = NSView()
-        tint.wantsLayer = true
-        tint.layer?.backgroundColor =
-            NSColor.windowBackgroundColor.withAlphaComponent(0.45).cgColor
-
-        let container = NSView()
-        for v in [tint, scroll] {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(v)
-            NSLayoutConstraint.activate([
-                v.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                v.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                v.topAnchor.constraint(equalTo: container.topAnchor),
-                v.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            ])
-        }
-        view = container
+        view = scroll
     }
 
     override func viewDidLoad() {
@@ -682,7 +668,7 @@ final class SidebarHeaderCell: NSTableCellView {
         addSubview(title)
         addSubview(addButton)
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             title.centerYAnchor.constraint(equalTo: centerYAnchor),
             addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             addButton.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -741,7 +727,7 @@ final class SidebarRowCell: NSTableCellView {
             pill.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             pill.topAnchor.constraint(equalTo: topAnchor, constant: 1),
             pill.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -1),
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 18),
             name.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),

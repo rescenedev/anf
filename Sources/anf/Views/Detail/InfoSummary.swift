@@ -9,7 +9,8 @@ struct InfoSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(item.name).font(.headline).lineLimit(2)
+            Text(item.name).font(.system(size: 13, weight: .semibold)).lineLimit(2)
+                .padding(.bottom, 2)
             row(L("Kind", "종류"), Format.kind(item))
             if item.isBrowsableContainer {
                 folderSizeRow
@@ -26,7 +27,7 @@ struct InfoSummary: View {
 
     @ViewBuilder private var folderSizeRow: some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(L("Size", "크기")).foregroundStyle(.secondary).frame(width: 64, alignment: .trailing)
+            Text(L("Size", "크기")).foregroundStyle(.secondary).frame(width: 56, alignment: .leading)
             if let folderSize {
                 Text(Format.bytes(folderSize)).textSelection(.enabled)
             } else if calculating {
@@ -47,7 +48,7 @@ struct InfoSummary: View {
 
     private func row(_ k: String, _ v: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(k).foregroundStyle(.secondary).frame(width: 64, alignment: .trailing)
+            Text(k).foregroundStyle(.secondary).frame(width: 56, alignment: .leading)
             Text(v).textSelection(.enabled).lineLimit(3)
         }
         .font(.system(size: 11))
@@ -133,6 +134,8 @@ struct InfoInspector: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            inspectorHeader
+            Divider()
             if let target {
                 if summarizing || summary != nil {
                     SummaryCard(text: summary, loading: summarizing, fontSize: workspace.previewTextSize) {
@@ -160,7 +163,7 @@ struct InfoInspector: View {
                 if showDetails {
                     Divider()
                     InfoSummary(item: target)
-                        .padding(16)
+                        .padding(12)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             } else {
@@ -173,57 +176,66 @@ struct InfoInspector: View {
             }
         }
         .frame(minWidth: 260, idealWidth: 300)
-        .background(.regularMaterial)
-        .overlay(alignment: .bottom) {
-            if let target {
-                HStack(spacing: 8) {
-                    if target.hasSummarizableText && AIFeatures.enabled {
-                        // Labeled pill (not a tiny icon) — summarize was too hard
-                        // to find as a bare ✨ circle.
-                        Button { summarize(target) } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold))
-                                Text(summarizing ? L("Summarizing…", "요약 중…") : L("Summarize", "AI 요약"))
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Color.accentColor.opacity(summarizing ? 0.5 : 1), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(summarizing)
-                        .help(L("Summarize on-device (AI)", "온디바이스 AI 요약"))
-                    }
-                    Button {
-                        PreviewPopup.show(workspace: workspace)
-                    } label: {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(7)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(L("Open preview in a floating window", "미리보기를 팝업 창으로"))
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { showDetails.toggle() }
-                    } label: {
-                        Image(systemName: showDetails ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(7)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(showDetails ? L("Hide Info", "정보 가리기") : L("Show Info", "정보 보기"))
-                }
-                .padding(.bottom, 10)
-            }
-        }
+        .background(Color(nsColor: .controlBackgroundColor))
         .onChange(of: target?.id, initial: true) {
             summary = nil; summarizing = false       // reset per selection
             if let target { model.downloadFromCloud(target) }
         }
+    }
+
+    private var inspectorHeader: some View {
+        HStack(spacing: 8) {
+            Text(L("Preview", "미리보기"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if let target {
+                if target.hasSummarizableText && AIFeatures.enabled {
+                    Button { summarize(target) } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                            Text(summarizing ? L("Summarizing…", "요약 중…") : L("Summarize", "AI 요약"))
+                                .lineLimit(1)
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 6)
+                        .frame(height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(summarizing)
+                    .help(L("Summarize on-device (AI)", "온디바이스 AI 요약"))
+                }
+                Button {
+                    PreviewPopup.show(workspace: workspace)
+                } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("Open preview in a floating window", "미리보기를 팝업 창으로"))
+                .help(L("Open preview in a floating window", "미리보기를 팝업 창으로"))
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showDetails.toggle() }
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(showDetails ? Color.accentColor : Color.secondary)
+                        .frame(width: 24, height: 24)
+                        .background(showDetails ? Color.accentColor.opacity(0.1) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showDetails ? L("Hide Info", "정보 가리기") : L("Show Info", "정보 보기"))
+                .help(showDetails ? L("Hide Info", "정보 가리기") : L("Show Info", "정보 보기"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private func summarize(_ target: FileItem) {

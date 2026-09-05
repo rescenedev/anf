@@ -81,11 +81,10 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         let contentHC = HostingViewController(rootView: ContentRootView(workspace: workspace))
 
         let split = NSSplitViewController()
-        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarVC)
+        let sidebarItem = NSSplitViewItem(viewController: sidebarVC)
         sidebarItem.minimumThickness = Self.sidebarMinThickness
         sidebarItem.maximumThickness = Self.sidebarMaxThickness
         sidebarItem.canCollapse = true
-        sidebarItem.allowsFullHeightLayout = true
         split.addSplitViewItem(sidebarItem)
         let contentItem = NSSplitViewItem(viewController: contentHC)
         contentItem.minimumThickness = 420
@@ -101,9 +100,10 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         )
         window.title = "anf"
         window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         window.minSize = NSSize(width: 720, height: 460)
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
         // CRITICAL for multi-window: a programmatic NSWindow defaults to
         // isReleasedWhenClosed=true, so AppKit releases it on close WHILE this
         // controller still strong-refs it — a double free that segfaults inside
@@ -116,10 +116,7 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         window.tabbingMode = .disallowed
 
         let container = NSViewController()
-        let base = NSVisualEffectView()
-        base.material = .underWindowBackground
-        base.blendingMode = .behindWindow
-        base.state = .active
+        let base = NSView()
         container.view = base
         container.addChild(split)
         split.view.translatesAutoresizingMaskIntoConstraints = false
@@ -127,7 +124,7 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
         NSLayoutConstraint.activate([
             split.view.leadingAnchor.constraint(equalTo: base.leadingAnchor),
             split.view.trailingAnchor.constraint(equalTo: base.trailingAnchor),
-            split.view.topAnchor.constraint(equalTo: base.topAnchor),
+            split.view.topAnchor.constraint(equalTo: base.safeAreaLayoutGuide.topAnchor),
             split.view.bottomAnchor.constraint(equalTo: base.bottomAnchor),
         ])
         window.contentViewController = container
@@ -139,10 +136,10 @@ final class AnfWindowController: NSObject, NSWindowDelegate {
             split.splitView.autosaveName = "anf.main.split"
         }
 
-        let toolbarController = WindowToolbarController(workspace: workspace)
+        let toolbarController = WindowToolbarController(workspace: workspace, split: split)
         self.toolbarController = toolbarController
         window.toolbar = toolbarController.makeToolbar()
-        window.toolbarStyle = .unified
+        window.toolbarStyle = .unifiedCompact
         // Seamless top like Finder: no hairline under the toolbar, so the toolbar,
         // tab strip and content read as one continuous surface.
         window.titlebarSeparatorStyle = .none

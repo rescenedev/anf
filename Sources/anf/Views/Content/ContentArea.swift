@@ -9,14 +9,7 @@ struct ContentArea: View {
 
     var body: some View {
         ZStack {
-            // True window translucency: the desktop shows through, blurred. A faint
-            // gradient tint on top keeps text readable without killing the effect.
-            VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
-                .overlay(
-                    LinearGradient(
-                        colors: [Color(nsColor: .windowBackgroundColor).opacity(0.55),
-                                 Color(nsColor: .windowBackgroundColor).opacity(0.42)],
-                        startPoint: .top, endPoint: .bottom))
+            Color(nsColor: .textBackgroundColor)
                 .ignoresSafeArea()
 
             switch model.viewMode {
