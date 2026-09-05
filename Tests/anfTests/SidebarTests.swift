@@ -1,9 +1,23 @@
-import Foundation
+import AppKit
 @testable import anf
 
 /// Sidebar favorites: iCloud Drive must appear when it's set up (reported
 /// missing 2026-06-14 — there was no entry point at all).
 func runSidebarTests() {
+    MainActor.assumeIsolated {
+        T.group("sidebar rows accept native selection and disclosure focus") {
+            let controller = SidebarViewController(workspace: WorkspaceModel())
+            let outline = NSOutlineView()
+            let folder = SidebarViewController.Node(.folder(name: "Home", symbol: "house",
+                url: FileManager.default.homeDirectoryForCurrentUser,
+                removable: false, ejectable: false))
+            let header = SidebarViewController.Node(.header(.favorites))
+            T.expect(controller.outlineView(outline, shouldSelectItem: folder),
+                     "folder can be selected for arrow navigation")
+            T.expect(controller.outlineView(outline, shouldSelectItem: header),
+                     "header can receive left/right disclosure navigation")
+        }
+    }
     let fm = FileManager.default
 
     T.group("iCloud Drive path + gating") {

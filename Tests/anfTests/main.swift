@@ -25,6 +25,15 @@ if let ocrRoot = ProcessInfo.processInfo.environment["ANF_BENCH_OCR"] {
     exit(0)
 }
 
+// Focused AppKit sidebar/resize regressions, without filesystem integration tests.
+if ProcessInfo.processInfo.environment["ANF_TEST_SIDEBAR"] == "1" {
+    runSidebarTests()
+    runEdgeScrollerTests()
+    print("Sidebar/resize: \(T.checks) checks, \(T.failures.count) failures")
+    T.failures.forEach { print($0) }
+    exit(T.failures.isEmpty ? 0 : 1)
+}
+
 runFuzzyMatchTests()
 runNormalizedRankTests()
 runSFTPParseTests()

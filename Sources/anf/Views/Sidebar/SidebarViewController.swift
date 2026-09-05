@@ -184,6 +184,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     /// Repaint only the on-screen rows' highlight pills — no tree rebuild, no
     /// reloadData (which would collapse groups and lose scroll position).
     private func refreshHighlights() {
+        syncSelection()
         let rows = outline.rows(in: outline.visibleRect)
         guard rows.length > 0 else { return }
         for row in rows.location ..< rows.location + rows.length {
@@ -192,6 +193,19 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             else { continue }
             cell.setHighlighted(isHighlighted(node))
         }
+    }
+
+    private func syncSelection() {
+        let row = (0..<outline.numberOfRows).first {
+            guard let node = outline.item(atRow: $0) as? Node else { return false }
+            return isHighlighted(node)
+        }
+        outline.selectRowIndexes(row.map { IndexSet(integer: $0) } ?? IndexSet(),
+                                 byExtendingSelection: false)
+    }
+
+    func activateSelectedRow() {
+        activate(row: outline.selectedRow)
     }
 
     /// Whether a node is the current highlight target (matches viewFor's logic).
@@ -278,6 +292,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
             let open = UserDefaults.standard.object(forKey: s.defaultsKey) as? Bool ?? true
             if open { outline.expandItem(root) } else { outline.collapseItem(root) }
         }
+        syncSelection()
     }
 
     // MARK: Data source
@@ -377,7 +392,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
         }
     }
 
-    func outlineView(_ o: NSOutlineView, shouldSelectItem item: Any) -> Bool { false }
+    func outlineView(_ o: NSOutlineView, shouldSelectItem item: Any) -> Bool { true }
 
     func outlineView(_ o: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         if case .header = (item as! Node).kind { return 24 }
@@ -387,7 +402,10 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
     // MARK: Clicks
 
     @objc private func rowClicked() {
-        let row = outline.clickedRow
+        activate(row: outline.clickedRow)
+    }
+
+    private func activate(row: Int) {
         guard row >= 0, let node = outline.item(atRow: row) as? Node else { return }
         switch node.kind {
         case .header:
@@ -629,8 +647,16 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource,
 }
 
 /// Outline view that routes right-clicks to the controller's menus.
-private final class SidebarOutlineView: NSOutlineView {
+final class SidebarOutlineView: NSOutlineView {
     weak var controller: SidebarViewController?
+
+    override func keyDown(with event: NSEvent) {
+        super.keyDown(with: event)
+        if event.keyCode == 125 || event.keyCode == 126 {
+            controller?.activateSelectedRow()
+        }
+    }
+
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         return controller?.menu(forRow: row(at: point))

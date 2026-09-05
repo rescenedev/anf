@@ -96,7 +96,7 @@ final class WindowEdgeResizer: NSView {
                     let local = self.convert(event.locationInWindow, from: nil)
                     guard !self.edges(at: local).isEmpty,
                           !self.overlapsWindowControl(local),
-                          !self.overlapsScroller(local) else { return false }
+                          !self.overlapsScroller(local) && !self.overlapsContentControl(local) else { return false }
                     Trace.log("edge: down consumed at \(local)")
                     self.mouseDown(with: event)
                     return true
@@ -126,7 +126,7 @@ final class WindowEdgeResizer: NSView {
         }
         let local = convert(event.locationInWindow, from: nil)
         let e = edges(at: local)
-        let inZone = !e.isEmpty && !overlapsWindowControl(local) && !overlapsScroller(local)
+        let inZone = !e.isEmpty && !overlapsWindowControl(local) && !overlapsScroller(local) && !overlapsContentControl(local)
         if inZone != wasInZone {
             Trace.log("edge: \(event.type == .cursorUpdate ? "cursorUpdate" : "mouseMoved") inZone=\(inZone) at \(local)")
         }
@@ -149,7 +149,7 @@ final class WindowEdgeResizer: NSView {
         let local = convert(point, from: superview)
         guard !edges(at: local).isEmpty else { return nil }
         if overlapsWindowControl(local) { return nil }
-        if overlapsScroller(local) { return nil }
+        if overlapsScroller(local) || overlapsContentControl(local) { return nil }
         return self
     }
 
@@ -161,12 +161,13 @@ final class WindowEdgeResizer: NSView {
 
     /// Test seam: stands in for the contentView hit-test when there's no window,
     /// so the scrollbar pass-through (#87) is testable headless.
+    var controlProbeForTest: ((NSPoint) -> Bool)?
     var scrollerProbeForTest: ((NSPoint) -> Bool)?
 
     /// Test seam: the full consume decision (edge zone minus window-control and
     /// scroller exceptions) — what the event monitor and hitTest actually use.
     func wouldConsumeForTest(at p: NSPoint) -> Bool {
-        !edges(at: p).isEmpty && !overlapsWindowControl(p) && !overlapsScroller(p)
+        !edges(at: p).isEmpty && !overlapsWindowControl(p) && !overlapsScroller(p) && !overlapsContentControl(p)
     }
     #endif
 
@@ -190,6 +191,23 @@ final class WindowEdgeResizer: NSView {
         while let view = v {
             if let s = view as? NSScroller { return !s.isHidden && s.alphaValue > 0.01 }
             v = view.superview
+        }
+        return false
+    }
+
+    /// Disclosure buttons and other controls near an edge remain clickable.
+    /// Keep only the outermost three points reserved for a resize grip.
+    private func overlapsContentControl(_ p: NSPoint) -> Bool {
+        let b = bounds
+        guard min(p.x - b.minX, b.maxX - p.x, p.y - b.minY, b.maxY - p.y) > 3 else { return false }
+        #if DEBUG
+        if let probe = controlProbeForTest { return probe(p) }
+        #endif
+        guard let content = window?.contentView else { return false }
+        var hit = content.hitTest(convert(p, to: content.superview))
+        while let view = hit {
+            if view is NSButton { return true }
+            hit = view.superview
         }
         return false
     }

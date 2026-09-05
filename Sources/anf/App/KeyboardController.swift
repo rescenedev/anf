@@ -96,6 +96,12 @@ final class KeyboardController: NSObject, @preconcurrency QLPreviewPanelDataSour
             return false
         }
         if isEditingText { return false }
+        // The sidebar owns its arrow keys, including native disclosure handling.
+        if NSApp.keyWindow?.firstResponder is SidebarOutlineView,
+           (123...126).contains(e.keyCode),
+           flagsAll.intersection([.command, .control, .option]).isEmpty {
+            return false
+        }
         // Keymap-driven actions (defaults pre-filled in keybindings.json; ⌘,
         // opens it). Everything bindable dispatches here; the hardcoded
         // shortcuts below are the non-bindable navigation/system set.

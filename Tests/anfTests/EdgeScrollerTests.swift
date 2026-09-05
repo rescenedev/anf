@@ -27,6 +27,15 @@ func runEdgeScrollerTests() {
                      "left edge (no scroller) unaffected")
         }
 
+        T.group("sidebar disclosure beats the left resize band") {
+            let r = WindowEdgeResizer(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+            r.controlProbeForTest = { p in p.x < 20 && p.y > 100 }
+            T.expect(!r.wouldConsumeForTest(at: NSPoint(x: 13, y: 300)),
+                     "down disclosure arrow receives clicks and hover")
+            T.expect(r.wouldConsumeForTest(at: NSPoint(x: 2, y: 300)),
+                     "outer grip still resizes")
+        }
+
         T.group("no scroller → band behaves exactly as before") {
             let r = WindowEdgeResizer(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
             r.scrollerProbeForTest = { _ in false }
