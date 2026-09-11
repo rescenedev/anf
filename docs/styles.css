@@ -208,6 +208,30 @@ h2 {
 }
 
 /* ---- Release notes ---- */
+/* Changelog reads as a document, not a hero: long entries turn ragged when
+   centered, so versions sit in a fixed gutter and text keeps one left edge. */
+.changelog {
+  list-style: none; max-width: 820px; margin: 48px auto 0; text-align: left;
+  border-top: 1px solid var(--line);
+}
+.changelog li {
+  display: grid; grid-template-columns: 132px 1fr; gap: 24px;
+  padding: 18px 0; border-bottom: 1px solid var(--line);
+}
+.cl-ver {
+  padding-top: 3px; color: var(--txt-faint); font-size: 12.5px; white-space: nowrap;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums;
+}
+.cl-latest .cl-ver { color: var(--accent-2); }
+.cl-body { color: var(--txt-dim); font-size: 14.5px; line-height: 1.65; }
+.cl-body b { color: var(--txt); font-weight: 600; }
+.cl-lead { color: var(--txt); font-size: 17px; margin-bottom: 4px; }
+.cl-body code {
+  padding: 1px 6px; background: rgba(255,255,255,.06); border: 1px solid var(--line);
+  border-radius: 6px; font-size: .88em; color: var(--accent-2);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+}
+@media (max-width: 720px) { .changelog li { grid-template-columns: 1fr; gap: 4px; } }
 .release {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 52px;
   text-align: left;
